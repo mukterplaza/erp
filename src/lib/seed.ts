@@ -1,4 +1,4 @@
-import {
+﻿import {
   db,
   users,
   employees,
@@ -36,11 +36,10 @@ import {
   auditLogs,
   dailyWorkPlans,
   reminderSettings,
-  companies,
 } from "@/db";
 import { hashPassword, ROLE_DEFAULT_PERMISSIONS } from "./auth";
-import { CRM_COMPANIES, normalizeIbdcService } from "./crm-constants";
 import { sql, eq } from "drizzle-orm";
+import { ensureFinalTeam } from "./team";
 
 let seedPromise: Promise<void> | null = null;
 
@@ -48,181 +47,16 @@ export async function ensureSeeded() {
   if (seedPromise) {
     return seedPromise;
   }
-  seedPromise = runSeedInternal().finally(() => {
-    seedPromise = null;
-  });
-  return seedPromise;
-}
-
-async function ensureCompanyRows() {
-  const existingCompanies = await db.select().from(companies);
-  if (existingCompanies.length === 0) {
-    await db.insert(companies).values(
-      CRM_COMPANIES.map((c) => ({
-        code: c.code,
-        name: c.name,
-        shortName: c.shortName,
-        businessType: c.businessType,
-        leadPrefix: c.leadPrefix,
-      }))
-    );
-  }
-}
-
-async function ensureCrmCompaniesSeeded() {
-  const today = new Date().toISOString().split("T")[0];
-
-  // 1. Ensure both business units exist (IBDC = 1, IREL = 2)
-  await ensureCompanyRows();
-
-  const allCompanies = await db.select().from(companies);
-  const ibdc = allCompanies.find((c) => c.code === "IBDC");
-  const irel = allCompanies.find((c) => c.code === "IREL");
-  if (!ibdc || !irel) return;
-
-  // 2. EXCEL MIGRATION: all pre-existing service-based leads belong to IBDC
-  const allLeads = await db.select().from(leads);
-  for (const lead of allLeads) {
-    const needsMigration =
-      lead.companyId !== irel.id &&
-      (lead.leadCode.startsWith("LEAD-") ||
-        !["Hot", "Warm", "Cold"].includes(lead.priority));
-
-    if (needsMigration) {
-      const normalizedService = normalizeIbdcService(lead.service);
-      const migratedPriority =
-        lead.status === "Won" || lead.status === "Quotation"
-          ? "Hot"
-          : lead.status === "Lost"
-          ? "Cold"
-          : "Warm";
-      const migratedStatus =
-        lead.status === "Follow-up" ? "Follow-up Required" : lead.status;
-
-      await db
-        .update(leads)
-        .set({
-          companyId: ibdc.id,
-          service: normalizedService,
-          priority: migratedPriority,
-          status: migratedStatus,
-          propertyType: "",
-        })
-        .where(eq(leads.id, lead.id));
-    }
-  }
-
-  // 3. Seed reference leads for BOTH business units (only once)
-  const ibdcSample = allLeads.find((l) => l.leadCode.startsWith("BDL-"));
-  if (!ibdcSample) {
-    const ibdcCount = (await db.select().from(leads)).filter(
-      (l) => l.companyId === ibdc.id
-    ).length;
-    await db.insert(leads).values({
-      leadCode: `BDL-${String(ibdcCount + 1).padStart(4, "0")}`,
-      companyId: ibdc.id,
-      name: "Rahim Uddin Ahmed",
-      phone: "01712-556677",
-      whatsapp: "01712-556677",
-      location: "Mirpur DOHS, Road 12, Dhaka",
-      source: "Referral",
-      priority: "Hot",
-      service: "RAJUK Plan Approval",
-      landSize: "5 Katha",
-      roadWidth: "25 ft",
-      requirement:
-        "RAJUK plan approval for a G+6 residential building including soil test documentation.",
-      budget: "450000.00",
-      status: "Follow-up Required",
-      nextFollowUpDate: today,
+  seedPromise = runSeedInternal()
+    .then(() => ensureFinalTeam())
+    .finally(() => {
+      seedPromise = null;
     });
-  }
-
-  const irelSample = allLeads.find((l) => l.companyId === irel.id);
-  if (!irelSample) {
-    await db.insert(leads).values([
-      {
-        leadCode: "REL-0001",
-        companyId: irel.id,
-        name: "Karim Hossain",
-        phone: "01819-334455",
-        whatsapp: "01819-334455",
-        location: "Bashundhara R/A, Dhaka",
-        source: "Facebook",
-        priority: "Hot",
-        service: "",
-        propertyType: "Flat",
-        projectName: "Salsabil",
-        unitNo: "Flat B-4",
-        preferredLocation: "Bashundhara R/A Block-C",
-        propertySize: "1650 sft",
-        floor: "4th Floor",
-        bedrooms: "3 Bed",
-        purpose: "Own Use",
-        expectedPurchaseDate: "2026-08-30",
-        requirement:
-          "South-facing 3 bedroom flat with 2 parking spaces and lift access.",
-        budget: "8000000.00",
-        status: "Follow-up Required",
-        nextFollowUpDate: today,
-      },
-      {
-        leadCode: "REL-0002",
-        companyId: irel.id,
-        name: "Hasan Mahmud",
-        phone: "01911-778899",
-        whatsapp: "01911-778899",
-        location: "Uttara Sector 7, Dhaka",
-        source: "Walk-in",
-        priority: "Warm",
-        service: "",
-        propertyType: "Shop",
-        projectName: "Bhai Bhai Tower",
-        unitNo: "Shop G-12",
-        preferredLocation: "Uttara Sector 7 Main Road",
-        propertySize: "420 sft",
-        floor: "Ground Floor",
-        bedrooms: "",
-        purpose: "Investment",
-        expectedPurchaseDate: "2026-11-15",
-        requirement:
-          "Ground floor corner shop facing the main road for rental investment.",
-        budget: "12000000.00",
-        status: "Contacted",
-        nextFollowUpDate: today,
-      },
-      {
-        leadCode: "REL-0003",
-        companyId: irel.id,
-        name: "Nusrat Jahan",
-        phone: "01677-223344",
-        whatsapp: "01677-223344",
-        location: "Jolshiri Abashon, Dhaka",
-        source: "Website",
-        priority: "Warm",
-        service: "",
-        propertyType: "Land/Plot",
-        projectName: "Jolshiri Green Valley",
-        unitNo: "Plot 22",
-        preferredLocation: "Jolshiri Abashon Sector 5",
-        propertySize: "5 Katha",
-        floor: "",
-        bedrooms: "",
-        purpose: "Investment",
-        expectedPurchaseDate: "2027-01-20",
-        requirement: "Corner plot with approved layout for future development.",
-        budget: "25000000.00",
-        status: "Qualified",
-        nextFollowUpDate: today,
-      },
-    ]);
-  }
+  return seedPromise;
 }
 
 async function ensureEnhancementsSeeded() {
   const today = new Date().toISOString().split("T")[0];
-
-  await ensureCrmCompaniesSeeded();
 
   const remCount = await db.select({ count: sql<number>`count(*)` }).from(reminderSettings);
   if (Number(remCount[0]?.count || 0) === 0) {
@@ -250,31 +84,31 @@ async function ensureEnhancementsSeeded() {
         items: [
           {
             id: "wp-1",
-            title: "১. ক্লায়েন্ট ফলো-আপ (Client follow-up - Alhaj Abdul Karim)",
+            title: "à§§. à¦•à§à¦²à¦¾à¦¯à¦¼à§‡à¦¨à§à¦Ÿ à¦«à¦²à§‹-à¦†à¦ª (Client follow-up - Alhaj Abdul Karim)",
             status: "Completed",
             completionPercent: 100,
           },
           {
             id: "wp-2",
-            title: "২. রাজউক ড্রয়িং আপডেট (Rajuk structural drawing update)",
+            title: "à§¨. à¦°à¦¾à¦œà¦‰à¦• à¦¡à§à¦°à¦¯à¦¼à¦¿à¦‚ à¦†à¦ªà¦¡à§‡à¦Ÿ (Rajuk structural drawing update)",
             status: "Completed",
             completionPercent: 100,
           },
           {
             id: "wp-3",
-            title: "৩. প্রজেক্ট রিপোর্ট প্রস্তুত (INSAF Heights Project Report)",
+            title: "à§©. à¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ à¦°à¦¿à¦ªà§‹à¦°à§à¦Ÿ à¦ªà§à¦°à¦¸à§à¦¤à§à¦¤ (INSAF Heights Project Report)",
             status: "Completed",
             completionPercent: 100,
           },
           {
             id: "wp-4",
-            title: "৪. বসুন্ধরা সাইট ভিজিট ও রড বাইন্ডিং চেক (Site-0001 Visit)",
+            title: "à§ª. à¦¬à¦¸à§à¦¨à§à¦§à¦°à¦¾ à¦¸à¦¾à¦‡à¦Ÿ à¦­à¦¿à¦œà¦¿à¦Ÿ à¦“ à¦°à¦¡ à¦¬à¦¾à¦‡à¦¨à§à¦¡à¦¿à¦‚ à¦šà§‡à¦• (Site-0001 Visit)",
             status: "Completed",
             completionPercent: 100,
           },
           {
             id: "wp-5",
-            title: "৫. ৪র্থ তলার শাটারিং মেটেরিয়াল রিকুইজিশন (4th Floor Requisition)",
+            title: "à§«. à§ªà¦°à§à¦¥ à¦¤à¦²à¦¾à¦° à¦¶à¦¾à¦Ÿà¦¾à¦°à¦¿à¦‚ à¦®à§‡à¦Ÿà§‡à¦°à¦¿à§Ÿà¦¾à¦² à¦°à¦¿à¦•à§à¦‡à¦œà¦¿à¦¶à¦¨ (4th Floor Requisition)",
             status: "In Progress",
             completionPercent: 50,
           },
@@ -297,25 +131,25 @@ async function ensureEnhancementsSeeded() {
           },
           {
             id: "wp-m2",
-            title: "2. সিমেন্ট ও রড স্টক ভেরিফিকেশন (Cement & Rod stock check)",
+            title: "2. à¦¸à¦¿à¦®à§‡à¦¨à§à¦Ÿ à¦“ à¦°à¦¡ à¦¸à§à¦Ÿà¦• à¦­à§‡à¦°à¦¿à¦«à¦¿à¦•à§‡à¦¶à¦¨ (Cement & Rod stock check)",
             status: "Completed",
             completionPercent: 100,
           },
           {
             id: "wp-m3",
-            title: "3. কিউরিং পাম্প তদারকি (Curing water pump supervision)",
+            title: "3. à¦•à¦¿à¦‰à¦°à¦¿à¦‚ à¦ªà¦¾à¦®à§à¦ª à¦¤à¦¦à¦¾à¦°à¦•à¦¿ (Curing water pump supervision)",
             status: "Completed",
             completionPercent: 100,
           },
           {
             id: "wp-m4",
-            title: "4. সাব-কন্ট্রাক্টর কাজের মাপ গ্রহণ (Contractor measurement)",
+            title: "4. à¦¸à¦¾à¦¬-à¦•à¦¨à§à¦Ÿà§à¦°à¦¾à¦•à§à¦Ÿà¦° à¦•à¦¾à¦œà§‡à¦° à¦®à¦¾à¦ª à¦—à§à¦°à¦¹à¦£ (Contractor measurement)",
             status: "Pending",
             completionPercent: 0,
           },
           {
             id: "wp-m5",
-            title: "5. সন্ধ্যায় ডেইলি সামারি আপডেট (Evening Daily Summary)",
+            title: "5. à¦¸à¦¨à§à¦§à§à¦¯à¦¾à§Ÿ à¦¡à§‡à¦‡à¦²à¦¿ à¦¸à¦¾à¦®à¦¾à¦°à¦¿ à¦†à¦ªà¦¡à§‡à¦Ÿ (Evening Daily Summary)",
             status: "In Progress",
             completionPercent: 50,
           },
@@ -330,7 +164,7 @@ async function ensureEnhancementsSeeded() {
         {
           targetRole: "All",
           type: "Task Assigned",
-          title: `Task Assigned: ${allTasks[0].taskCode} — ${allTasks[0].title}`,
+          title: `Task Assigned: ${allTasks[0].taskCode} â€” ${allTasks[0].title}`,
           message: allTasks[0].description || "Please complete the structural quality check and attach site evidence.",
           createdBy: "Engr. Rafiqul Alam (Project Manager)",
           priority: allTasks[0].priority,
@@ -344,9 +178,9 @@ async function ensureEnhancementsSeeded() {
         {
           targetRole: "All",
           type: "Announcement",
-          title: "অফিস সময়সূচি ও ডেইলি ওয়ার্ক প্ল্যান নির্দেশনা (Official Working Schedule Notice)",
+          title: "à¦…à¦«à¦¿à¦¸ à¦¸à¦®à§Ÿà¦¸à§‚à¦šà¦¿ à¦“ à¦¡à§‡à¦‡à¦²à¦¿ à¦“à§Ÿà¦¾à¦°à§à¦• à¦ªà§à¦²à§à¦¯à¦¾à¦¨ à¦¨à¦¿à¦°à§à¦¦à§‡à¦¶à¦¨à¦¾ (Official Working Schedule Notice)",
           message:
-            "সকল স্টাফদের সকাল ৯:৩০ মিনিটের মধ্যে IN TIME এবং দিনের শুরুতে Today's Work Plan সাবমিট করার নির্দেশ দেওয়া হলো। (Morning: 9:30 AM–1:15 PM, Break: 1:15 PM–2:30 PM, Afternoon: 2:30 PM–7:30 PM)।",
+            "à¦¸à¦•à¦² à¦¸à§à¦Ÿà¦¾à¦«à¦¦à§‡à¦° à¦¸à¦•à¦¾à¦² à§¯:à§©à§¦ à¦®à¦¿à¦¨à¦¿à¦Ÿà§‡à¦° à¦®à¦§à§à¦¯à§‡ IN TIME à¦à¦¬à¦‚ à¦¦à¦¿à¦¨à§‡à¦° à¦¶à§à¦°à§à¦¤à§‡ Today's Work Plan à¦¸à¦¾à¦¬à¦®à¦¿à¦Ÿ à¦•à¦°à¦¾à¦° à¦¨à¦¿à¦°à§à¦¦à§‡à¦¶ à¦¦à§‡à¦“à§Ÿà¦¾ à¦¹à¦²à§‹à¥¤ (Morning: 9:30 AMâ€“1:15 PM, Break: 1:15 PMâ€“2:30 PM, Afternoon: 2:30 PMâ€“7:30 PM)à¥¤",
           createdBy: "Engr. Tariqul Islam (Owner)",
           priority: "High",
           assignedPersonOrTeam: "All Staff",
@@ -360,19 +194,157 @@ async function ensureEnhancementsSeeded() {
   }
 }
 
+// ============================================================================
+// CRM BUSINESS-UNIT SEPARATION MIGRATION (IBDC vs IREL)
+// Idempotent: safely applies company tagging + IREL demo leads to existing data.
+// ============================================================================
+async function ensureCrmCompanySeparation() {
+  const existingLeads = await db.select().from(leads);
+
+  // 1. Tag any untagged legacy (Excel-migrated, service-based) lead as IBDC
+  //    and normalise legacy service names to valid Building Design services.
+  const legacyServiceMap: Record<string, string> = {
+    "Full Construction": "Package Building Work",
+    "Architectural & Structural Design": "Plan Design + RAJUK Approval",
+    "Architectural Design": "Architectural Design",
+    "Structural Design": "Structural Design",
+  };
+
+  for (const lead of existingLeads) {
+    if (lead.companyId !== 1 && lead.companyId !== 2) {
+      const mapped = legacyServiceMap[lead.service] || "Other";
+      await db
+        .update(leads)
+        .set({ companyId: 1, service: mapped, priority: lead.priority || "Warm" })
+        .where(eq(leads.id, lead.id));
+    } else if (lead.companyId === 1 && legacyServiceMap[lead.service]) {
+      await db
+        .update(leads)
+        .set({ service: legacyServiceMap[lead.service] })
+        .where(eq(leads.id, lead.id));
+    }
+  }
+
+  // 2. Seed IREL (Insaf Real Estate Ltd.) leads only if none exist
+  const irelLeads = existingLeads.filter((l) => l.companyId === 2);
+  if (irelLeads.length === 0) {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const allEmps = await db.select().from(employees);
+    const salesEmp =
+      allEmps.find((e) => e.department === "CRM & Sales") || allEmps[0];
+
+    await db.insert(leads).values([
+      {
+        leadCode: "LEAD-0004",
+        companyId: 2,
+        name: "Karim",
+        phone: "01712-334455",
+        whatsapp: "01712-334455",
+        location: "Salsabil, Merul Badda, Dhaka",
+        preferredLocation: "Merul Badda / Salsabil",
+        source: "Walk-in",
+        service: "Other",
+        propertyType: "Flat",
+        projectName: "Salsabil",
+        unitFlatShop: "B-4",
+        size: "1450 Sft",
+        floor: "5th Floor",
+        bedrooms: "3",
+        purpose: "Own Use",
+        expectedPurchaseDate: "2026-06-30",
+        clientRequirement: "South-facing 3 bedroom flat with 2 car parking",
+        budget: "8000000.00", // 80 Lakh
+        priority: "Hot",
+        status: "Follow-up",
+        assignedStaffId: salesEmp?.id ?? null,
+        nextFollowUpDate: todayStr,
+      },
+      {
+        leadCode: "LEAD-0005",
+        companyId: 2,
+        name: "Hasan",
+        phone: "01818-667788",
+        whatsapp: "01818-667788",
+        location: "Bhai Bhai Tower, Motijheel, Dhaka",
+        preferredLocation: "Motijheel Commercial Area",
+        source: "Referral",
+        service: "Other",
+        propertyType: "Shop",
+        projectName: "Bhai Bhai Tower",
+        unitFlatShop: "Shop 12",
+        size: "620 Sft",
+        floor: "2nd Floor",
+        purpose: "Investment",
+        expectedPurchaseDate: "2026-08-15",
+        clientRequirement: "Corner shop with wide frontage for franchise outlet",
+        budget: "12000000.00", // 1.2 Crore
+        priority: "Warm",
+        status: "Contacted",
+        assignedStaffId: salesEmp?.id ?? null,
+        nextFollowUpDate: todayStr,
+      },
+      {
+        leadCode: "LEAD-0006",
+        companyId: 2,
+        name: "Nusrat Jahan",
+        phone: "01915-990011",
+        whatsapp: "01915-990011",
+        location: "Purbachal American City, Block C",
+        preferredLocation: "Purbachal / Gulshan Link Road",
+        source: "Facebook",
+        service: "Other",
+        propertyType: "Land/Plot",
+        projectName: "Purbachal American City",
+        unitFlatShop: "Plot 27/C",
+        size: "5 Katha",
+        purpose: "Investment",
+        expectedPurchaseDate: "2026-12-01",
+        clientRequirement: "Corner plot beside 60ft road for future apartment project",
+        budget: "25000000.00",
+        priority: "Warm",
+        status: "Qualified",
+        assignedStaffId: salesEmp?.id ?? null,
+        nextFollowUpDate: todayStr,
+      },
+      {
+        leadCode: "LEAD-0007",
+        companyId: 2,
+        name: "Mizanur Rahman",
+        phone: "01611-223344",
+        whatsapp: "01611-223344",
+        location: "Uttara Sector 4, Dhaka",
+        preferredLocation: "Uttara Sector 3-7",
+        source: "Website",
+        service: "Other",
+        propertyType: "Office Space",
+        projectName: "Insaf Corporate Hub",
+        unitFlatShop: "Unit 7-B",
+        size: "2100 Sft",
+        floor: "7th Floor",
+        purpose: "Own Use",
+        expectedPurchaseDate: "2027-01-15",
+        clientRequirement: "Open floor office with server room & 12 workstations",
+        budget: "18500000.00",
+        priority: "Cold",
+        status: "New",
+        assignedStaffId: salesEmp?.id ?? null,
+        nextFollowUpDate: todayStr,
+      },
+    ]);
+  }
+}
+
 async function runSeedInternal() {
   try {
     const existing = await db.select({ count: sql<number>`count(*)` }).from(users);
     if (Number(existing[0]?.count || 0) > 0) {
       await ensureEnhancementsSeeded();
+      await ensureCrmCompanySeparation();
       return;
     }
 
     const today = new Date().toISOString().split("T")[0];
     const defaultPass = hashPassword("insaf123");
-
-    // 0. CRM BUSINESS UNITS (required before leads can be inserted)
-    await ensureCompanyRows();
 
     // 1. CHART OF ACCOUNTS
     const insertedAccounts = await db
@@ -399,101 +371,64 @@ async function runSeedInternal() {
       .insert(users)
       .values([
         {
-          name: "Engr. Muhammad Sheik Rakibul Hasan",
-          email: "rakibul@insaferp.com",
-          username: "rakibul.hasan",
+          name: "Engr. Tariqul Islam (Owner)",
+          email: "owner@insaferp.com",
           passwordHash: defaultPass,
           role: "Owner",
           permissions: ROLE_DEFAULT_PERMISSIONS["Owner"],
           status: "Active",
         },
         {
-          name: "Asifur Rahman Fahim",
-          email: "fahim@insaferp.com",
-          username: "asifur.fahim",
+          name: "Mahmudul Hasan (General Manager)",
+          email: "manager@insaferp.com",
           passwordHash: defaultPass,
           role: "Manager",
           permissions: ROLE_DEFAULT_PERMISSIONS["Manager"],
           status: "Active",
         },
         {
-          name: "Md Harizul Islam",
-          email: "harizul@insaferp.com",
-          username: "harizul.islam",
+          name: "Farhana Yeasmin (HR Head)",
+          email: "hr@insaferp.com",
           passwordHash: defaultPass,
-          role: "Chairman",
-          permissions: ROLE_DEFAULT_PERMISSIONS["Chairman"],
+          role: "HR",
+          permissions: ROLE_DEFAULT_PERMISSIONS["HR"],
           status: "Active",
         },
         {
-          name: "Md Mahdi Hasan",
-          email: "mahdi@insaferp.com",
-          username: "mahdi.hasan",
+          name: "Kamrul Hasan (Chief Accountant)",
+          email: "accounts@insaferp.com",
+          passwordHash: defaultPass,
+          role: "Accounts",
+          permissions: ROLE_DEFAULT_PERMISSIONS["Accounts"],
+          status: "Active",
+        },
+        {
+          name: "Engr. Rafiqul Alam (Project Manager)",
+          email: "pm@insaferp.com",
           passwordHash: defaultPass,
           role: "Project Manager",
           permissions: ROLE_DEFAULT_PERMISSIONS["Project Manager"],
           status: "Active",
         },
         {
-          name: "Engr. Rakib Hossain",
-          email: "rakib@insaferp.com",
-          username: "rakib.hossain",
+          name: "Sadia Afrin (CRM & Sales Executive)",
+          email: "sales@insaferp.com",
+          passwordHash: defaultPass,
+          role: "Sales",
+          permissions: ROLE_DEFAULT_PERMISSIONS["Sales"],
+          status: "Active",
+        },
+        {
+          name: "Engr. Tanvir Ahmed (Site Engineer)",
+          email: "engineer@insaferp.com",
           passwordHash: defaultPass,
           role: "Engineer",
           permissions: ROLE_DEFAULT_PERMISSIONS["Engineer"],
           status: "Active",
         },
         {
-          name: "Azharul Haq Asif",
-          email: "asif@insaferp.com",
-          username: "azharul.asif",
-          passwordHash: defaultPass,
-          role: "Engineer",
-          permissions: ROLE_DEFAULT_PERMISSIONS["Engineer"],
-          status: "Active",
-        },
-        {
-          name: "Md Talha",
-          email: "talha@insaferp.com",
-          username: "md.talha",
-          marketingScope: "IBDC",
-          passwordHash: defaultPass,
-          role: "Marketing",
-          permissions: ROLE_DEFAULT_PERMISSIONS["Marketing"],
-          status: "Active",
-        },
-        {
-          name: "Md Jahid Hasan",
-          email: "jahid@insaferp.com",
-          username: "jahid.hasan",
-          marketingScope: "IREL",
-          passwordHash: defaultPass,
-          role: "Marketing",
-          permissions: ROLE_DEFAULT_PERMISSIONS["Marketing"],
-          status: "Active",
-        },
-        {
-          name: "Md Abdus Salam",
-          email: "salam@insaferp.com",
-          username: "abdus.salam",
-          passwordHash: defaultPass,
-          role: "Site Staff",
-          permissions: ROLE_DEFAULT_PERMISSIONS["Site Staff"],
-          status: "Active",
-        },
-        {
-          name: "Md Yasin",
-          email: "yasin@insaferp.com",
-          username: "md.yasin",
-          passwordHash: defaultPass,
-          role: "Staff",
-          permissions: ROLE_DEFAULT_PERMISSIONS["Staff"],
-          status: "Active",
-        },
-        {
-          name: "Md Israfil",
-          email: "israfil@insaferp.com",
-          username: "md.israfil",
+          name: "Mehedi Hasan (Site Supervisor)",
+          email: "staff@insaferp.com",
           passwordHash: defaultPass,
           role: "Staff",
           permissions: ROLE_DEFAULT_PERMISSIONS["Staff"],
@@ -770,54 +705,161 @@ async function runSeedInternal() {
     ]);
 
     // 5. LEADS & FOLLOW-UPS & CLIENTS
+    // Existing Excel service-based leads migrated to INSAF BUILDING DESIGN & CONSULTANT LTD. (IBDC)
     const insertedLeads = await db
       .insert(leads)
       .values([
         {
           leadCode: "LEAD-0001",
+          companyId: 1,
           name: "Alhaj Abdul Karim",
           phone: "01819-223344",
           whatsapp: "01819-223344",
           location: "Plot 14, Road 7, Bashundhara Block-D, Dhaka",
           source: "Referral",
-          service: "Full Construction",
+          service: "Package Building Work",
+          propertyType: "Other",
           requirement: "G+9 Residential Apartment Building with Basement Parking",
           landSize: "10 Katha",
           roadWidth: "40 ft",
           budget: "45000000.00",
+          priority: "Hot",
           status: "Won",
           assignedStaffId: insertedEmployees[7].id,
           nextFollowUpDate: today,
         },
         {
           leadCode: "LEAD-0002",
+          companyId: 1,
           name: "Dr. Shafiqur Rahman",
           phone: "01713-556677",
           whatsapp: "01713-556677",
           location: "Sector 13, Uttara, Dhaka",
           source: "Facebook",
-          service: "Architectural & Structural Design",
+          service: "Plan Design + RAJUK Approval",
+          propertyType: "Other",
           requirement: "Duplex Villa + Diagnostic Center Commercial Floor",
           landSize: "6 Katha",
           roadWidth: "30 ft",
           budget: "18000000.00",
+          priority: "Warm",
           status: "Quotation",
           assignedStaffId: insertedEmployees[7].id,
           nextFollowUpDate: today,
         },
         {
           leadCode: "LEAD-0003",
+          companyId: 1,
           name: "Syed Monirul Islam",
           phone: "01911-889900",
           whatsapp: "01911-889900",
           location: "Jolshiri Abashon, Sector 12",
           source: "Website",
-          service: "Full Construction",
+          service: "Construction Management",
+          propertyType: "Other",
           requirement: "G+8 Luxury Condominium",
           landSize: "8 Katha",
           roadWidth: "50 ft",
           budget: "32000000.00",
+          priority: "Hot",
           status: "Follow-up",
+          assignedStaffId: insertedEmployees[7].id,
+          nextFollowUpDate: today,
+        },
+        // ============ INSAF REAL ESTATE LTD. (IREL) â€” PROPERTY ENQUIRIES ============
+        {
+          leadCode: "LEAD-0004",
+          companyId: 2,
+          name: "Karim",
+          phone: "01712-334455",
+          whatsapp: "01712-334455",
+          location: "Salsabil, Merul Badda, Dhaka",
+          preferredLocation: "Merul Badda / Salsabil",
+          source: "Walk-in",
+          service: "Other",
+          propertyType: "Flat",
+          projectName: "Salsabil",
+          unitFlatShop: "B-4",
+          size: "1450 Sft",
+          floor: "5th Floor",
+          bedrooms: "3",
+          purpose: "Own Use",
+          expectedPurchaseDate: "2026-06-30",
+          clientRequirement: "South-facing 3 bedroom flat with 2 car parking",
+          budget: "8000000.00", // 80 Lakh
+          priority: "Hot",
+          status: "Follow-up",
+          assignedStaffId: insertedEmployees[7].id,
+          nextFollowUpDate: today,
+        },
+        {
+          leadCode: "LEAD-0005",
+          companyId: 2,
+          name: "Hasan",
+          phone: "01818-667788",
+          whatsapp: "01818-667788",
+          location: "Bhai Bhai Tower, Motijheel, Dhaka",
+          preferredLocation: "Motijheel Commercial Area",
+          source: "Referral",
+          service: "Other",
+          propertyType: "Shop",
+          projectName: "Bhai Bhai Tower",
+          unitFlatShop: "Shop 12",
+          size: "620 Sft",
+          floor: "2nd Floor",
+          purpose: "Investment",
+          expectedPurchaseDate: "2026-08-15",
+          clientRequirement: "Corner shop with wide frontage for franchise outlet",
+          budget: "12000000.00", // 1.2 Crore
+          priority: "Warm",
+          status: "Contacted",
+          assignedStaffId: insertedEmployees[7].id,
+          nextFollowUpDate: today,
+        },
+        {
+          leadCode: "LEAD-0006",
+          companyId: 2,
+          name: "Nusrat Jahan",
+          phone: "01915-990011",
+          whatsapp: "01915-990011",
+          location: "Purbachal American City, Block C",
+          preferredLocation: "Purbachal / Gulshan Link Road",
+          source: "Facebook",
+          service: "Other",
+          propertyType: "Land/Plot",
+          projectName: "Purbachal American City",
+          unitFlatShop: "Plot 27/C",
+          size: "5 Katha",
+          purpose: "Investment",
+          expectedPurchaseDate: "2026-12-01",
+          clientRequirement: "Corner plot beside 60ft road for future apartment project",
+          budget: "25000000.00",
+          priority: "Warm",
+          status: "Qualified",
+          assignedStaffId: insertedEmployees[7].id,
+          nextFollowUpDate: today,
+        },
+        {
+          leadCode: "LEAD-0007",
+          companyId: 2,
+          name: "Mizanur Rahman",
+          phone: "01611-223344",
+          whatsapp: "01611-223344",
+          location: "Uttara Sector 4, Dhaka",
+          preferredLocation: "Uttara Sector 3-7",
+          source: "Website",
+          service: "Other",
+          propertyType: "Office Space",
+          projectName: "Insaf Corporate Hub",
+          unitFlatShop: "Unit 7-B",
+          size: "2100 Sft",
+          floor: "7th Floor",
+          purpose: "Own Use",
+          expectedPurchaseDate: "2027-01-15",
+          clientRequirement: "Open floor office with server room & 12 workstations",
+          budget: "18500000.00",
+          priority: "Cold",
+          status: "New",
           assignedStaffId: insertedEmployees[7].id,
           nextFollowUpDate: today,
         },
@@ -1930,8 +1972,8 @@ async function runSeedInternal() {
       {
         targetRole: "All",
         type: "Payment Due",
-        title: "Supplier Payable Outstanding: ৳200,000",
-        message: "BILL-0001 from BSRM & Crown Building Materials has ৳200,000 balance due.",
+        title: "Supplier Payable Outstanding: à§³200,000",
+        message: "BILL-0001 from BSRM & Crown Building Materials has à§³200,000 balance due.",
         relatedUrl: "/suppliers",
         relatedEntityCode: "BILL-0001",
         isRead: false,
@@ -1977,7 +2019,11 @@ async function runSeedInternal() {
     void insertedExpenses;
 
     await ensureEnhancementsSeeded();
+    await ensureCrmCompanySeparation();
   } catch (err) {
     console.error("Seed initialization error:", err);
   }
 }
+
+
+

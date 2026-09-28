@@ -3,9 +3,17 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import {
+  Plus,
+  Phone,
+  MapPin,
+  FileText,
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  ArrowRight,
   Printer,
 } from "lucide-react";
-import { exportToPDFPrint } from "@/lib/export-utils";
+import { exportToCSV, exportToPDFPrint } from "@/lib/export-utils";
 
  
 
@@ -28,9 +36,9 @@ export function ClientsAndQuotationsView({
 
   // Quotation state
   const [qClientId, setQClientId] = useState(String(data.clients?.[0]?.id || ""));
-  const [qLeadId] = useState(String(data.leads?.[0]?.id || ""));
-  const [service, setService] = useState("ফুল কনস্ট্রাকশন প্যাকেজ");
-  const [itemDesc, setItemDesc] = useState("আরসিসি স্ট্রাকচারাল ফ্রেম ও ফাউন্ডেশন");
+  const [qLeadId, setQLeadId] = useState(String(data.leads?.[0]?.id || ""));
+  const [service, setService] = useState("Full Construction Package");
+  const [itemDesc, setItemDesc] = useState("RCC Structural Framing & Foundation");
   const [itemQty, setItemQty] = useState("1000");
   const [itemRate, setItemRate] = useState("450");
   const [discount, setDiscount] = useState("10000");
@@ -48,7 +56,6 @@ export function ClientsAndQuotationsView({
     setClientName("");
     setCompanyName("");
     setPhone("");
-    setAddress("");
   }
 
   async function handleCreateQuotation(e: React.FormEvent) {
@@ -61,7 +68,7 @@ export function ClientsAndQuotationsView({
       items: [
         {
           description: itemDesc,
-          unit: "বর্গফুট",
+          unit: "SqFt",
           quantity: Number(itemQty),
           rate: Number(itemRate),
         },
@@ -73,209 +80,162 @@ export function ClientsAndQuotationsView({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900">
             {mode === "quotations"
-              ? "কোটেশন ও বিওকিউ প্রস্তাবনা ব্যবস্থাপনা (QUO-0001)"
-              : "ক্লায়েন্ট তালিকা ও বকেয়া হিসাব লেজার (CLI-0001)"}
+              ? "Quotations & BOQ Proposal System (QUO-0001)"
+              : "Client Directory & Receivable Ledger (CLI-0001)"}
           </h1>
           <p className="text-xs text-slate-500">
-            লিড → ফলো-আপ → কোটেশন → ক্লায়েন্ট → প্রজেক্ট → ইনভয়েস → পেমেন্ট সমন্বিত সিআরএম
+            End-to-End CRM Integration: Lead → Quotation → Client → Project → Invoice → Payment
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* বাম পাশের ফর্মসমূহ */}
+        {/* Left Forms */}
         <div className="lg:col-span-4 space-y-6">
           <form
             onSubmit={handleCreateClient}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
-            <h2 className="text-sm font-bold text-slate-900">নতুন ক্লায়েন্ট নিবন্ধন করুন</h2>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                ক্লায়েন্টের পূর্ণ নাম *
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="যেমন: আলহাজ্ব আব্দুল করিম"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                প্রতিষ্ঠানের নাম
-              </label>
-              <input
-                type="text"
-                placeholder="যেমন: করিম প্রোপার্টিজ লি."
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                ফোন নম্বর *
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="01711-XXXXXX"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-mono"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                ঠিকানা
-              </label>
-              <input
-                type="text"
-                placeholder="প্লট ১৪, রোড ৭, বসুন্ধরা আ/এ"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs"
-              />
-            </div>
+            <h2 className="text-sm font-bold text-slate-900">নতুন ক্লায়েন্ট নিবন্ধন</h2>
+            <input
+              type="text"
+              required
+              placeholder="Client পূর্ণ নাম *"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
+            <input
+              type="text"
+              placeholder="Company Name"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
+            <input
+              type="text"
+              required
+              placeholder="Phone Number *"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
+            <input
+              type="text"
+              placeholder="Address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs"
             >
-              ক্লায়েন্ট সংরক্ষণ করুন (CLI-XXXX)
+              ক্লায়েন্ট তৈরি (CLI-XXXX)
             </button>
           </form>
 
           <form
             onSubmit={handleCreateQuotation}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
-            <h2 className="text-sm font-bold text-slate-900">নতুন বিওকিউ কোটেশন তৈরি করুন</h2>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                ক্লায়েন্ট নির্বাচন
-              </label>
-              <select
-                value={qClientId}
-                onChange={(e) => setQClientId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium"
-              >
-                <option value="">-- ক্লায়েন্ট নির্বাচন করুন --</option>
-                {(data.clients || []).map((c: any) => (
-                  <option key={c.id} value={c.id}>
-                    {c.clientCode} — {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                সেবার শিরোনাম
-              </label>
+            <h2 className="text-sm font-bold text-slate-900">BOQ কোটেশন তৈরি</h2>
+            <select
+              value={qClientId}
+              onChange={(e) => setQClientId(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            >
+              <option value="">-- Select Client --</option>
+              {(data.clients || []).map((c: any) => (
+                <option key={c.id} value={c.id}>
+                  {c.clientCode} — {c.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              required
+              value={service}
+              onChange={(e) => setService(e.target.value)}
+              placeholder="Service Title"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
+            <input
+              type="text"
+              required
+              value={itemDesc}
+              onChange={(e) => setItemDesc(e.target.value)}
+              placeholder="BOQ Item Description"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
+            <div className="grid grid-cols-2 gap-2">
               <input
-                type="text"
-                required
-                value={service}
-                onChange={(e) => setService(e.target.value)}
-                placeholder="সেবার নাম লিখুন"
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs"
+                type="number"
+                value={itemQty}
+                onChange={(e) => setItemQty(e.target.value)}
+                placeholder="Qty"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
               />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                কাজের বিবরণ / আইটেম
-              </label>
               <input
-                type="text"
-                required
-                value={itemDesc}
-                onChange={(e) => setItemDesc(e.target.value)}
-                placeholder="আইটেমের বিবরণ"
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs"
+                type="number"
+                value={itemRate}
+                onChange={(e) => setItemRate(e.target.value)}
+                placeholder="Rate"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">পরিমাণ</label>
-                <input
-                  type="number"
-                  value={itemQty}
-                  onChange={(e) => setItemQty(e.target.value)}
-                  placeholder="পরিমাণ"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">দর (৳)</label>
-                <input
-                  type="number"
-                  value={itemRate}
-                  onChange={(e) => setItemRate(e.target.value)}
-                  placeholder="দর"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">ছাড় (৳)</label>
-                <input
-                  type="number"
-                  value={discount}
-                  onChange={(e) => setDiscount(e.target.value)}
-                  placeholder="ছাড়"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">ট্যাক্স (৳)</label>
-                <input
-                  type="number"
-                  value={tax}
-                  onChange={(e) => setTax(e.target.value)}
-                  placeholder="ট্যাক্স"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
+              <input
+                type="number"
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                placeholder="Discount"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              />
+              <input
+                type="number"
+                value={tax}
+                onChange={(e) => setTax(e.target.value)}
+                placeholder="Tax"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              />
             </div>
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2 rounded-xl bg-slate-900 text-white font-semibold text-xs"
             >
-              কোটেশন তৈরি করুন (QUO-XXXX)
+              কোটেশন তৈরি (QUO-XXXX)
             </button>
           </form>
         </div>
 
-        {/* ডান পাশের ক্লায়েন্ট ও কোটেশন তালিকা */}
+        {/* Right Clients & Quotations Tables */}
         <div className="lg:col-span-8 space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                ক্লায়েন্ট ও বকেয়া পাওনা সারাংশ ({(data.clients || []).length} জন)
+                ক্লায়েন্ট ও প্রাপ্য সারাংশ ({(data.clients || []).length})
               </h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                    <th className="p-3 font-semibold">ক্লায়েন্ট আইডি</th>
-                    <th className="p-3 font-semibold">নাম ও প্রতিষ্ঠান</th>
-                    <th className="p-3 font-semibold">ফোন নম্বর</th>
-                    <th className="p-3 font-semibold">মোট ইনভয়েসকৃত</th>
-                    <th className="p-3 font-semibold">মোট পরিশোধিত</th>
-                    <th className="p-3 font-semibold">বকেয়া পাওনা (AR)</th>
+                    <th className="p-3">ক্লায়েন্ট আইডি</th>
+                    <th className="p-3">নাম ও কোম্পানি</th>
+                    <th className="p-3">ফোন</th>
+                    <th className="p-3">মোট ইনভয়েস</th>
+                    <th className="p-3">মোট পরিশোধ</th>
+                    <th className="p-3">বকেয়া প্রাপ্য</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {(data.clients || []).map((c: any) => (
-                    <tr key={c.id} className="hover:bg-slate-50 transition">
+                    <tr key={c.id}>
                       <td className="p-3 font-mono font-bold text-emerald-700">
                         {c.clientCode}
                       </td>
@@ -283,14 +243,14 @@ export function ClientsAndQuotationsView({
                         <div className="font-bold text-slate-900">{c.name}</div>
                         <div className="text-[11px] text-slate-500">{c.companyName}</div>
                       </td>
-                      <td className="p-3 font-mono">{c.phone}</td>
+                      <td className="p-3">{c.phone}</td>
                       <td className="p-3 font-semibold">
                         ৳{Number(c.totalInvoiced).toLocaleString()}
                       </td>
                       <td className="p-3 text-emerald-600 font-semibold">
                         ৳{Number(c.totalPaid).toLocaleString()}
                       </td>
-                      <td className="p-3 font-bold text-amber-600 text-sm">
+                      <td className="p-3 font-bold text-amber-600">
                         ৳{Number(c.outstandingBalance).toLocaleString()}
                       </td>
                     </tr>
@@ -300,35 +260,35 @@ export function ClientsAndQuotationsView({
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                কোটেশন তালিকা (খসড়া → প্রেরিত → অনুমোদিত → প্রজেক্ট/ইনভয়েস)
+                Quotations (Draft → Sent → Accepted → Project/Invoice)
               </h3>
             </div>
             <div className="divide-y divide-slate-100">
               {(data.quotations || []).map((q: any) => (
                 <div
                   key={q.id}
-                  className="p-4 flex flex-wrap items-center justify-between gap-3 text-xs hover:bg-slate-50 transition"
+                  className="p-4 flex flex-wrap items-center justify-between gap-3 text-xs"
                 >
                   <div>
-                    <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg">
+                    <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
                       {q.quotationNumber}
                     </span>
                     <span className="ml-2 font-bold text-slate-900">{q.service}</span>
                     <p className="text-slate-500 mt-1">
-                      উপমোট: ৳{Number(q.subtotal).toLocaleString()} | ছাড়: ৳
-                      {Number(q.discount).toLocaleString()} | ভ্যাট/ট্যাক্স: ৳
+                      Subtotal: ৳{Number(q.subtotal).toLocaleString()} | Discount: ৳
+                      {Number(q.discount).toLocaleString()} | Tax: ৳
                       {Number(q.tax).toLocaleString()} →{" "}
                       <strong className="text-slate-900">
-                        সর্বমোট: ৳{Number(q.totalAmount).toLocaleString()}
+                        Total: ৳{Number(q.totalAmount).toLocaleString()}
                       </strong>
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-1 rounded-full font-bold bg-emerald-100 text-emerald-800 text-[11px]">
-                      {q.status === "Accepted" ? "অনুমোদিত" : q.status === "Sent" ? "প্রেরিত" : q.status}
+                    <span className="px-2.5 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800">
+                      {q.status}
                     </span>
                     {q.status !== "Accepted" && (
                       <button
@@ -340,9 +300,9 @@ export function ClientsAndQuotationsView({
                             status: "Accepted",
                           })
                         }
-                        className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold transition hover:bg-emerald-500"
+                        className="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold"
                       >
-                        কোটেশন অনুমোদন করুন
+                        কোটেশন গ্রহণ
                       </button>
                     )}
                     {q.status === "Accepted" && q.clientId && (
@@ -355,12 +315,12 @@ export function ClientsAndQuotationsView({
                             projectId: q.projectId,
                             quotationId: q.id,
                             totalAmount: Number(q.totalAmount),
-                            notes: `অনুমোদিত কোটেশন ${q.quotationNumber} হতে প্রস্তুতকৃত ইনভয়েস`,
+                            notes: `Generated from Accepted Quotation ${q.quotationNumber}`,
                           })
                         }
-                        className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold transition hover:bg-slate-800"
+                        className="px-2.5 py-1 rounded bg-slate-900 text-white font-semibold"
                       >
-                        ইনভয়েস তৈরি করুন →
+                        ইনভয়েস তৈরি →
                       </button>
                     )}
                   </div>
@@ -389,8 +349,8 @@ export function ProjectsView({
   const [clientId, setClientId] = useState(String(data.clients?.[0]?.id || 1));
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
-  const [landSize, setLandSize] = useState("১০ কাঠা");
-  const [roadWidth, setRoadWidth] = useState("৪০ ফুট");
+  const [landSize, setLandSize] = useState("10 Katha");
+  const [roadWidth, setRoadWidth] = useState("40 ft");
   const [budget, setBudget] = useState("2500000");
 
   async function handleCreateProject(e: React.FormEvent) {
@@ -414,21 +374,21 @@ export function ProjectsView({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 flex items-center justify-between shadow-xs">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900">
             {focusedProjectId
-              ? `প্রজেক্ট ৩৬০° বিশ্লেষণ ড্যাশবোর্ড (#${focusedProjectId})`
-              : "প্রজেক্ট ব্যবস্থাপনা ও লাভজনকতা বিশ্লেষণ (PRJ-0001)"}
+              ? `Project 360° Command Dashboard (#${focusedProjectId})`
+              : "প্রজেক্ট ব্যবস্থাপনা ও মুনাফা কেন্দ্র"}
           </h1>
           <p className="text-xs text-slate-500">
-            বাজেট বনাম প্রকৃত খরচ (মালামাল + শ্রমিক + ঠিকাদার + পরিবহন + সাইট খরচ) বনাম মোট আয় ও লাভ/ক্ষতির হিসাব
+            Live Comparison: Budget vs Actual Cost (Material + Labour + Contractor + Transport + Site Expense) vs Revenue vs Profit/Loss
           </p>
         </div>
         {focusedProjectId && (
           <Link
             href="/projects"
-            className="px-3.5 py-2 rounded-2xl bg-slate-900 text-white text-xs font-bold transition hover:bg-slate-800"
+            className="px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold"
           >
             ← সকল প্রজেক্ট
           </Link>
@@ -438,16 +398,16 @@ export function ProjectsView({
       {!focusedProjectId && data.currentUser?.role !== "Staff" && (
         <form
           onSubmit={handleCreateProject}
-          className="bg-white p-5 rounded-3xl border border-slate-200 grid grid-cols-1 sm:grid-cols-6 gap-3 items-end shadow-xs"
+          className="bg-white p-5 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-6 gap-3 items-end"
         >
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">
-              ক্লায়েন্ট
+              Client
             </label>
             <select
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             >
               {(data.clients || []).map((c: any) => (
                 <option key={c.id} value={c.id}>
@@ -465,20 +425,20 @@ export function ProjectsView({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="ইনসাফ স্কাইলাইন টাওয়ার"
+              placeholder="INSAF Skyline Tower"
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">
-              অবস্থান / ঠিকানা *
+              লোকেশন *
             </label>
             <input
               type="text"
               required
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="উত্তরা সেক্টর ১১"
+              placeholder="Uttara Sector 11"
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
           </div>
@@ -495,9 +455,9 @@ export function ProjectsView({
           </div>
           <button
             type="submit"
-            className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs"
+            className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs"
           >
-            + নতুন প্রজেক্ট শুরু করুন
+            + প্রজেক্ট চালু
           </button>
         </form>
       )}
@@ -514,12 +474,12 @@ export function ProjectsView({
           return (
             <div
               key={p.id}
-              className="bg-white p-6 rounded-3xl border border-slate-200 space-y-5 shadow-xs"
+              className="bg-white p-6 rounded-2xl border border-slate-200 space-y-5 shadow-xs"
             >
               <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-800">
+                    <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
                       {p.projectCode}
                     </span>
                     <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
@@ -528,13 +488,13 @@ export function ProjectsView({
                   </div>
                   <Link
                     href={`/projects/${p.id}`}
-                    className="text-xl font-bold text-slate-900 hover:text-emerald-600 mt-1 block transition"
+                    className="text-xl font-bold text-slate-900 hover:text-emerald-600 mt-1 block"
                   >
                     {p.name}
                   </Link>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    ঠিকানা: {p.location} • জমি: {p.landSize} • রাস্তা: {p.roadWidth} • সময়কাল:{" "}
-                    {p.startDate} হতে {p.expectedCompletion}
+                    Location: {p.location} • Land: {p.landSize} • Road: {p.roadWidth} • Timeline:{" "}
+                    {p.startDate} to {p.expectedCompletion}
                   </p>
                 </div>
                 <div className="text-right">
@@ -544,77 +504,77 @@ export function ProjectsView({
                     href={`/projects/${p.id}`}
                     className="text-xs font-semibold text-slate-900 underline"
                   >
-                    বিস্তারিত দেখুন →
+                    প্রজেক্ট বিস্তারিত →
                   </Link>
                 </div>
               </div>
 
-              {/* বাজেট বনাম খরচ বনাম আয় বনাম লাভ */}
+              {/* Budget vs Actual Cost vs Revenue vs Profit/Loss */}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                   <span className="text-xs text-slate-500 block">প্রজেক্ট বাজেট</span>
                   <span className="text-base font-bold text-slate-900">
                     ৳{Number(p.budget).toLocaleString()}
                   </span>
                 </div>
-                <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200">
+                <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200">
                   <span className="text-xs text-amber-800 block">প্রকৃত খরচ (মোট)</span>
                   <span className="text-base font-bold text-amber-700">
                     ৳{Number(p.actualCost).toLocaleString()}
                   </span>
                 </div>
-                <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200">
-                  <span className="text-xs text-emerald-800 block">বিলকৃত আয়</span>
+                <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200">
+                  <span className="text-xs text-emerald-800 block">বিল করা আয়</span>
                   <span className="text-base font-bold text-emerald-700">
                     ৳{Number(p.totalRevenue).toLocaleString()}
                   </span>
                 </div>
-                <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200">
-                  <span className="text-xs text-blue-800 block">আদায়কৃত অর্থ</span>
+                <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200">
+                  <span className="text-xs text-blue-800 block">সংগৃহীত অর্থ</span>
                   <span className="text-base font-bold text-blue-700">
                     ৳{Number(p.collectedRevenue).toLocaleString()}
                   </span>
                 </div>
-                <div className="p-3.5 rounded-2xl bg-slate-900 text-white">
-                  <span className="text-xs text-slate-300 block">নিট লাভ / ক্ষতি</span>
+                <div className="p-3.5 rounded-xl bg-slate-900 text-white">
+                  <span className="text-xs text-slate-300 block">নিট মুনাফা / ক্ষতি</span>
                   <span className="text-base font-bold text-emerald-400">
                     ৳{Number(p.profitLoss).toLocaleString()}
                   </span>
                 </div>
               </div>
 
-              {/* ব্যয়ের বিস্তারিত বিভাজন */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+              {/* Exact Cost Breakdown (Material + Labour + Contractor + Transport + Site Expense) */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs">
                 <p className="font-bold text-slate-800 mb-2">
-                  খরচের খাতভিত্তিক বিভাজন (অনুমোদিত খরচের ভিত্তিতে স্বয়ংক্রিয় হিসাব):
+                  Actual Cost Breakdown (Real-Time Aggregation from Approved Project Expenses):
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   <div>
-                    <span className="text-slate-500">মালামাল: </span>
+                    <span className="text-slate-500">Material: </span>
                     <strong className="text-slate-900">
                       ৳{Number(p.materialCost).toLocaleString()}
                     </strong>
                   </div>
                   <div>
-                    <span className="text-slate-500">শ্রমিক মজুরি: </span>
+                    <span className="text-slate-500">Labour: </span>
                     <strong className="text-slate-900">
                       ৳{Number(p.labourCost).toLocaleString()}
                     </strong>
                   </div>
                   <div>
-                    <span className="text-slate-500">ঠিকাদার বিল: </span>
+                    <span className="text-slate-500">Contractor: </span>
                     <strong className="text-slate-900">
                       ৳{Number(p.contractorCost).toLocaleString()}
                     </strong>
                   </div>
                   <div>
-                    <span className="text-slate-500">পরিবহন: </span>
+                    <span className="text-slate-500">Transport: </span>
                     <strong className="text-slate-900">
                       ৳{Number(p.transportCost).toLocaleString()}
                     </strong>
                   </div>
                   <div>
-                    <span className="text-slate-500">সাইট খরচ: </span>
+                    <span className="text-slate-500">Site Expense: </span>
                     <strong className="text-slate-900">
                       ৳{Number(p.siteExpenseCost).toLocaleString()}
                     </strong>
@@ -622,33 +582,33 @@ export function ProjectsView({
                 </div>
               </div>
 
-              {/* সংযুক্ত সাইট, টাস্ক ও ঠিকাদার */}
+              {/* Linked Sites, Tasks, ঠিকাদার ও খরচ */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div className="border border-slate-200 rounded-2xl p-4">
+                <div className="border border-slate-200 rounded-xl p-3.5">
                   <h4 className="font-bold text-slate-800 mb-2">
-                    প্রজেক্ট সাইটসমূহ ({pSites.length} টি)
+                    প্রজেক্ট সাইট ({pSites.length})
                   </h4>
                   {pSites.map((s: any) => (
-                    <div key={s.id} className="p-2.5 rounded-xl bg-slate-50 mb-2">
+                    <div key={s.id} className="p-2 rounded bg-slate-50 mb-1.5">
                       <div className="flex justify-between font-bold">
                         <span>
                           {s.siteCode}: {s.name}
                         </span>
                         <span className="text-emerald-600">{s.progressPercent}%</span>
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        শ্রমিক: {s.workersCount} জন • সমস্যা: {s.problems || "কোনোটি নয়"}
+                      <p className="text-[11px] text-slate-500">
+                        Workers: {s.workersCount} • Issues: {s.problems || "নেই"}
                       </p>
                     </div>
                   ))}
                 </div>
 
-                <div className="border border-slate-200 rounded-2xl p-4">
+                <div className="border border-slate-200 rounded-xl p-3.5">
                   <h4 className="font-bold text-slate-800 mb-2">
-                    প্রজেক্ট টাস্কসমূহ ({pTasks.length} টি)
+                    প্রজেক্ট টাস্ক ({pTasks.length})
                   </h4>
                   {pTasks.map((t: any) => (
-                    <div key={t.id} className="p-2.5 rounded-xl bg-slate-50 mb-2">
+                    <div key={t.id} className="p-2 rounded bg-slate-50 mb-1.5">
                       <div className="flex justify-between font-bold">
                         <Link href={`/tasks/${t.id}`} className="hover:underline">
                           {t.taskCode}: {t.title}
@@ -659,16 +619,16 @@ export function ProjectsView({
                   ))}
                 </div>
 
-                <div className="border border-slate-200 rounded-2xl p-4">
+                <div className="border border-slate-200 rounded-xl p-3.5">
                   <h4 className="font-bold text-slate-800 mb-2">
-                    সাব-ঠিকাদার ও খরচ ({pContractors.length} / {pExpenses.length})
+                    ঠিকাদার ও খরচ ({pContractors.length} / {pExpenses.length})
                   </h4>
                   {pContractors.map((c: any) => (
-                    <div key={c.id} className="p-2.5 rounded-xl bg-slate-50 mb-2">
+                    <div key={c.id} className="p-2 rounded bg-slate-50 mb-1.5">
                       <div className="font-bold">{c.name}</div>
-                      <div className="text-[11px] text-slate-600 mt-0.5">
-                        অনুমোদিত: ৳{Number(c.approvedBillAmount).toLocaleString()} | পরিশোধিত: ৳
-                        {Number(c.paidAmount).toLocaleString()} | বকেয়া: ৳
+                      <div className="text-[11px] text-slate-600">
+                        Approved: ৳{Number(c.approvedBillAmount).toLocaleString()} | Paid: ৳
+                        {Number(c.paidAmount).toLocaleString()} | Due: ৳
                         {Number(c.outstandingDue).toLocaleString()}
                       </div>
                     </div>
@@ -724,19 +684,17 @@ export function SitesAndReportsView({
     setWorkDone("");
     setMaterialsUsedSummary("");
     setTomorrowPlan("");
-    setProblems("");
-    setPhotoUrl("");
   }
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900">
-            সাইট ব্যবস্থাপনা ও দৈনিক সাইট ইঞ্জিনিয়ারিং রিপোর্ট (SITE-0001)
+            সাইট ব্যবস্থাপনা ও দৈনিক সাইট রিপোর্ট
           </h1>
           <p className="text-xs text-slate-500">
-            সাইট রিপোর্ট দাখিলের সাথে সাথে তা সংশ্লিষ্ট মূল প্রজেক্টের অগ্রগতি ও খরচে যুক্ত হয়
+            Site Reports automatically aggregate progress and labour count to the parent Project Dashboard
           </p>
         </div>
         <button
@@ -748,7 +706,7 @@ export function SitesAndReportsView({
               data.siteReports || []
             )
           }
-          className="px-3.5 py-2 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1.5 transition"
+          className="px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold flex items-center gap-1"
         >
           <Printer className="w-3.5 h-3.5" /> সাইট রিপোর্ট প্রিন্ট
         </button>
@@ -757,20 +715,20 @@ export function SitesAndReportsView({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <form
           onSubmit={handleSubmitReport}
-          className="lg:col-span-5 bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 h-fit shadow-xs"
+          className="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 space-y-3 h-fit"
         >
           <h2 className="text-sm font-bold text-slate-900">
-            আজকের সাইট রিপোর্ট দাখিল করুন ({today})
+            দৈনিক সাইট রিপোর্ট জমা ({today})
           </h2>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                সাইট নির্বাচন
+                Site
               </label>
               <select
                 value={siteId}
                 onChange={(e) => setSiteId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
               >
                 {(data.sites || []).map((s: any) => (
                   <option key={s.id} value={s.id}>
@@ -781,12 +739,12 @@ export function SitesAndReportsView({
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                প্রজেক্ট নির্বাচন
+                Project
               </label>
               <select
                 value={projectId}
                 onChange={(e) => setProjectId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
               >
                 {(data.projects || []).map((p: any) => (
                   <option key={p.id} value={p.id}>
@@ -799,14 +757,14 @@ export function SitesAndReportsView({
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">
-              আজকের সম্পাদিত কাজ *
+              আজকের কাজ *
             </label>
             <textarea
               required
               rows={2}
               value={workDone}
               onChange={(e) => setWorkDone(e.target.value)}
-              placeholder="যেমন: ৪র্থ তলার কলামের রড বাইন্ডিং ও শাটারিং সম্পন্ন হয়েছে"
+              placeholder="e.g. Completed 4th floor column shuttering & concrete pouring"
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
           </div>
@@ -851,13 +809,13 @@ export function SitesAndReportsView({
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">
-              ব্যবহৃত কাঁচামাল / মালামালের বিবরণ
+              ব্যবহৃত মালামাল
             </label>
             <input
               type="text"
               value={materialsUsedSummary}
               onChange={(e) => setMaterialsUsedSummary(e.target.value)}
-              placeholder="যেমন: ২৫ ব্যাগ সিমেন্ট, ১.২ টন রড"
+              placeholder="25 Bags Cement, 1.2 Ton 16mm Rod"
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
           </div>
@@ -865,26 +823,24 @@ export function SitesAndReportsView({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                সাইটের সমস্যা / বাধা
+                সাইট সমস্যা
               </label>
               <input
                 type="text"
                 value={problems}
                 onChange={(e) => setProblems(e.target.value)}
-                placeholder="সমস্যা থাকলে লিখুন"
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                আগামীকালের পরিকল্পনা *
+                Tomorrow&apos;s Plan *
               </label>
               <input
                 type="text"
                 required
                 value={tomorrowPlan}
                 onChange={(e) => setTomorrowPlan(e.target.value)}
-                placeholder="পরবর্তী দিনের কর্মপরিকল্পনা"
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
               />
             </div>
@@ -892,7 +848,7 @@ export function SitesAndReportsView({
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">
-              সাইট ফটোর ওয়েব লিংক (ঐচ্ছিক)
+              Site Photo URL (Optional)
             </label>
             <input
               type="text"
@@ -905,9 +861,9 @@ export function SitesAndReportsView({
 
           <button
             type="submit"
-            className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs"
+            className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition"
           >
-            সাইট রিপোর্ট জমা দিন ও প্রজেক্টে যুক্ত করুন
+            সাইট রিপোর্ট জমা ও প্রজেক্টে যোগ
           </button>
         </form>
 
@@ -916,7 +872,7 @@ export function SitesAndReportsView({
             {(data.sites || []).map((s: any) => (
               <div
                 key={s.id}
-                className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2 shadow-xs"
+                className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2"
               >
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
@@ -929,38 +885,38 @@ export function SitesAndReportsView({
                 <h3 className="text-sm font-bold text-slate-900">{s.name}</h3>
                 <p className="text-xs text-slate-500">{s.location}</p>
                 <div className="flex justify-between text-xs pt-2 border-t border-slate-100">
-                  <span>কার্যরত শ্রমিক: {s.workersCount} জন</span>
-                  <span className="text-amber-600 font-medium">{s.problems || "কোনো সমস্যা নেই"}</span>
+                  <span>Active Workers: {s.workersCount}</span>
+                  <span className="text-amber-600">{s.problems || "No issues"}</span>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3 shadow-xs">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
             <h3 className="text-sm font-bold text-slate-900">
-              দাখিলকৃত দৈনিক সাইট ইঞ্জিনিয়ারিং রিপোর্ট ({(data.siteReports || []).length} টি)
+              দৈনিক সাইট ইঞ্জিনিয়ারিং রিপোর্ট ({(data.siteReports || []).length})
             </h3>
             {(data.siteReports || []).map((sr: any) => (
               <div
                 key={sr.id}
-                className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1.5"
+                className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5"
               >
                 <div className="flex justify-between font-bold text-slate-900">
                   <span>
-                    {sr.reportCode} • {sr.date} (সাইট #{sr.siteId})
+                    {sr.reportCode} • {sr.date} (Site #{sr.siteId})
                   </span>
                   <span className="text-emerald-700">
-                    অগ্রগতি: {sr.progressPercent}% | শ্রমিক: {sr.labourCount} জন
+                    Progress: {sr.progressPercent}% | Labour: {sr.labourCount}
                   </span>
                 </div>
                 <p className="text-slate-800 font-medium">{sr.workDone}</p>
                 <p className="text-slate-600">
-                  <strong>ব্যবহৃত মালামাল:</strong> {sr.materialsUsedSummary || "প্রযোজ্য নয়"} |{" "}
-                  <strong>সাইট খরচ:</strong> ৳
+                  <strong>Materials Used:</strong> {sr.materialsUsedSummary || "N/A"} |{" "}
+                  <strong>Site Expense:</strong> ৳
                   {Number(sr.siteExpenseAmount).toLocaleString()}
                 </p>
                 <p className="text-slate-500">
-                  <strong>আগামীকালের কাজ:</strong> {sr.tomorrowPlan}
+                  <strong>Tomorrow Plan:</strong> {sr.tomorrowPlan}
                 </p>
               </div>
             ))}
@@ -970,3 +926,11 @@ export function SitesAndReportsView({
     </div>
   );
 }
+
+void Phone;
+void MapPin;
+void FileText;
+void Briefcase;
+void Building2;
+void CheckCircle2;
+void ArrowRight;

@@ -1,4 +1,4 @@
-import {
+﻿import {
   pgTable,
   serial,
   text,
@@ -20,14 +20,14 @@ export const users = pgTable(
     email: text("email").notNull(),
     username: text("username"),
     passwordHash: text("password_hash").notNull(),
-    role: text("role").notNull().default("Staff"), // Owner, Chairman, Manager, Marketing, Engineer, Project Manager, Site Staff, Staff, Admin, HR, Accounts, Sales
+    role: text("role").notNull().default("Staff"), // Owner, Admin, Manager, HR, Accounts, Sales, Project Manager, Engineer, Staff, Site Staff
     permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
-    marketingScope: text("marketing_scope"), // 'IBDC' (Building Design leads only), 'IREL' (Real Estate leads only), or null
-    mustChangePassword: boolean("must_change_password").notNull().default(false),
     status: text("status").notNull().default("Active"), // Active, Inactive
     resetToken: text("reset_token"),
     resetTokenExpiry: timestamp("reset_token_expiry"),
     lastLoginAt: timestamp("last_login_at"),
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
+    failedLoginCount: integer("failed_login_count").notNull().default(0),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
@@ -60,10 +60,8 @@ export const employees = pgTable(
     empCode: text("emp_code").notNull(), // EMP-0001
     userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
     name: text("name").notNull(),
-    company: text("company").notNull().default("INSAF"), // INSAF, INSAF BUILDING DESIGN & CONSULTANT LTD., INSAF REAL ESTATE LTD.
-    department: text("department").notNull(), // Engineering, Construction, CRM & Sales, HR & Admin, Accounts & Finance, Procurement, Site Operations
+    department: text("department").notNull(), // Engineering, Construction, CRM & Sales, HR & Admin, Accounts & Finance, Procurement
     designation: text("designation").notNull(),
-    assignedSite: text("assigned_site").notNull().default(""), // e.g. Muktar Plaza
     joiningDate: text("joining_date").notNull(),
     basicSalary: numeric("basic_salary", { precision: 14, scale: 2 }).notNull().default("0"),
     allowance: numeric("allowance", { precision: 14, scale: 2 }).notNull().default("0"),
@@ -82,6 +80,10 @@ export const employees = pgTable(
     annualLeaveQuota: integer("annual_leave_quota").notNull().default(20),
     casualLeaveQuota: integer("casual_leave_quota").notNull().default(10),
     sickLeaveQuota: integer("sick_leave_quota").notNull().default(14),
+    companyId: text("company").notNull().default("INSAF"), // INSAF | IBDC | IREL
+    marketingCompany: text("marketing_company"), // IBDC | IREL | BOTH | null
+    assignedSite: text("assigned_site").notNull().default(""),
+    archived: boolean("archived").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
@@ -149,84 +151,174 @@ export const attendanceCorrections = pgTable("attendance_corrections", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// 4. BUSINESS UNITS / COMPANIES (CRM SEPARATION)
-export const companies = pgTable(
-  "companies",
+// 4. LEADS & CLIENTS (CRM)
+// COMPANY / BUSINESS-UNIT SEPARATION:
+//   IBDC = INSAF BUILDING DESIGN & CONSULTANT LTD.  (building design, approval, engineering & construction services)
+//   IREL = INSAF REAL ESTATE LTD.                   (real-estate / property enquiries)
+export const COMPANY_OPTIONS = [
   {
-    id: serial("id").primaryKey(),
-    code: text("code").notNull(), // IBDC, IREL
-    name: text("name").notNull(),
-    shortName: text("short_name").notNull(),
-    businessType: text("business_type").notNull(), // Building Design & Consultancy | Real Estate
-    leadPrefix: text("lead_prefix").notNull().default("LEAD"), // BDL / REL
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    id: "IBDC",
+    label: "INSAF BUILDING DESIGN & CONSULTANT LTD.",
+    shortLabel: "Insaf Building Design",
+    categoryLabel: "Service Type",
+    categoryField: "service",
+    categories: [
+      "Architectural Design",
+      "Structural Design",
+      "Electrical Design",
+      "Plumbing Design",
+      "Costing & Estimating",
+      "RAJUK Plan Approval",
+      "Plan Design + RAJUK Approval",
+      "Interior Design",
+      "3D Visualization & VR",
+      "3D View",
+      "Construction Management",
+      "Package Building Work",
+      "Documents",
+      "Other",
+    ],
   },
-  (table) => [uniqueIndex("companies_code_idx").on(table.code)]
-);
+  {
+    id: "IREL",
+    label: "INSAF REAL ESTATE LTD.",
+    shortLabel: "Insaf Real Estate",
+    categoryLabel: "Property Interest / Property Type",
+    categoryField: "propertyType",
+    categories: [
+      "Flat",
+      "Shop",
+      "Office Space",
+      "Commercial Space",
+      "Apartment",
+      "Land/Plot",
+      "Investment",
+      "Project",
+      "Other",
+    ],
+  },
+] as const;
 
-// 5. LEADS & CLIENTS (CRM) — Company-Scoped (IBDC Services vs IREL Property)
+export const PROPERTY_TYPES = [
+  "Flat",
+  "Shop",
+  "Office Space",
+  "Commercial Space",
+  "Apartment",
+  "Land/Plot",
+  "Investment",
+  "Project",
+  "Other",
+] as const;
+
+export const DESIGN_SERVICES = [
+  "Architectural Design",
+  "Structural Design",
+  "Electrical Design",
+  "Plumbing Design",
+  "Costing & Estimating",
+  "RAJUK Plan Approval",
+  "Plan Design + RAJUK Approval",
+  "Interior Design",
+  "3D Visualization & VR",
+  "3D View",
+  "Construction Management",
+  "Package Building Work",
+  "Documents",
+  "Other",
+] as const;
+
+export const LEAD_PRIORITIES = ["Hot", "Warm", "Cold"] as const;
+
 export const leads = pgTable(
   "leads",
   {
     id: serial("id").primaryKey(),
-    leadCode: text("lead_code").notNull(), // BDL-0001 (IBDC) / REL-0001 (IREL)
-    companyId: integer("company_id")
-      .notNull()
-      .default(1)
-      .references(() => companies.id, { onDelete: "restrict" }),
+    leadCode: text("lead_code").notNull(), // LEAD-0001
+    companyId: integer("company_id").notNull().default(1), // DB: 1=IBDC, 2=IREL
     name: text("name").notNull(),
     phone: text("phone").notNull(),
     whatsapp: text("whatsapp").notNull().default(""),
     location: text("location").notNull().default(""),
-    source: text("source").notNull().default("Direct"), // Facebook, Referral, Website, Direct, Walk-in, Phone Call, WhatsApp
-    priority: text("priority").notNull().default("Warm"), // Hot, Warm, Cold
-
-    // --- INSAF BUILDING DESIGN & CONSULTANT LTD. (IBDC) FIELDS ---
-    service: text("service").notNull().default("Other"), // Architectural Design, RAJUK Plan Approval, 3D View, etc.
+    source: text("source").notNull().default("Direct"), // Facebook, Referral, Website, Direct, Walk-in
+    // IBDC: Building Design / Engineering Service Type
+    service: text("service").notNull().default("Other"),
+    // IREL: Real-Estate Property Interest
+    propertyType: text("property_type").notNull().default("Other"),
+    projectName: text("project_name").notNull().default(""), // e.g. Salsabil, Bhai Bhai Tower
+    unitFlatShop: text("unit_flat_shop").notNull().default(""), // e.g. B-4, Shop 12
+    preferredLocation: text("preferred_location").notNull().default(""),
+    size: text("size").notNull().default(""), // e.g. 1450 sft
+    floor: text("floor").notNull().default(""), // e.g. 5th Floor
+    bedrooms: text("bedrooms").notNull().default(""), // e.g. 3
+    purpose: text("purpose").notNull().default(""), // Own Use | Investment
+    expectedPurchaseDate: text("expected_purchase_date").notNull().default(""),
+    clientRequirement: text("client_requirement").notNull().default(""),
+    requirement: text("requirement").notNull().default(""),
     landSize: text("land_size").notNull().default(""),
     roadWidth: text("road_width").notNull().default(""),
-
-    // --- INSAF REAL ESTATE LTD. (IREL) FIELDS ---
-    propertyType: text("property_type").notNull().default(""), // Flat, Shop, Office Space, Land/Plot, etc.
-    projectName: text("project_name").notNull().default(""), // Salsabil, Bhai Bhai Tower
-    unitNo: text("unit_no").notNull().default(""), // Unit / Flat / Shop number
-    preferredLocation: text("preferred_location").notNull().default(""),
-    propertySize: text("property_size").notNull().default(""), // 1450 sft
-    floor: text("floor").notNull().default(""),
-    bedrooms: text("bedrooms").notNull().default(""),
-    purpose: text("purpose").notNull().default(""), // Own Use, Investment, Resale, Rental Income
-    expectedPurchaseDate: text("expected_purchase_date"),
-
-    // --- SHARED FIELDS ---
-    requirement: text("requirement").notNull().default(""),
     budget: numeric("budget", { precision: 14, scale: 2 }).notNull().default("0"),
-    status: text("status").notNull().default("New"), // New, Contacted, Follow-up Required, Qualified, Quotation, Negotiating, On Hold, Won, Lost
-    assignedStaffId: integer("assigned_staff_id").references(() => employees.id, { onDelete: "set null" }),
-
-    // --- REPEATED FOLLOW-UP TRACKING ---
-    nextFollowUpDate: text("next_follow_up_date"),
-    nextFollowUpTime: text("next_follow_up_time").default("10:00"),
+    priority: text("priority").notNull().default("Warm"), // Hot, Warm, Cold
+    status: text("status").notNull().default("New"), // New, Contacted, Follow-up, Qualified, Quotation, Negotiating, Won, Lost, On Hold
     lastContactDate: text("last_contact_date"),
-    lastOutcome: text("last_outcome").notNull().default(""),
-    followUpCount: integer("follow_up_count").notNull().default(0),
-    lastReminderNotifiedDate: text("last_reminder_notified_date"), // prevents duplicate notifications
-
-    // --- LEGACY EXCEL REMINDER FIELDS (preserved during migration, not a limit) ---
-    reminder1: text("reminder_1").default(""),
-    reminder2: text("reminder_2").default(""),
-    reminder3: text("reminder_3").default(""),
-
+    nextFollowUpTime: text("next_follow_up_time").notNull().default("10:00"),
+    assignedStaffId: integer("assigned_staff_id").references(() => employees.id, { onDelete: "set null" }),
+    nextFollowUpDate: text("next_follow_up_date"),
     convertedClientId: integer("converted_client_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("leads_code_idx").on(table.leadCode),
     index("leads_company_idx").on(table.companyId),
-    index("leads_status_idx").on(table.status),
   ]
 );
 
-// UNLIMITED REPEATED FOLLOW-UP HISTORY (Append-Only — never overwritten)
+// ============================================================================
+// FOLLOW-UP CONTACT METHODS & OUTCOMES (UNLIMITED FOLLOW-UPS PER LEAD)
+// ============================================================================
+export const FOLLOW_UP_METHODS = [
+  "Phone Call",
+  "WhatsApp",
+  "Facebook",
+  "SMS",
+  "Email",
+  "Meeting",
+  "Office Visit",
+  "Site Visit",
+  "Other",
+] as const;
+
+export const FOLLOW_UP_OUTCOMES = [
+  "No Response",
+  "Contacted",
+  "Interested",
+  "Qualified",
+  "Need More Information",
+  "Quotation Sent",
+  "Negotiating",
+  "Call Back Later",
+  "Not Interested",
+  "Won",
+  "Lost",
+  "Other",
+] as const;
+
+// Outcomes that do NOT close a lead â€” a new follow-up must be scheduled.
+export const OPEN_OUTCOMES = [
+  "No Response",
+  "Contacted",
+  "Interested",
+  "Qualified",
+  "Need More Information",
+  "Quotation Sent",
+  "Negotiating",
+  "Call Back Later",
+  "Other",
+] as const;
+
+// Outcomes that close/hold a lead (no further follow-up required).
+export const CLOSED_OUTCOMES = ["Won", "Lost", "Not Interested"] as const;
+
 export const leadFollowups = pgTable(
   "lead_followups",
   {
@@ -234,28 +326,34 @@ export const leadFollowups = pgTable(
     leadId: integer("lead_id")
       .notNull()
       .references(() => leads.id, { onDelete: "cascade" }),
-    followupNumber: integer("followup_number").notNull().default(1), // #1, #2, #3 ... unlimited
+    // Follow-up Number (1, 2, 3 ... unlimited) â€” never reused or overwritten
+    followUpNumber: integer("follow_up_number").notNull().default(1),
     staffId: integer("staff_id").references(() => employees.id, { onDelete: "set null" }),
     staffName: text("staff_name").notNull(),
-    date: text("date").notNull(),
-    time: text("time").notNull().default("10:00"),
-    method: text("method").notNull().default("Phone Call"), // Phone Call, WhatsApp, Facebook, SMS, Email, Meeting, Office Visit, Site Visit, Other
-    outcome: text("outcome").notNull().default("Contacted"), // No Response, Contacted, Interested, Qualified, Need More Information, Quotation Sent, Negotiating, Call Back Later, Not Interested, Won, Lost, Other
+    // Date & Time of the actual follow-up
+    date: text("date").notNull(), // YYYY-MM-DD
+    time: text("time").notNull().default("10:00"), // HH:mm
+    contactMethod: text("contact_method").notNull().default("Phone Call"),
+    outcome: text("outcome").notNull().default("Contacted"),
     clientResponse: text("client_response").notNull().default(""),
-    note: text("note").notNull().default(""),
-    // --- Legacy columns preserved for existing history compatibility ---
+    // Staff note (kept legacy `discussion` field in sync for backward compatibility)
     discussion: text("discussion").notNull(),
-    nextAction: text("next_action").notNull(),
-    result: text("result").notNull(),
-    // -------------------------------------------------------------------
+    nextAction: text("next_action").notNull().default(""),
     nextFollowUpDate: text("next_follow_up_date"),
-    nextFollowUpTime: text("next_follow_up_time").default("10:00"),
-    attachments: jsonb("attachments").$type<AttachmentMeta[]>().notNull().default([]),
+    nextFollowUpTime: text("next_follow_up_time").notNull().default("10:00"),
+    attachmentName: text("attachment_name"),
+    attachmentType: text("attachment_type"),
+    attachmentSize: text("attachment_size"),
+    attachmentUrl: text("attachment_url"),
+    // Idempotent reminder key so we never spam duplicate notifications
+    reminderKey: text("reminder_key"),
+    reminderNotified: boolean("reminder_notified").notNull().default(false),
+    result: text("result").notNull().default("Contacted"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     index("lead_followups_lead_idx").on(table.leadId),
-    index("lead_followups_next_idx").on(table.nextFollowUpDate),
+    index("lead_followups_next_date_idx").on(table.nextFollowUpDate),
   ]
 );
 
@@ -403,7 +501,6 @@ export const tasks = pgTable(
     status: text("status").notNull().default("Todo"), // Todo, Accepted, In Progress, Blocked, Review, Reopened, Completed, Cancelled
     progressPercent: integer("progress_percent").notNull().default(0),
     requiresReview: boolean("requires_review").notNull().default(false),
-    visibility: text("visibility").notNull().default("Assigned Staff"), // "Everyone", "Assigned Staff", "Management Only"
     createdBy: text("created_by").notNull().default("Manager"),
     reviewedBy: text("reviewed_by"),
     reviewedAt: timestamp("reviewed_at"),
@@ -413,15 +510,55 @@ export const tasks = pgTable(
     attachmentUrl: text("attachment_url"),
     evidenceAttachments: jsonb("evidence_attachments").$type<AttachmentMeta[]>().notNull().default([]),
     isCompanyWide: boolean("is_company_wide").notNull().default(false),
-    managementReviewStatus: text("management_review_status").default(""),
-    managementReviewBy: text("management_review_by"),
-    managementReviewAt: timestamp("management_review_at"),
-    correctionReason: text("correction_reason").default(""),
-    delayReason: text("delay_reason").default(""),
-    nextAction: text("next_action").default(""),
+    visibility: text("visibility").notNull().default("Assigned"), // Everyone, Assigned, Management
+    // Assignment tracking (who gave â†’ whom, when)
+    assignedByUserId: integer("assigned_by_user_id"),
+    assignedByEmployeeId: integer("assigned_by_employee_id"),
+    assignedByName: text("assigned_by_name"),
+    assignedByDesignation: text("assigned_by_designation"),
+    assignedToName: text("assigned_to_name"),
+    assignedToDesignation: text("assigned_to_designation"),
+    dueTime: text("due_time"), // HH:mm (optional)
+    viewedAt: timestamp("viewed_at"),
+    deadlineReminderSentAt: timestamp("deadline_reminder_sent_at"),
+    overdueNotifiedAt: timestamp("overdue_notified_at"),
+    // Work-tracking extensions (Option B)
+    category: text("category").notNull().default("General"),
+    startDate: text("start_date"),
+    nextAction: text("next_action").notNull().default(""),
+    delayReason: text("delay_reason").notNull().default(""),
+    reviewStatus: text("review_status").notNull().default("None"), // None, Pending Review, Approved, Correction Required
+    reviewNote: text("review_note").notNull().default(""),
+    correctionCount: integer("correction_count").notNull().default(0),
+    lastUpdateAt: timestamp("last_update_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [uniqueIndex("tasks_code_idx").on(table.taskCode)]
+  (table) => [
+    uniqueIndex("tasks_code_idx").on(table.taskCode),
+    index("tasks_assigned_idx").on(table.assignedTo),
+  ]
+);
+
+// Secure task/daily-work evidence files (bytes stored server-side, served only via authorised API)
+export const workFiles = pgTable(
+  "work_files",
+  {
+    id: serial("id").primaryKey(),
+    taskId: integer("task_id").references(() => tasks.id, { onDelete: "set null" }),
+    dailyWorkId: integer("daily_work_id"),
+    employeeId: integer("employee_id").references(() => employees.id, { onDelete: "set null" }),
+    uploadedByUserId: integer("uploaded_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    uploadedByName: text("uploaded_by_name").notNull(),
+    fileName: text("file_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    dataBase64: text("data_base64").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("work_files_task_idx").on(table.taskId),
+    index("work_files_emp_idx").on(table.employeeId),
+  ]
 );
 
 export const taskComments = pgTable("task_comments", {
@@ -432,7 +569,16 @@ export const taskComments = pgTable("task_comments", {
   userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
   authorName: text("author_name").notNull(),
   comment: text("comment").notNull(),
-  actionType: text("action_type").notNull().default("Comment"), // Comment, StatusChange, ProgressUpdate, ReviewApproved
+  actionType: text("action_type").notNull().default("Comment"), // Assigned, Accepted, Started, ProgressUpdate, ProofSubmitted, SubmittedForReview, ReviewApproved, CorrectionRequired, StatusChange, Reassigned, DeadlineChanged, Comment
+  progressPercent: integer("progress_percent"),
+  fileIds: jsonb("file_ids").$type<number[]>().notNull().default([]),
+  // Canonical lifecycle event (TASK_ASSIGNED, TASK_ACCEPTED, TASK_STARTED, TASK_PROGRESS_UPDATED, DAILY_WORK_SUBMITTED,
+  // TASK_PROBLEM_REPORTED, TASK_ATTACHMENT_ADDED, TASK_COMPLETED, TASK_CORRECTION_REQUIRED, TASK_RESUBMITTED, TASK_APPROVED, ...)
+  eventType: text("event_type"),
+  oldStatus: text("old_status"),
+  newStatus: text("new_status"),
+  actorEmployeeId: integer("actor_employee_id"),
+  actorDesignation: text("actor_designation"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -865,25 +1011,7 @@ export const documents = pgTable("documents", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// 19. ANNOUNCEMENTS (Company-Wide Management Notices & Instructions)
-export const announcements = pgTable(
-  "announcements",
-  {
-    id: serial("id").primaryKey(),
-    title: text("title").notNull(),
-    message: text("message").notNull(),
-    createdBy: text("created_by").notNull(),
-    createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
-    priority: text("priority").notNull().default("Normal"), // Urgent, High, Normal
-    publishedStatus: text("published_status").notNull().default("Published"), // Published, Draft
-    attachmentUrl: text("attachment_url"),
-    readByUserIds: jsonb("read_by_user_ids").$type<number[]>().notNull().default([]),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => [index("announcements_created_idx").on(table.createdAt)]
-);
-
-// 20. NOTIFICATIONS
+// 19. NOTIFICATIONS
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
@@ -897,10 +1025,38 @@ export const notifications = pgTable("notifications", {
   dueDate: text("due_date"),
   attachmentUrl: text("attachment_url"),
   relatedTaskId: integer("related_task_id"),
+  category: text("category"), // Announcement, Task Assigned, Task Update, Daily Work, Approval, Correction, Deadline, Overdue, Leave, Attendance
+  senderUserId: integer("sender_user_id"),
+  recipientEmployeeId: integer("recipient_employee_id"),
+  recipientName: text("recipient_name"),
+  relatedEmployeeId: integer("related_employee_id"),
   relatedUrl: text("related_url").notNull().default("/dashboard"),
   relatedEntityCode: text("related_entity_code").default(""),
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// 19b. COMPANY ANNOUNCEMENTS
+export const announcements = pgTable("announcements", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdByUserId: integer("created_by_user_id"),
+  published: boolean("published").notNull().default(true),
+  attachmentUrl: text("attachment_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const announcementReads = pgTable("announcement_reads", {
+  id: serial("id").primaryKey(),
+  announcementId: integer("announcement_id")
+    .notNull()
+    .references(() => announcements.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  readAt: timestamp("read_at").defaultNow().notNull(),
 });
 
 // 20. REMINDER AUTOMATION SETTINGS
@@ -930,3 +1086,6 @@ export const auditLogs = pgTable("audit_logs", {
   userAgent: text("user_agent").default("INSAF-ERP-Client"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+
+

@@ -15,13 +15,9 @@ import {
   Lock,
 } from "lucide-react";
 import { exportToCSV, exportToExcel, exportToPDFPrint } from "@/lib/export-utils";
-import { getRoleBangla } from "@/components/ErpAppShell";
 
  
 
-// ============================================================================
-// ডাবল-এন্ট্রি খতিয়ান ও সাধারণ লেজার (/accounts - 100% BANGLA)
-// ============================================================================
 export function AccountingView({
   data,
   onMutate,
@@ -32,7 +28,7 @@ export function AccountingView({
   const [fromAcc, setFromAcc] = useState("1010");
   const [toAcc, setToAcc] = useState("1020");
   const [amount, setAmount] = useState("25000");
-  const [description, setDescription] = useState("সিটি ব্যাংক কর্পোরেট একাউন্টে নগদ জমা");
+  const [description, setDescription] = useState("Cash Deposit to City Bank Corporate A/C");
 
   async function handleTransfer(e: React.FormEvent) {
     e.preventDefault();
@@ -47,60 +43,58 @@ export function AccountingView({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">
-            ডাবল-এন্ট্রি হিসাববিজ্ঞান, চার্ট অব একাউন্টস ও সাধারণ লেজার
+            ডাবল-এন্ট্রি হিসাব, চার্ট অব অ্যাকাউন্টস ও জেনারেল লেজার
           </h1>
           <p className="text-xs text-slate-500">
-            প্রতিটি ইনভয়েস, পেমেন্ট, বাকি ক্রয়, ব্যয়, পে-রোল ও স্থানান্তর স্বয়ংক্রিয়ভাবে ব্যালেন্সড ডেবিট = ক্রেডিট জার্নাল তৈরি করে
+            Every Invoice, Payment, Credit Purchase, Expense, Payroll & Transfer automatically generates a balanced Debit = Credit Journal Entry
           </p>
         </div>
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => exportToExcel("INSAF_ChartOfAccounts", "হিসাবের চার্ট তালিকা", data.accounts || [])}
-            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-xs"
+            onClick={() => exportToExcel("INSAF_ChartOfAccounts", "Chart of Accounts", data.accounts || [])}
+            className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold"
           >
             Excel এক্সপোর্ট (.xls)
           </button>
           <button
             type="button"
-            onClick={() => exportToPDFPrint("সাধারণ জার্নাল ও ট্রায়াল ব্যালেন্স", "ডাবল-এন্ট্রি হিসাব রেজিস্টার", data.journalEntries || [])}
-            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1.5 transition"
+            onClick={() => exportToPDFPrint("General Journal & Trial Balance", "Double-Entry Accounting", data.journalEntries || [])}
+            className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold flex items-center gap-1"
           >
-            <Printer className="w-3.5 h-3.5" /> লেজার PDF প্রিন্ট
+            <Printer className="w-3.5 h-3.5" /> Print Ledger PDF
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-5 space-y-6">
-          {/* চার্ট অব একাউন্টস তালিকা */}
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          {/* Chart of Accounts */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Landmark className="w-4 h-4 text-emerald-600" /> হিসাবের তালিকা ও লাইভ ব্যালেন্স (Chart of Accounts)
+                <Landmark className="w-4 h-4 text-emerald-600" /> চার্ট অব অ্যাকাউন্টস (লাইভ ব্যালেন্স)
               </h2>
             </div>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                  <th className="p-3 font-semibold">কোড</th>
-                  <th className="p-3 font-semibold">হিসাবের নাম</th>
-                  <th className="p-3 font-semibold">ধরন</th>
-                  <th className="p-3 font-semibold text-right">ব্যালেন্স (৳)</th>
+                  <th className="p-2.5">কোড</th>
+                  <th className="p-2.5">হিসাবের নাম</th>
+                  <th className="p-2.5">ধরন</th>
+                  <th className="p-2.5 text-right">ব্যালেন্স (৳)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(data.accounts || []).map((acc: any) => (
-                  <tr key={acc.id} className="hover:bg-slate-50 transition">
-                    <td className="p-3 font-mono font-bold text-slate-800">{acc.code}</td>
-                    <td className="p-3 font-semibold text-slate-900">{acc.name}</td>
-                    <td className="p-3 text-slate-500">
-                      {acc.type === "Asset" ? "সম্পদ (Asset)" : acc.type === "Liability" ? "দায় (Liability)" : acc.type === "Revenue" ? "আয় (Revenue)" : acc.type === "Expense" ? "ব্যয় (Expense)" : "মূলধন (Equity)"}
-                    </td>
-                    <td className="p-3 text-right font-bold text-slate-900">
+                  <tr key={acc.id}>
+                    <td className="p-2.5 font-mono font-bold">{acc.code}</td>
+                    <td className="p-2.5 font-semibold text-slate-900">{acc.name}</td>
+                    <td className="p-2.5 text-slate-500">{acc.type}</td>
+                    <td className="p-2.5 text-right font-bold text-slate-900">
                       ৳{Number(acc.balance).toLocaleString()}
                     </td>
                   </tr>
@@ -109,85 +103,74 @@ export function AccountingView({
             </table>
           </div>
 
-          {/* নগদ ও ব্যাংক অভ্যন্তরীণ স্থানান্তর ফর্ম */}
+          {/* Cash <-> Bank Transfer */}
           <form
             onSubmit={handleTransfer}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <ArrowLeftRight className="w-4 h-4 text-emerald-600" /> নগদ ↔ ব্যাংক ডাবল-এন্ট্রি স্থানান্তর
+              <ArrowLeftRight className="w-4 h-4 text-emerald-600" /> নগদ ↔ ব্যাংক স্থানান্তর
             </h3>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  হতে (Credit)
+                  ক্রেডিট (থেকে)
                 </label>
                 <select
                   value={fromAcc}
                   onChange={(e) => setFromAcc(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 >
-                  <option value="1010">১০১০ — হাতে নগদ (Cash in Hand)</option>
-                  <option value="1020">১০২০ — সিটি ব্যাংক কর্পোরেট একাউন্ট</option>
+                  <option value="1010">1010 — Cash in Hand</option>
+                  <option value="1020">1020 — City Bank Corporate A/C</option>
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  জমা (Debit)
+                  ডেবিট (প্রতি)
                 </label>
                 <select
                   value={toAcc}
                   onChange={(e) => setToAcc(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 >
-                  <option value="1020">১০২০ — সিটি ব্যাংক কর্পোরেট একাউন্ট</option>
-                  <option value="1010">১০১০ — হাতে নগদ (Cash in Hand)</option>
+                  <option value="1020">1020 — City Bank Corporate A/C</option>
+                  <option value="1010">1010 — Cash in Hand</option>
                 </select>
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                স্থানান্তরের পরিমাণ (৳) *
-              </label>
-              <input
-                type="number"
-                required
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="পরিমাণ লিখুন"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                স্থানান্তরের বিবরণ *
-              </label>
-              <input
-                type="text"
-                required
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="বিবরণ লিখুন"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-              />
-            </div>
+            <input
+              type="number"
+              required
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Amount (৳)"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
+            <input
+              type="text"
+              required
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-xs"
             >
-              কন্ট্রা জার্নাল ভাউচার পোস্ট করুন
+              কনট্রা জার্নাল পোস্ট করুন
             </button>
           </form>
         </div>
 
-        {/* ডাবল-এন্ট্রি জার্নাল ভাউচার তালিকা */}
-        <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-xs">
+        {/* ডাবল-এন্ট্রি জার্নাল ভাউচার */}
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h3 className="text-sm font-bold text-slate-900">
-              ডাবল-এন্ট্রি জার্নাল ভাউচার তালিকা (মোট {(data.journalEntries || []).length} টি)
+              ডাবল-এন্ট্রি জার্নাল ভাউচার ({(data.journalEntries || []).length})
             </h3>
             <span className="text-xs text-emerald-700 font-semibold">
-              স্থায়ী অডিট ট্রেইল সংরক্ষিত
+              Hard Delete Blocked • Audit Trail Active
             </span>
           </div>
           <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
@@ -198,26 +181,26 @@ export function AccountingView({
               return (
                 <div
                   key={jv.id}
-                  className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 text-xs space-y-2 shadow-2xs"
+                  className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 text-xs space-y-2"
                 >
                   <div className="flex items-center justify-between font-bold text-slate-900">
                     <span>
                       {jv.voucherNo} • {jv.date} ({jv.referenceType}: {jv.referenceCode})
                     </span>
-                    <span className="text-emerald-700 font-mono">
+                    <span className="text-emerald-700">
                       Dr ৳{Number(jv.totalDebit).toLocaleString()} = Cr ৳
                       {Number(jv.totalCredit).toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-slate-700">{jv.description}</p>
+                  <p className="text-slate-600">{jv.description}</p>
                   <div className="border-t border-slate-200 pt-2 space-y-1">
                     {lines.map((ln: any) => (
                       <div key={ln.id} className="flex justify-between font-mono text-[11px]">
-                        <span className="text-slate-800">{ln.accountName}</span>
-                        <span className={Number(ln.debit) > 0 ? "text-emerald-700 font-bold" : "text-slate-600"}>
+                        <span>{ln.accountName}</span>
+                        <span>
                           {Number(ln.debit) > 0
-                            ? `ডেবিট: ৳${Number(ln.debit).toLocaleString()}`
-                            : `ক্রেডিট: ৳${Number(ln.credit).toLocaleString()}`}
+                            ? `Debit: ৳${Number(ln.debit).toLocaleString()}`
+                            : `Credit: ৳${Number(ln.credit).toLocaleString()}`}
                         </span>
                       </div>
                     ))}
@@ -233,7 +216,7 @@ export function AccountingView({
 }
 
 // ============================================================================
-// ইনভয়েস, পেমেন্ট ও ব্যয় ব্যবস্থাপনা (/invoices, /income, /payments, /expenses - 100% BANGLA)
+// INVOICES, PAYMENTS & EXPENSES VIEW (/invoices, /income, /payments, /expenses)
 // ============================================================================
 export function InvoicesPaymentsExpensesView({
   data,
@@ -245,11 +228,13 @@ export function InvoicesPaymentsExpensesView({
   tab?: "invoices" | "payments" | "expenses";
 }) {
   const today = new Date().toISOString().split("T")[0];
+  // Create Invoice state
   const [clientId, setClientId] = useState(String(data.clients?.[0]?.id || 1));
   const [projectId, setProjectId] = useState(String(data.projects?.[0]?.id || 1));
   const [invAmount, setInvAmount] = useState("250000");
-  const [invNotes, setInvNotes] = useState("স্ট্রাকচারাল নির্মাণ কাজের ১ম রানিং বিল");
+  const [invNotes, setInvNotes] = useState("Running Bill for Structural Works");
 
+  // Create Expense state
   const [expCategory, setExpCategory] = useState("Material");
   const [expAmount, setExpAmount] = useState("15000");
   const [expDesc, setExpDesc] = useState("");
@@ -283,17 +268,17 @@ export function InvoicesPaymentsExpensesView({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">
             {tab === "expenses"
-              ? "প্রজেক্ট ও দাফতরিক ব্যয় ব্যবস্থাপনা (EXP-0001)"
+              ? "Project & Operational Expense Management (EXP-0001)"
               : tab === "payments"
-              ? "সেন্ট্রাল পেমেন্ট ও রসিদ ভাউচার সিস্টেম (PAY-0001)"
-              : "প্রাপ্য হিসাব ও গ্রাহক ইনভয়েস ব্যবস্থাপনা (INV-0001)"}
+              ? "Central Payment & Receipt Voucher System (PAY-0001)"
+              : "Accounts Receivable & Client Invoices (INV-0001)"}
           </h1>
           <p className="text-xs text-slate-500">
-            আর্থিক নিরাপত্তা: ইনভয়েস + পেমেন্ট + ব্যালেন্স ও ডাবল-এন্ট্রি খতিয়ান সমন্বিতভাবে আপডেট হয়
+            Transactional Financial Safety: Invoice + Payment + Balance Update + Double-Entry Journal execute atomically
           </p>
         </div>
         <div className="flex gap-2">
@@ -309,7 +294,7 @@ export function InvoicesPaymentsExpensesView({
                   : data.invoices
               )
             }
-            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition"
+            className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700"
           >
             CSV এক্সপোর্ট
           </button>
@@ -317,162 +302,138 @@ export function InvoicesPaymentsExpensesView({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* ফর্মসমূহ */}
+        {/* Left Forms */}
         <div className="lg:col-span-4 space-y-6">
           <form
             onSubmit={handleCreateInvoice}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-emerald-600" /> নতুন ক্লায়েন্ট ইনভয়েস তৈরি করুন (AR)
+              <Receipt className="w-4 h-4 text-emerald-600" /> ক্লায়েন্ট ইনভয়েস তৈরি
             </h2>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">ক্লায়েন্ট</label>
-              <select
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
-              >
-                {(data.clients || []).map((c: any) => (
-                  <option key={c.id} value={c.id}>
-                    {c.clientCode} — {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">প্রজেক্ট</label>
-              <select
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
-              >
-                {(data.projects || []).map((p: any) => (
-                  <option key={p.id} value={p.id}>
-                    {p.projectCode} — {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">ইনভয়েসের পরিমাণ (৳) *</label>
-              <input
-                type="number"
-                required
-                value={invAmount}
-                onChange={(e) => setInvAmount(e.target.value)}
-                placeholder="ইনভয়েসের পরিমাণ লিখুন"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">ইনভয়েসের বিবরণ</label>
-              <input
-                type="text"
-                value={invNotes}
-                onChange={(e) => setInvNotes(e.target.value)}
-                placeholder="কাজের বিবরণ লিখুন"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-              />
-            </div>
+            <select
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            >
+              {(data.clients || []).map((c: any) => (
+                <option key={c.id} value={c.id}>
+                  {c.clientCode} — {c.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            >
+              {(data.projects || []).map((p: any) => (
+                <option key={p.id} value={p.id}>
+                  {p.projectCode} — {p.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              required
+              value={invAmount}
+              onChange={(e) => setInvAmount(e.target.value)}
+              placeholder="Invoice Amount (৳)"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
+            <input
+              type="text"
+              value={invNotes}
+              onChange={(e) => setInvNotes(e.target.value)}
+              placeholder="Invoice Description"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2.5 rounded-xl bg-emerald-600 text-white font-semibold text-xs"
             >
-              ইনভয়েস তৈরি ও প্রাপ্য জার্নাল পোস্ট করুন
+              ইনভয়েস তৈরি ও জার্নাল
             </button>
           </form>
 
           <form
             onSubmit={handleCreateExpense}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-amber-600" /> প্রজেক্ট / অফিস ব্যয় সংরক্ষণ করুন
+              <CreditCard className="w-4 h-4 text-amber-600" /> প্রজেক্ট/অফিস খরচ রেকর্ড
             </h2>
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">ব্যয়ের খাত</label>
-                <select
-                  value={expCategory}
-                  onChange={(e) => setExpCategory(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
-                >
-                  <option value="Material">মালামাল (Material)</option>
-                  <option value="Labour">শ্রমিক মজুরি (Labour)</option>
-                  <option value="Contractor">সাব-ঠিকাদার (Contractor)</option>
-                  <option value="Transport">পরিবহন (Transport)</option>
-                  <option value="Site Expense">সাইট খরচ (Site)</option>
-                  <option value="Office">অফিস খরচ (Office)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">পরিশোধ মাধ্যম</label>
-                <select
-                  value={expMethod}
-                  onChange={(e) => setExpMethod(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
-                >
-                  <option value="Cash">নগদ (Cash)</option>
-                  <option value="Bank">ব্যাংক (Bank)</option>
-                  <option value="Payable">বকেয়া (Payable)</option>
-                </select>
-              </div>
+              <select
+                value={expCategory}
+                onChange={(e) => setExpCategory(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              >
+                <option>Material</option>
+                <option>Labour</option>
+                <option>Contractor</option>
+                <option>Transport</option>
+                <option>Site Expense</option>
+                <option>Office</option>
+              </select>
+              <select
+                value={expMethod}
+                onChange={(e) => setExpMethod(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              >
+                <option>Cash</option>
+                <option>Bank</option>
+                <option>Payable</option>
+              </select>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">ব্যয়ের পরিমাণ (৳) *</label>
-              <input
-                type="number"
-                required
-                value={expAmount}
-                onChange={(e) => setExpAmount(e.target.value)}
-                placeholder="টাকার পরিমাণ লিখুন"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">ব্যয়ের বিবরণ *</label>
-              <input
-                type="text"
-                required
-                value={expDesc}
-                onChange={(e) => setExpDesc(e.target.value)}
-                placeholder="খরচের বিবরণ লিখুন"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-              />
-            </div>
+            <input
+              type="number"
+              required
+              value={expAmount}
+              onChange={(e) => setExpAmount(e.target.value)}
+              placeholder="Expense Amount (৳)"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
+            <input
+              type="text"
+              required
+              value={expDesc}
+              onChange={(e) => setExpDesc(e.target.value)}
+              placeholder="Expense Description *"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-xs"
             >
-              ব্যয় সংরক্ষণ করুন (প্রজেক্ট খরচ আপডেট হবে)
+              খরচ সংরক্ষণ (প্রজেক্ট খরচ আপডেট)
             </button>
           </form>
         </div>
 
-        {/* টেবিলসমূহ */}
+        {/* Right Tables */}
         <div className="lg:col-span-8 space-y-6">
-          {/* ইনভয়েস তালিকা */}
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          {/* Client Invoices Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                গ্রাহক ইনভয়েস ও বকেয়া পাওনা ট্র্যাকার (মোট {(data.invoices || []).length} টি)
+                ক্লায়েন্ট ইনভয়েস ও আংশিক পেমেন্ট ({(data.invoices || []).length})
               </h3>
             </div>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                  <th className="p-3 font-semibold">ইনভয়েস কোড</th>
-                  <th className="p-3 font-semibold">মোট বিল</th>
-                  <th className="p-3 font-semibold">পরিশোধিত</th>
-                  <th className="p-3 font-semibold">বকেয়া পাওনা (AR)</th>
-                  <th className="p-3 font-semibold">স্ট্যাটাস</th>
-                  <th className="p-3 font-semibold">পদক্ষেপ</th>
+                  <th className="p-3">ইনভয়েস</th>
+                  <th className="p-3">মোট বিল</th>
+                  <th className="p-3">পরিশোধিত</th>
+                  <th className="p-3">বকেয়া প্রাপ্য</th>
+                  <th className="p-3">স্ট্যাটাস</th>
+                  <th className="p-3">পেমেন্ট গ্রহণ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(data.invoices || []).map((inv: any) => (
-                  <tr key={inv.id} className="hover:bg-slate-50 transition">
+                  <tr key={inv.id}>
                     <td className="p-3">
                       <div className="font-mono font-bold text-slate-900">{inv.invoiceCode}</div>
                       <div className="text-[11px] text-slate-500">{inv.notes}</div>
@@ -487,8 +448,8 @@ export function InvoicesPaymentsExpensesView({
                       ৳{Number(inv.outstandingAmount).toLocaleString()}
                     </td>
                     <td className="p-3">
-                      <span className="px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 text-[11px]">
-                        {inv.status === "Paid" ? "পরিশোধিত" : inv.status === "Partial" ? "আংশিক" : "বকেয়া"}
+                      <span className="px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800">
+                        {inv.status}
                       </span>
                     </td>
                     <td className="p-3">
@@ -497,7 +458,7 @@ export function InvoicesPaymentsExpensesView({
                           type="button"
                           onClick={() => {
                             const amt = prompt(
-                              `${inv.invoiceCode}-এর বিপরীতে পেমেন্ট গ্রহণ করুন (বকেয়া: ৳${inv.outstandingAmount}):`,
+                              `Receive payment against ${inv.invoiceCode} (Outstanding: ৳${inv.outstandingAmount}):`,
                               "50000"
                             );
                             if (!amt) return;
@@ -509,9 +470,9 @@ export function InvoicesPaymentsExpensesView({
                               method: "Bank",
                             });
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition shadow-xs text-[11px]"
+                          className="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold"
                         >
-                          পেমেন্ট গ্রহণ
+                          নগদ/ব্যাংক গ্রহণ
                         </button>
                       )}
                     </td>
@@ -521,28 +482,28 @@ export function InvoicesPaymentsExpensesView({
             </table>
           </div>
 
-          {/* ব্যয়ের তালিকা */}
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          {/* Expenses Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                প্রজেক্ট ও দাফতরিক খরচের হিসাব (মোট {(data.expenses || []).length} টি)
+                প্রজেক্ট ও পরিচালন খরচ ({(data.expenses || []).length})
               </h3>
             </div>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                  <th className="p-3 font-semibold">ব্যয় কোড</th>
-                  <th className="p-3 font-semibold">তারিখ</th>
-                  <th className="p-3 font-semibold">খাত</th>
-                  <th className="p-3 font-semibold">বিবরণ</th>
-                  <th className="p-3 font-semibold">পরিমাণ</th>
-                  <th className="p-3 font-semibold">স্ট্যাটাস</th>
+                  <th className="p-3">কোড</th>
+                  <th className="p-3">তারিখ</th>
+                  <th className="p-3">ক্যাটাগরি</th>
+                  <th className="p-3">বিবরণ</th>
+                  <th className="p-3">পরিমাণ</th>
+                  <th className="p-3">স্ট্যাটাস</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(data.expenses || []).map((ex: any) => (
-                  <tr key={ex.id} className="hover:bg-slate-50 transition">
-                    <td className="p-3 font-mono font-bold text-slate-800">{ex.expenseCode}</td>
+                  <tr key={ex.id}>
+                    <td className="p-3 font-mono font-bold">{ex.expenseCode}</td>
                     <td className="p-3">{ex.date}</td>
                     <td className="p-3 font-semibold">{ex.category}</td>
                     <td className="p-3 text-slate-600">{ex.description}</td>
@@ -550,8 +511,8 @@ export function InvoicesPaymentsExpensesView({
                       ৳{Number(ex.amount).toLocaleString()}
                     </td>
                     <td className="p-3">
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[11px]">
-                        {ex.approvalStatus === "Approved" ? "অনুমোদিত" : ex.approvalStatus}
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                        {ex.approvalStatus}
                       </span>
                     </td>
                   </tr>
@@ -560,31 +521,31 @@ export function InvoicesPaymentsExpensesView({
             </table>
           </div>
 
-          {/* সকল পেমেন্টের খতিয়ান */}
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          {/* All Payments Ledger */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                পেমেন্ট ও রসিদ খতিয়ান রেজিস্টার (মোট {(data.payments || []).length} টি)
+                সকল পেমেন্ট ও রসিদ ({(data.payments || []).length})
               </h3>
             </div>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                  <th className="p-3 font-semibold">ভাউচার কোড</th>
-                  <th className="p-3 font-semibold">তারিখ</th>
-                  <th className="p-3 font-semibold">লেনদেনের প্রকার</th>
-                  <th className="p-3 font-semibold">মাধ্যম</th>
-                  <th className="p-3 font-semibold">পরিমাণ</th>
-                  <th className="p-3 font-semibold">মন্তব্য</th>
+                  <th className="p-3">কোড</th>
+                  <th className="p-3">তারিখ</th>
+                  <th className="p-3">ধরন</th>
+                  <th className="p-3">পদ্ধতি</th>
+                  <th className="p-3">পরিমাণ</th>
+                  <th className="p-3">নোট</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(data.payments || []).map((py: any) => (
-                  <tr key={py.id} className="hover:bg-slate-50 transition">
-                    <td className="p-3 font-mono font-bold text-slate-800">{py.paymentCode}</td>
+                  <tr key={py.id}>
+                    <td className="p-3 font-mono font-bold">{py.paymentCode}</td>
                     <td className="p-3">{py.date}</td>
                     <td className="p-3 font-bold">{py.paymentType}</td>
-                    <td className="p-3">{py.method === "Bank" ? "ব্যাংক" : "নগদ"}</td>
+                    <td className="p-3">{py.method}</td>
                     <td className="p-3 font-bold text-emerald-700">
                       ৳{Number(py.amount).toLocaleString()}
                     </td>
@@ -601,16 +562,22 @@ export function InvoicesPaymentsExpensesView({
 }
 
 // ============================================================================
-// রিপোর্ট সেন্টার ও এক্সপোর্ট (/reports - 100% BANGLA)
+// REPORT CENTER WITH DATE FILTERS & PDF / EXCEL / CSV EXPORT (/reports)
 // ============================================================================
 export function ReportsCenterView({ data }: { data: any }) {
-  const [category, setCategory] = useState<"HR" | "CRM" | "Project" | "Inventory" | "Accounts">("Accounts");
+  const [category, setCategory] = useState<
+    "HR" | "CRM" | "CRM_IBDC" | "CRM_IREL" | "Project" | "Inventory" | "Accounts"
+  >("Accounts");
   const [fromDate, setFromDate] = useState("2026-01-01");
   const [toDate, setToDate] = useState("2026-12-31");
 
   const getActiveDataset = (): Record<string, unknown>[] => {
     if (category === "HR") return data.attendances || [];
     if (category === "CRM") return data.leads || [];
+    if (category === "CRM_IBDC")
+      return (data.leads || []).filter((l: any) => (l.companyId || "IBDC") === "IBDC");
+    if (category === "CRM_IREL")
+      return (data.leads || []).filter((l: any) => l.companyId === "IREL");
     if (category === "Project") return data.projects || [];
     if (category === "Inventory") return data.materials || [];
     return data.accounts || [];
@@ -618,15 +585,22 @@ export function ReportsCenterView({ data }: { data: any }) {
 
   const rows = getActiveDataset();
 
+  const reportTitleMap: Record<string, string> = {
+    CRM_IBDC: "INSAF BUILDING DESIGN & CONSULTANT LTD. — Design & Engineering Lead Report",
+    CRM_IREL: "INSAF REAL ESTATE LTD. — Property Lead Report",
+    CRM: "All Leads — Both Business Units (Company Identity Preserved)",
+  };
+
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xs">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900">
-            রিপোর্ট ও অ্যানালিটিক্স সেন্টার (মানবসম্পদ, সিআরএম, প্রজেক্ট, ইনভেন্টরি ও হিসাব)
+            রিপোর্ট সেন্টার (এইচআর, CRM, প্রজেক্ট, ইনভেন্টরি ও হিসাব)
           </h1>
           <p className="text-xs text-slate-500">
-            তারিখ ও বিভাগ অনুযায়ী ফিল্টারিং • পিডিএফ, এক্সেল (.xls) এবং সিএসভি এক্সপোর্ট সুবিধা
+            {reportTitleMap[category] ||
+              "Filter by Date Range & বিভাগ • One-Click Export to PDF, Excel (.xls) & CSV"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -634,19 +608,19 @@ export function ReportsCenterView({ data }: { data: any }) {
             type="date"
             value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+            className="px-2.5 py-1.5 rounded-xl border border-slate-300 text-xs"
           />
-          <span className="text-xs text-slate-400">হতে</span>
+          <span className="text-xs text-slate-400">to</span>
           <input
             type="date"
             value={toDate}
             onChange={(e) => setToDate(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+            className="px-2.5 py-1.5 rounded-xl border border-slate-300 text-xs"
           />
           <button
             type="button"
             onClick={() => exportToCSV(`INSAF_${category}_Report`, rows)}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition"
+            className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700"
           >
             CSV এক্সপোর্ট
           </button>
@@ -655,11 +629,11 @@ export function ReportsCenterView({ data }: { data: any }) {
             onClick={() =>
               exportToExcel(
                 `INSAF_${category}_Report`,
-                `${category} মাস্টার রিপোর্ট (${fromDate} হতে ${toDate})`,
+                `${category} Master Report (${fromDate} to ${toDate})`,
                 rows
               )
             }
-            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-xs"
+            className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" /> Excel এক্সপোর্ট
           </button>
@@ -667,52 +641,61 @@ export function ReportsCenterView({ data }: { data: any }) {
             type="button"
             onClick={() =>
               exportToPDFPrint(
-                `${category} অ্যানালিটিক্যাল রিপোর্ট`,
-                `সময়কাল: ${fromDate} হতে ${toDate}`,
+                `${category} Analytical Report`,
+                `Period: ${fromDate} to ${toDate}`,
                 rows
               )
             }
-            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1.5 transition"
+            className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1"
           >
-            <Printer className="w-3.5 h-3.5" /> PDF প্রিন্ট
+            <Printer className="w-3.5 h-3.5" /> Export PDF
           </button>
         </div>
       </div>
 
-      {/* ক্যাটাগরি ট্যাব */}
+      {/* Category Tabs */}
       <div className="flex flex-wrap gap-2">
-        {[
-          { key: "Accounts", label: "হিসাব ও অর্থায়ন" },
-          { key: "Project", label: "প্রজেক্ট ও সাইট" },
-          { key: "Inventory", label: "ইনভেন্টরি স্টক" },
-          { key: "HR", label: "মানবসম্পদ ও উপস্থিতি" },
-          { key: "CRM", label: "সিআরএম ও লিড" },
-        ].map((cat) => (
+        {(
+          [
+            "Accounts",
+            "Project",
+            "Inventory",
+            "HR",
+            "CRM_IBDC",
+            "CRM_IREL",
+            "CRM",
+          ] as const
+        ).map((cat) => (
           <button
-            key={cat.key}
+            key={cat}
             type="button"
-            onClick={() => setCategory(cat.key as any)}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition ${
-              category === cat.key
-                ? "bg-slate-900 text-white shadow-xs"
+            onClick={() => setCategory(cat)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+              category === cat
+                ? "bg-slate-900 text-white"
                 : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
             }`}
           >
-            {cat.label} ({category === cat.key ? rows.length : "সক্রিয়"})
+            {cat === "CRM_IBDC"
+              ? "বিল্ডিং ডিজাইন লিড (IBDC)"
+              : cat === "CRM_IREL"
+              ? "রিয়েল এস্টেট লিড (IREL)"
+              : cat}{" "}
+            Reports ({cat === category ? rows.length : "Live"})
           </button>
         ))}
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 p-5 overflow-x-auto shadow-xs">
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 overflow-x-auto">
         <h3 className="text-sm font-bold text-slate-900 mb-3">
-          রিপোর্ট প্রিভিউ (মোট {rows.length} টি যাচাইকৃত ডাটাবেজ রেকর্ড)
+          {category} Report Preview ({rows.length} Verified Database Rows)
         </h3>
         {rows.length > 0 ? (
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
                 {Object.keys(rows[0]).slice(0, 8).map((k) => (
-                  <th key={k} className="p-3 font-semibold capitalize">
+                  <th key={k} className="p-2.5 font-semibold capitalize">
                     {k}
                   </th>
                 ))}
@@ -720,9 +703,9 @@ export function ReportsCenterView({ data }: { data: any }) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((r: any, idx: number) => (
-                <tr key={idx} className="hover:bg-slate-50 transition">
+                <tr key={idx}>
                   {Object.keys(rows[0]).slice(0, 8).map((k) => (
-                    <td key={k} className="p-3">
+                    <td key={k} className="p-2.5">
                       {typeof r[k] === "object" ? JSON.stringify(r[k]) : String(r[k] ?? "")}
                     </td>
                   ))}
@@ -731,7 +714,7 @@ export function ReportsCenterView({ data }: { data: any }) {
             </tbody>
           </table>
         ) : (
-          <p className="text-xs text-slate-400 p-4 text-center">এই ক্যাটাগরিতে প্রদর্শনের মতো কোনো তথ্য নেই।</p>
+          <p className="text-xs text-slate-400">এই ভিউতে রেকর্ড নেই।</p>
         )}
       </div>
     </div>
@@ -739,22 +722,45 @@ export function ReportsCenterView({ data }: { data: any }) {
 }
 
 // ============================================================================
-// স্মার্ট নোটিফিকেশন সেন্টার (/notifications - 100% BANGLA)
+// 6 & 11. SMART NOTIFICATION CENTER (With Direct Accept / Start / Complete)
 // ============================================================================
 const SMART_NOTIFICATION_CATEGORIES = [
-  "সকল নোটিফিকেশন",
-  "Task Assigned",
-  "Task Completed",
-  "Task Overdue",
+  "সব ক্যাটাগরি",
   "Announcement",
-  "Daily Work Reminder",
-  "Work Plan Reminder",
-  "Leave Approved/Rejected",
-  "Attendance Correction",
-  "Project Update",
-  "Material Request",
-  "Approval Required",
+  "Task Assigned",
+  "Task Update",
+  "Daily Work",
+  "Approval",
+  "Correction",
+  "Deadline",
+  "Overdue",
+  "Leave",
+  "Attendance",
 ];
+
+const CATEGORY_BN: Record<string, string> = {
+  Announcement: "ঘোষণা",
+  "Task Assigned": "নতুন টাস্ক",
+  "Task Update": "টাস্ক আপডেট",
+  "Daily Work": "দৈনিক কাজ",
+  Approval: "অনুমোদন",
+  Correction: "সংশোধন",
+  Deadline: "ডেডলাইন",
+  Overdue: "ওভারডিউ",
+  Leave: "ছুটি",
+  Attendance: "হাজিরা",
+};
+
+function notifCategory(n: any): string {
+  if (n.category) return n.category;
+  const t = String(n.type || "");
+  if (t === "Announcement") return "Announcement";
+  if (t.includes("Leave")) return "Leave";
+  if (t.includes("Attendance") || t.includes("Checkout") || t.includes("Late")) return "Attendance";
+  if (t.includes("Overdue")) return "Overdue";
+  if (t.includes("Task")) return "Task Update";
+  return t;
+}
 
 export function NotificationsView({
   data,
@@ -764,8 +770,9 @@ export function NotificationsView({
   onMutate: (payload: Record<string, unknown>) => Promise<any>;
 }) {
   const [filter, setFilter] = useState<"All" | "Unread" | "Read">("All");
-  const [categoryFilter, setCategoryFilter] = useState("সকল নোটিফিকেশন");
+  const [categoryFilter, setCategoryFilter] = useState("সব ক্যাটাগরি");
 
+  // Broadcast Announcement / Task Notice State
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeDesc, setNoticeDesc] = useState("");
   const [noticePriority, setNoticePriority] = useState("High");
@@ -778,58 +785,54 @@ export function NotificationsView({
     const readMatch =
       filter === "All" ? true : filter === "Unread" ? !n.isRead : n.isRead;
     const catMatch =
-      categoryFilter === "সকল নোটিফিকেশন" ? true : n.type === categoryFilter;
+      categoryFilter === "সব ক্যাটাগরি" ? true : notifCategory(n) === categoryFilter;
     return readMatch && catMatch;
   });
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Bell className="w-5 h-5 text-emerald-600" /> স্মার্ট নোটিফিকেশন ও দাফতরিক নির্দেশনা কেন্দ্র
+            <Bell className="w-5 h-5 text-emerald-600" /> স্মার্ট নোটিফিকেশন ও নির্দেশনা কেন্দ্র
           </h1>
           <p className="text-xs text-slate-500">
-            অর্পিত টাস্ক নোটিফিকেশন হতে সরাসরি গ্রহণ, শুরু বা সম্পন্ন করুন • ম্যানেজার ও কর্তৃপক্ষের কাছে স্বয়ংক্রিয় অ্যালার্ট
+            Accept, Start, or Complete assigned tasks directly from your notification feed • Automatic completion alerts sent to Creator & Management
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {[
-            { key: "All", label: "সবগুলো" },
-            { key: "Unread", label: "অপঠিত" },
-            { key: "Read", label: "পঠিত" },
-          ].map((f) => (
+          {(["All", "Unread", "Read"] as const).map((f) => (
             <button
-              key={f.key}
+              key={f}
               type="button"
-              onClick={() => setFilter(f.key as any)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                filter === f.key
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold ${
+                filter === f
                   ? "bg-slate-900 text-white"
                   : "bg-slate-100 text-slate-700"
               }`}
             >
-              {f.label}
+              {f}
             </button>
           ))}
           <button
             type="button"
             onClick={() => onMutate({ action: "runReminderAutomation" })}
-            className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition shadow-xs"
+            className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 text-xs font-bold"
           >
-            রিমাইন্ডার ট্রিগার করুন
+            রিমাইন্ডার চালান
           </button>
           <button
             type="button"
             onClick={() => onMutate({ action: "markAllNotificationsRead" })}
-            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-xs"
+            className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold"
           >
-            সবগুলো পঠিত চিহ্নিত করুন
+            সব পঠিত করুন
           </button>
         </div>
       </div>
 
-      {/* ক্যাটাগরি ফিল্টার পিলস */}
+      {/* Category Filter Pills */}
       <div className="flex flex-wrap gap-1.5">
         {SMART_NOTIFICATION_CATEGORIES.map((cat) => (
           <button
@@ -842,12 +845,17 @@ export function NotificationsView({
                 : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
             }`}
           >
-            {cat}
+            {CATEGORY_BN[cat] || cat}
+            {cat !== "সব ক্যাটাগরি" && (
+              <span className="ml-1 opacity-70">
+                ({(data.notifications || []).filter((n: any) => notifCategory(n) === cat && !n.isRead).length})
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      {/* নোটিশ ও ঘোষণা জারি ফর্ম (ম্যানেজমেন্টের জন্য) */}
+      {/* Broadcast Company-Wide Task / Notice Form */}
       {data.currentUser?.role !== "Staff" && (
         <form
           onSubmit={async (e) => {
@@ -863,45 +871,45 @@ export function NotificationsView({
             setNoticeTitle("");
             setNoticeDesc("");
           }}
-          className="bg-white p-5 rounded-3xl border border-slate-200 grid grid-cols-1 md:grid-cols-6 gap-3 items-end shadow-xs"
+          className="bg-white p-5 rounded-2xl border border-slate-200 grid grid-cols-1 md:grid-cols-6 gap-3 items-end"
         >
           <div className="md:col-span-2">
             <label className="block text-xs font-semibold text-slate-600 mb-1">
-              নোটিশের শিরোনাম *
+              Task / Notice Title *
             </label>
             <input
               type="text"
               required
               value={noticeTitle}
               onChange={(e) => setNoticeTitle(e.target.value)}
-              placeholder="শিরোনাম লিখুন"
+              placeholder="e.g. সাইট ইন্সপেকশন ও রাজউক ড্রয়িং নির্দেশনা"
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
           </div>
           <div className="md:col-span-2">
             <label className="block text-xs font-semibold text-slate-600 mb-1">
-              বিস্তারিত বার্তা / নির্দেশনা *
+              Description / Instruction *
             </label>
             <input
               type="text"
               required
               value={noticeDesc}
               onChange={(e) => setNoticeDesc(e.target.value)}
-              placeholder="বিস্তারিত লিখুন..."
+              placeholder="Write detailed instruction..."
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">
-              প্রাপক ও অগ্রাধিকার
+              Target / Priority
             </label>
             <div className="flex gap-1">
               <select
                 value={noticeTarget}
                 onChange={(e) => setNoticeTarget(e.target.value)}
-                className="w-1/2 px-2 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                className="w-1/2 px-2 py-2 rounded-xl border border-slate-300 text-xs"
               >
-                <option value="All Staff">সকল কর্মকর্তা</option>
+                <option value="All Staff">All Staff</option>
                 {(data.allEmployeesDirectory || []).map((e: any) => (
                   <option key={e.id} value={`${e.name} (${e.empCode})`}>
                     {e.name}
@@ -911,19 +919,19 @@ export function NotificationsView({
               <select
                 value={noticePriority}
                 onChange={(e) => setNoticePriority(e.target.value)}
-                className="w-1/2 px-2 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                className="w-1/2 px-2 py-2 rounded-xl border border-slate-300 text-xs"
               >
-                <option value="High">উচ্চ</option>
-                <option value="Urgent">জরুরি</option>
-                <option value="Normal">সাধারণ</option>
+                <option>High</option>
+                <option>Critical</option>
+                <option>Medium</option>
               </select>
             </div>
           </div>
           <button
             type="submit"
-            className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs"
+            className="py-2 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs"
           >
-            নোটিশ পাঠান
+            ঘোষণা পাঠান
           </button>
         </form>
       )}
@@ -932,47 +940,56 @@ export function NotificationsView({
         {list.map((n: any) => (
           <div
             key={n.id}
-            className={`p-4 rounded-3xl border flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition ${
+            className={`p-4 rounded-2xl border flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
               n.isRead
                 ? "bg-white border-slate-200"
-                : "bg-emerald-50/40 border-emerald-300 shadow-xs"
+                : "bg-emerald-50/40 border-emerald-300"
             }`}
           >
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-lg bg-slate-900 text-white text-[11px] font-bold">
-                  {n.type}
+                <span className="px-2 py-0.5 rounded bg-slate-900 text-white text-[11px] font-bold">
+                  {CATEGORY_BN[notifCategory(n)] || n.type}
                 </span>
+                <span className="text-[11px] text-slate-500">
+                  {new Date(n.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </span>
+                {n.recipientName && (
+                  <span className="text-[11px] text-slate-500">প্রাপক: <strong>{n.recipientName}</strong></span>
+                )}
                 <span
-                  className={`px-2 py-0.5 rounded-lg text-[11px] font-bold ${
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold ${
                     n.priority === "Critical" || n.priority === "High"
                       ? "bg-rose-100 text-rose-700"
                       : "bg-blue-100 text-blue-700"
                   }`}
                 >
-                  অগ্রাধিকার: {n.priority === "High" ? "জরুরি" : n.priority === "Critical" ? "অতীব জরুরি" : "সাধারণ"}
+                  Priority: {n.priority || "Medium"}
                 </span>
                 <span className="text-xs font-semibold text-slate-600">
-                  প্রাপক: {n.assignedPersonOrTeam || "সকল কর্মকর্তা"}
+                  Assigned: {n.assignedPersonOrTeam || "All Staff"}
                 </span>
                 <span className="text-xs text-slate-500">
-                  প্রেরক: <strong>{n.createdBy || "সিস্টেম"}</strong>
+                  Created by: <strong>{n.createdBy || "System"}</strong>
                 </span>
                 {n.dueDate && (
                   <span className="text-xs text-amber-700 font-semibold">
-                    সময়সীমা: {n.dueDate}
+                    Due: {n.dueDate}
                   </span>
                 )}
+                <span className="text-xs font-mono text-slate-400">
+                  {n.relatedEntityCode}
+                </span>
                 {!n.isRead && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 )}
               </div>
               <h3 className="text-sm font-bold text-slate-900">{n.title}</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">{n.message}</p>
+              <p className="text-xs text-slate-600 whitespace-pre-line">{n.message}</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {/* নোটিফিকেশন থেকে সরাসরি টাস্ক গ্রহণ, শুরু বা সম্পন্ন করার সুবিধা */}
+              {/* Direct Task Accept / Start / Complete buttons right inside Notification */}
               {(n.relatedTaskId || n.type === "Task Assigned" || n.type === "New Task" || n.type === "Task Overdue") && (
                 <div className="flex items-center gap-1.5 mr-2">
                   <button
@@ -984,9 +1001,9 @@ export function NotificationsView({
                         status: "Accepted",
                       })
                     }
-                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-xs"
+                    className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold"
                   >
-                    গ্রহণ
+                    Accept
                   </button>
                   <button
                     type="button"
@@ -997,9 +1014,9 @@ export function NotificationsView({
                         status: "In Progress",
                       })
                     }
-                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-xs"
+                    className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
                   >
-                    শুরু
+                    Start
                   </button>
                   <button
                     type="button"
@@ -1008,21 +1025,24 @@ export function NotificationsView({
                         action: "updateTaskStatus",
                         taskId: n.relatedTaskId || 1,
                         status: "Completed",
-                        completionNote: "নোটিফিকেশন হতে সরাসরি সম্পন্ন করা হয়েছে",
+                        completionNote: "Completed directly from Notification Center",
                       })
                     }
-                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-xs"
+                    className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
                   >
-                    সম্পন্ন
+                    Complete
                   </button>
                 </div>
               )}
 
               <Link
                 href={n.relatedUrl || "/dashboard"}
-                className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition"
+                onClick={() => {
+                  if (!n.isRead && n.userId) onMutate({ action: "markNotificationRead", notificationId: n.id });
+                }}
+                className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-semibold"
               >
-                দেখুন →
+                {n.relatedTaskId ? "কাজটি দেখুন →" : "খুলুন →"}
               </Link>
               {!n.isRead && (
                 <button
@@ -1033,9 +1053,9 @@ export function NotificationsView({
                       notificationId: n.id,
                     })
                   }
-                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition"
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700"
                 >
-                  পঠিত চিহ্নিত করুন
+                  পঠিত করুন
                 </button>
               )}
             </div>
@@ -1046,9 +1066,6 @@ export function NotificationsView({
   );
 }
 
-// ============================================================================
-// ডকুমেন্ট ভল্ট, পাসওয়ার্ড পরিবর্তন ও অডিট লগ (/documents, /users, /settings - 100% BANGLA)
-// ============================================================================
 export function DocumentsAndUsersView({
   data,
   onMutate,
@@ -1063,10 +1080,12 @@ export function DocumentsAndUsersView({
   const [docType, setDocType] = useState("PDF");
   const [relatedCode, setRelatedCode] = useState("PRJ-0001");
 
+  // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [pwdMsg, setPwdMsg] = useState("");
 
+  // 12. রিমাইন্ডার অটোমেশন সেটিংস State
   const [lateCheckInAfter, setLateCheckInAfter] = useState(
     data.reminderSettings?.lateCheckInAfter || "09:30"
   );
@@ -1129,45 +1148,45 @@ export function DocumentsAndUsersView({
       }),
     });
     const d = await res.json();
-    setPwdMsg(d.message || d.error || "পাসওয়ার্ড হালনাগাদ সম্পন্ন হয়েছে।");
+    setPwdMsg(d.message || d.error || "Updated");
     setCurrentPassword("");
     setNewPassword("");
   }
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200">
         <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-emerald-600" />
           {mode === "documents"
-            ? "ডকুমেন্ট ভল্ট (PDF, JPG, PNG, DOCX, XLSX)"
-            : "ব্যবহারকারী ও পদবী নিয়ন্ত্রণ, নিরাপত্তা সেটিংস ও অডিট ট্রেইল"}
+            ? "Document Management Vault (PDF, JPG, PNG, DOCX, XLSX)"
+            : "User Access Control, Role Permissions, Security & Audit Trail"}
         </h1>
         <p className="text-xs text-slate-500">
-          সার্ভার-সাইড অনুমোদন নিয়ন্ত্রণ • কর্মকর্তা তথ্যের গোপনীয়তা • আর্থিক ও প্রশাসনিক অডিট লগ
+          Server-Side Permission Enforcement • Active/Inactive User Blocking • Complete Financial & Operational Audit Trail
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* ফর্মসমূহ: ডকুমেন্ট আপলোড, পাসওয়ার্ড পরিবর্তন ও রিমাইন্ডার সেটিংস */}
+        {/* Document Upload + Password Change */}
         <div className="lg:col-span-4 space-y-6">
           <form
             onSubmit={handleSaveDoc}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-emerald-600" /> নতুন ফাইল বা ডকুমেন্ট আপলোড
+              <FileText className="w-4 h-4 text-emerald-600" /> ডকুমেন্ট আপলোড
             </h2>
             <input
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
               onChange={handleFileUpload}
-              className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-slate-900 file:text-white"
+              className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white"
             />
             <input
               type="text"
               required
-              placeholder="ফাইলের নাম লিখুন *"
+              placeholder="ডকুমেন্টের নাম *"
               value={docName}
               onChange={(e) => setDocName(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
@@ -1176,52 +1195,51 @@ export function DocumentsAndUsersView({
               <select
                 value={docCat}
                 onChange={(e) => setDocCat(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs"
               >
-                <option value="Project">প্রজেক্ট</option>
-                <option value="Employee">কর্মকর্তা</option>
-                <option value="Client">ক্লায়েন্ট</option>
-                <option value="Site">সাইট</option>
-                <option value="Supplier">সরবরাহকারী</option>
-                <option value="Contractor">ঠিকাদার</option>
-                <option value="Invoice">ইনভয়েস</option>
-                <option value="PO">পারচেজ অর্ডার</option>
-                <option value="Payment">পেমেন্ট</option>
+                <option>Project</option>
+                <option>Employee</option>
+                <option>Client</option>
+                <option>Site</option>
+                <option>Supplier</option>
+                <option>Contractor</option>
+                <option>Invoice</option>
+                <option>PO</option>
+                <option>Payment</option>
               </select>
               <input
                 type="text"
                 value={relatedCode}
                 onChange={(e) => setRelatedCode(e.target.value)}
-                placeholder="সংশ্লিষ্ট কোড"
-                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                placeholder="Entity Code"
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs"
               />
             </div>
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs"
             >
-              ডকুমেন্ট সংরক্ষণ ও ইনডেক্স করুন
+              আপলোড ও ইনডেক্স
             </button>
           </form>
 
-          {/* পাসওয়ার্ড পরিবর্তন ফর্ম */}
           <form
             onSubmit={handlePasswordChange}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Lock className="w-4 h-4 text-slate-800" /> একাউন্টের পাসওয়ার্ড পরিবর্তন
+              <Lock className="w-4 h-4 text-slate-800" /> অ্যাকাউন্ট পাসওয়ার্ড পরিবর্তন
             </h2>
             {pwdMsg && (
-              <p className="text-xs font-semibold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">{pwdMsg}</p>
+              <p className="text-xs font-semibold text-emerald-600">{pwdMsg}</p>
             )}
             <input
               type="password"
               required
-              placeholder="বর্তমান পাসওয়ার্ড দিন"
+              placeholder="বর্তমান পাসওয়ার্ড"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
             <input
               type="password"
@@ -1229,132 +1247,129 @@ export function DocumentsAndUsersView({
               placeholder="নতুন পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2 rounded-xl bg-slate-900 text-white font-semibold text-xs"
             >
-              পাসওয়ার্ড হালনাগাদ করুন
+              পাসওয়ার্ড আপডেট
             </button>
           </form>
 
-          {/* ১২. স্বয়ংক্রিয় রিমাইন্ডার সেটিংস (ম্যানেজমেন্টের জন্য) */}
           {data.currentUser?.role !== "Staff" && (
             <form
               onSubmit={handleSaveReminders}
-              className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 shadow-xs"
+              className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
             >
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Bell className="w-4 h-4 text-amber-600" /> ১২. স্বয়ংক্রিয় রিমাইন্ডার অটোমেশন সেটিংস
+                <Bell className="w-4 h-4 text-amber-600" /> 12. রিমাইন্ডার অটোমেশন সেটিংস
               </h2>
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    দেরি ইন
+                    দেরিতে ইন এর পর
                   </label>
                   <input
                     type="time"
                     value={lateCheckInAfter}
                     onChange={(e) => setLateCheckInAfter(e.target.value)}
-                    className="w-full px-2 py-1.5 rounded-xl border border-slate-300 text-xs font-mono"
+                    className="w-full px-2 py-1.5 rounded-xl border border-slate-300 text-xs"
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    কাজের প্ল্যান
+                    কাজের পরিকল্পনার সময়
                   </label>
                   <input
                     type="time"
                     value={workPlanReminderTime}
                     onChange={(e) => setWorkPlanReminderTime(e.target.value)}
-                    className="w-full px-2 py-1.5 rounded-xl border border-slate-300 text-xs font-mono"
+                    className="w-full px-2 py-1.5 rounded-xl border border-slate-300 text-xs"
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    দৈনিক সারাংশ
+                    সারাংশের সময়
                   </label>
                   <input
                     type="time"
                     value={dailySummaryReminderTime}
                     onChange={(e) => setDailySummaryReminderTime(e.target.value)}
-                    className="w-full px-2 py-1.5 rounded-xl border border-slate-300 text-xs font-mono"
+                    className="w-full px-2 py-1.5 rounded-xl border border-slate-300 text-xs"
                   />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+              <label className="flex items-center gap-2 text-xs text-slate-700">
                 <input
                   type="checkbox"
                   checked={enableOverdueTaskReminder}
                   onChange={(e) => setEnableOverdueTaskReminder(e.target.checked)}
                 />
-                মেয়াদোত্তীর্ণ টাস্ক রিমাইন্ডার সক্রিয়
+                ওভারডিউ টাস্ক রিমাইন্ডার চালু
               </label>
-              <label className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+              <label className="flex items-center gap-2 text-xs text-slate-700">
                 <input
                   type="checkbox"
                   checked={enablePendingTaskReminder}
                   onChange={(e) => setEnablePendingTaskReminder(e.target.checked)}
                 />
-                পেন্ডিং টাস্ক রিমাইন্ডার সক্রিয়
+                পেন্ডিং টাস্ক রিমাইন্ডার চালু
               </label>
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs"
+                  className="flex-1 py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs"
                 >
-                  রিমাইন্ডার সংরক্ষণ
+                  রিমাইন্ডার সেভ করুন
                 </button>
                 <button
                   type="button"
                   onClick={() => onMutate({ action: "runReminderAutomation" })}
-                  className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-xs"
+                  className="px-3 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs"
                 >
-                  চালু করুন
+                  এখন চালান
                 </button>
               </div>
             </form>
           )}
         </div>
 
-        {/* ব্যবহারকারী ও অডিট ট্রেইল টেবিল */}
+        {/* Users, Documents & Audit Logs */}
         <div className="lg:col-span-8 space-y-6">
           {(data.users || []).length > 0 && (
-            <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
               <div className="p-4 border-b border-slate-200">
                 <h3 className="text-sm font-bold text-slate-900">
-                  সিস্টেম ব্যবহারকারী, ভূমিকা ও প্রবেশাধিকার নিয়ন্ত্রণ (মোট {(data.users || []).length} জন)
+                  সিস্টেম ইউজার, রোল ও সক্রিয়/নিষ্ক্রিয় নিয়ন্ত্রণ
                 </h3>
               </div>
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                    <th className="p-3 font-semibold">নাম ও ইমেইল</th>
-                    <th className="p-3 font-semibold">সিস্টেম ভূমিকা / পদবী</th>
-                    <th className="p-3 font-semibold">স্ট্যাটাস</th>
-                    <th className="p-3 font-semibold">পদক্ষেপ</th>
+                    <th className="p-3">নাম ও ইমেইল</th>
+                    <th className="p-3">রোল</th>
+                    <th className="p-3">স্ট্যাটাস</th>
+                    <th className="p-3">অ্যাকশন</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {(data.users || []).map((u: any) => (
-                    <tr key={u.id} className="hover:bg-slate-50 transition">
+                    <tr key={u.id}>
                       <td className="p-3">
                         <div className="font-bold text-slate-900">{u.name}</div>
-                        <div className="text-[11px] text-slate-500 font-mono">{u.email}</div>
+                        <div className="text-[11px] text-slate-500">{u.email}</div>
                       </td>
-                      <td className="p-3 font-semibold text-emerald-800">
-                        {getRoleBangla(u.role)}
-                      </td>
+                      <td className="p-3 font-semibold">{u.role}</td>
                       <td className="p-3">
                         <span
-                          className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                          className={`px-2 py-0.5 rounded-full font-bold ${
                             u.status === "Active"
                               ? "bg-emerald-100 text-emerald-700"
                               : "bg-rose-100 text-rose-700"
                           }`}
                         >
-                          {u.status === "Active" ? "সক্রিয়" : "নিষ্ক্রিয়"}
+                          {u.status}
                         </span>
                       </td>
                       <td className="p-3">
@@ -1369,9 +1384,9 @@ export function DocumentsAndUsersView({
                                 role: u.role,
                               })
                             }
-                            className="px-3 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold transition text-[11px]"
+                            className="px-2.5 py-1 rounded bg-slate-900 text-white font-semibold"
                           >
-                            {u.status === "Active" ? "নিষ্ক্রিয় করুন" : "সক্রিয় করুন"}
+                            Toggle {u.status === "Active" ? "Inactive" : "Active"}
                           </button>
                         )}
                       </td>
@@ -1382,27 +1397,27 @@ export function DocumentsAndUsersView({
             </div>
           )}
 
-          {/* ডকুমেন্ট ভল্ট */}
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          {/* Documents Vault */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                আপলোডকৃত ডকুমেন্ট ভল্ট (মোট {(data.documents || []).length} টি ফাইল)
+                আপলোডকৃত ডকুমেন্ট ({(data.documents || []).length})
               </h3>
             </div>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                  <th className="p-3 font-semibold">কোড</th>
-                  <th className="p-3 font-semibold">ফাইলের নাম</th>
-                  <th className="p-3 font-semibold">ক্যাটাগরি</th>
-                  <th className="p-3 font-semibold">সংশ্লিষ্ট রেকর্ড</th>
-                  <th className="p-3 font-semibold">আপলোডকারী</th>
+                  <th className="p-3">কোড</th>
+                  <th className="p-3">ফাইলের নাম</th>
+                  <th className="p-3">ক্যাটাগরি</th>
+                  <th className="p-3">এন্টিটি</th>
+                  <th className="p-3">আপলোড করেছেন</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(data.documents || []).map((doc: any) => (
-                  <tr key={doc.id} className="hover:bg-slate-50 transition">
-                    <td className="p-3 font-mono font-bold text-emerald-800">{doc.docCode}</td>
+                  <tr key={doc.id}>
+                    <td className="p-3 font-mono font-bold">{doc.docCode}</td>
                     <td className="p-3 font-semibold text-slate-900">
                       {doc.name} ({doc.fileType})
                     </td>
@@ -1415,35 +1430,35 @@ export function DocumentsAndUsersView({
             </table>
           </div>
 
-          {/* অপবর্তনযোগ্য অডিট ট্রেইল লগ */}
+          {/* Immutable Audit Trail */}
           {(data.auditLogs || []).length > 0 && (
-            <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
               <div className="p-4 border-b border-slate-200">
                 <h3 className="text-sm font-bold text-slate-900">
-                  নিরাপত্তা ও আর্থিক অডিট ট্রেইল রেজিস্টার (মোট {(data.auditLogs || []).length} টি লগ)
+                  নিরাপত্তা ও আর্থিক অডিট লগ ({(data.auditLogs || []).length})
                 </h3>
               </div>
               <div className="max-h-64 overflow-y-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                      <th className="p-2.5 font-semibold">ব্যবহারকারী ও পদবী</th>
-                      <th className="p-2.5 font-semibold">সম্পাদিত কাজ</th>
-                      <th className="p-2.5 font-semibold">মডিউল / এনটিটি</th>
-                      <th className="p-2.5 font-semibold">রেকর্ড কোড</th>
+                      <th className="p-2.5">ইউজার ও রোল</th>
+                      <th className="p-2.5">অ্যাকশন</th>
+                      <th className="p-2.5">এন্টিটি</th>
+                      <th className="p-2.5">রেকর্ড আইডি</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {(data.auditLogs || []).map((log: any) => (
-                      <tr key={log.id} className="hover:bg-slate-50 transition">
+                      <tr key={log.id}>
                         <td className="p-2.5">
-                          <strong>{log.userName}</strong> ({getRoleBangla(log.userRole)})
+                          <strong>{log.userName}</strong> ({log.userRole})
                         </td>
                         <td className="p-2.5 font-mono font-bold text-emerald-700">
                           {log.action}
                         </td>
                         <td className="p-2.5">{log.entity}</td>
-                        <td className="p-2.5 font-mono text-slate-500">{log.recordId}</td>
+                        <td className="p-2.5 font-mono">{log.recordId}</td>
                       </tr>
                     ))}
                   </tbody>

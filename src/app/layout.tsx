@@ -3,15 +3,15 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "INSAF ERP — ইনসাফ পূর্ণাঙ্গ এন্টারপ্রাইজ বিজনেস ম্যানেজমেন্ট সিস্টেম",
+  title: "INSAF ERP — Complete Enterprise Construction & Business ERP",
   description:
-    "ইনসাফ বিল্ডিং ডিজাইন অ্যান্ড কনসালট্যান্ট লিমিটেড এবং ইনসাফ রিয়েল এস্টেট লিমিটেডের সমন্বিত বিজনেস ইআরপি।",
+    "Full Business ERP with HR, Attendance, My Day, Tasks, CRM, Quotations, Projects, Sites, Inventory Formula Engine, Procurement GRN, Double-Entry Accounting, AR/AP, Payroll, Leave, Performance & Audit Trail.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="bn">
-      <body className="bg-slate-100 text-slate-900 antialiased font-sans">{children}</body>
+      <body className="bg-slate-100 text-slate-900 antialiased overflow-x-hidden">{children}</body>
     </html>
   );
 }

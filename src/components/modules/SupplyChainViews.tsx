@@ -8,15 +8,13 @@ import {
   ShoppingCart,
   Truck,
   HardHat,
+  AlertTriangle,
   Printer,
 } from "lucide-react";
 import { exportToCSV, exportToPDFPrint } from "@/lib/export-utils";
 
  
 
-// ============================================================================
-// কাঁচামাল ও ইনভেন্টরি স্টক নিয়ন্ত্রণ (/materials and /inventory - 100% BANGLA)
-// ============================================================================
 export function MaterialsAndInventoryView({
   data,
   onMutate,
@@ -27,8 +25,8 @@ export function MaterialsAndInventoryView({
   // New Material form
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Cement");
-  const [unit, setUnit] = useState("ব্যাগ");
-  const [warehouse, setWarehouse] = useState("সেন্ট্রাল ওয়্যারহাউস");
+  const [unit, setUnit] = useState("Bag");
+  const [warehouse, setWarehouse] = useState("Central Warehouse");
   const [openingStock, setOpeningStock] = useState("50");
   const [unitCost, setUnitCost] = useState("550");
   const [reorderLevel, setReorderLevel] = useState("25");
@@ -83,18 +81,18 @@ export function MaterialsAndInventoryView({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">
-            কাঁচামাল ও ইনভেন্টরি স্টক নিয়ন্ত্রণ ইঞ্জিন (MAT-0001)
+            মালামাল ও ইনভেন্টরি নিয়ন্ত্রণ
           </h1>
           <p className="text-xs text-slate-500">
-            সূত্র: বর্তমান মজুদ = প্রারম্ভিক + ক্রয় + স্থানান্তর (আগত) + ফেরত - ইস্যু - স্থানান্তর (বহির্গমন) - ব্যবহার ± সমন্বয়
+            Formula: বর্তমান স্টক = Opening + Purchase + Transfer In + Return - Issue - Transfer Out - Consumption ± Adjustment • Negative Stock Blocked
           </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="px-3.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
-            <span className="text-emerald-700 font-medium">স্টকের মোট মূল্যমান: </span>
+            <span className="text-emerald-700 font-medium">Total Valuation: </span>
             <strong className="text-emerald-900 text-sm">
               ৳{totalInventoryValuation.toLocaleString()}
             </strong>
@@ -102,7 +100,7 @@ export function MaterialsAndInventoryView({
           <button
             type="button"
             onClick={() => exportToCSV("INSAF_Inventory", data.materials || [])}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition"
+            className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700"
           >
             CSV এক্সপোর্ট
           </button>
@@ -110,27 +108,27 @@ export function MaterialsAndInventoryView({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* ফর্মসমূহ: স্টক লেনদেন ও নতুন মালামাল সংযোজন */}
+        {/* Left Forms: Add Material + Record Stock Movement */}
         <div className="lg:col-span-4 space-y-6">
           <form
             onSubmit={handleStockMovement}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <ArrowLeftRight className="w-4 h-4 text-emerald-600" /> স্টক আদান-প্রদান লেনদেন দাখিল
+              <ArrowLeftRight className="w-4 h-4 text-emerald-600" /> স্টক লেনদেন রেকর্ড
             </h2>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                মালামাল নির্বাচন
+                Material
               </label>
               <select
                 value={materialId}
                 onChange={(e) => setMaterialId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
               >
                 {(data.materials || []).map((m: any) => (
                   <option key={m.id} value={m.id}>
-                    {m.materialCode} — {m.name} (মজুদ: {m.currentStock} {m.unit})
+                    {m.materialCode} — {m.name} (Stock: {m.currentStock} {m.unit})
                   </option>
                 ))}
               </select>
@@ -143,15 +141,15 @@ export function MaterialsAndInventoryView({
                 <select
                   value={movementType}
                   onChange={(e) => setMovementType(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 >
-                  <option value="Consumption">ব্যবহার / ভোগ (Consumption)</option>
-                  <option value="Issue">সাইটে ইস্যু (Issue)</option>
-                  <option value="Purchase">ক্রয় / প্রাপ্তি (Purchase)</option>
-                  <option value="Transfer In">স্থানান্তর আগত (Transfer In)</option>
-                  <option value="Transfer Out">স্থানান্তর বহির্গমন (Transfer Out)</option>
-                  <option value="Return">ফেরত (Return)</option>
-                  <option value="Adjustment">সমন্বয় (Adjustment)</option>
+                  <option>Consumption</option>
+                  <option>Issue</option>
+                  <option>Purchase</option>
+                  <option>Transfer In</option>
+                  <option>Transfer Out</option>
+                  <option>Return</option>
+                  <option>Adjustment</option>
                 </select>
               </div>
               <div>
@@ -164,19 +162,19 @@ export function MaterialsAndInventoryView({
                   required
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  সংশ্লিষ্ট প্রজেক্ট
+                  প্রজেক্ট লিংক
                 </label>
                 <select
                   value={projectId}
                   onChange={(e) => setProjectId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 >
                   {(data.projects || []).map((p: any) => (
                     <option key={p.id} value={p.id}>
@@ -187,12 +185,12 @@ export function MaterialsAndInventoryView({
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  সংশ্লিষ্ট সাইট
+                  সাইট লিংক
                 </label>
                 <select
                   value={siteId}
                   onChange={(e) => setSiteId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 >
                   {(data.sites || []).map((s: any) => (
                     <option key={s.id} value={s.id}>
@@ -202,40 +200,40 @@ export function MaterialsAndInventoryView({
                 </select>
               </div>
             </div>
-            <label className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+            <label className="flex items-center gap-2 text-xs text-slate-600">
               <input
                 type="checkbox"
                 checked={recordAsProjectExpense}
                 onChange={(e) => setRecordAsProjectExpense(e.target.checked)}
               />
-              সাইটে ব্যবহার বা ইস্যুর ক্ষেত্রে স্বয়ংক্রিয় প্রজেক্ট ব্যয়ে যুক্ত করুন
+              Auto-post to Project Material Cost if Issue/Consumption
             </label>
             <input
               type="text"
-              placeholder="চালান নম্বর / রেফারেন্স নোট"
+              placeholder="Challan / Reference Notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition"
             >
-              স্টক মুভমেন্ট নিশ্চিত করুন
+              স্টক মুভমেন্ট কার্যকর
             </button>
           </form>
 
           <form
             onSubmit={handleCreateMaterial}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Plus className="w-4 h-4 text-slate-800" /> নতুন মালামাল আইটেম নিবন্ধন
+              <Plus className="w-4 h-4 text-slate-800" /> নতুন মালামাল নিবন্ধন
             </h2>
             <input
               type="text"
               required
-              placeholder="মালামালের নাম *"
+              placeholder="Material Name *"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
@@ -244,26 +242,26 @@ export function MaterialsAndInventoryView({
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="px-2 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                className="px-2 py-2 rounded-xl border border-slate-300 text-xs"
               >
-                <option value="Cement">সিমেন্ট</option>
-                <option value="Steel/Rod">রড/স্টিল</option>
-                <option value="Brick/Sand">ইট/বালু</option>
-                <option value="Electrical">বৈদ্যুতিক</option>
-                <option value="Plumbing">প্লাম্বিং</option>
+                <option>Cement</option>
+                <option>Steel/Rod</option>
+                <option>Brick/Sand</option>
+                <option>Electrical</option>
+                <option>Plumbing</option>
               </select>
               <input
                 type="text"
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                placeholder="একক (ব্যাগ/টন)"
+                placeholder="Unit (Bag/Ton)"
                 className="px-2 py-2 rounded-xl border border-slate-300 text-xs"
               />
               <input
                 type="text"
                 value={warehouse}
                 onChange={(e) => setWarehouse(e.target.value)}
-                placeholder="গুদাম"
+                placeholder="Warehouse"
                 className="px-2 py-2 rounded-xl border border-slate-300 text-xs"
               />
             </div>
@@ -272,86 +270,86 @@ export function MaterialsAndInventoryView({
                 type="number"
                 value={openingStock}
                 onChange={(e) => setOpeningStock(e.target.value)}
-                placeholder="প্রারম্ভিক"
+                placeholder="Opening"
                 className="px-2 py-2 rounded-xl border border-slate-300 text-xs"
               />
               <input
                 type="number"
                 value={unitCost}
                 onChange={(e) => setUnitCost(e.target.value)}
-                placeholder="একক দর"
+                placeholder="Unit Cost"
                 className="px-2 py-2 rounded-xl border border-slate-300 text-xs"
               />
               <input
                 type="number"
                 value={reorderLevel}
                 onChange={(e) => setReorderLevel(e.target.value)}
-                placeholder="রিঅর্ডার লেভেল"
+                placeholder="Reorder"
                 className="px-2 py-2 rounded-xl border border-slate-300 text-xs"
               />
             </div>
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2 rounded-xl bg-slate-900 text-white font-semibold text-xs"
             >
-              নতুন মালামাল আইটেম সংরক্ষণ
+              মালামাল যোগ করুন
             </button>
           </form>
         </div>
 
-        {/* ডান পাশ: স্টক রেজিস্টার ও মুভমেন্ট লেজার */}
+        {/* Right: Formula Breakdown Table + Stock Ledger */}
         <div className="lg:col-span-8 space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                লাইভ স্টক ব্যালেন্স ও সূত্র বিশ্লেষণ (মোট {(data.materials || []).length} টি আইটেম)
+                Live Stock Balance & Formula Breakdown ({(data.materials || []).length} items)
               </h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                    <th className="p-2.5 font-semibold">কোড ও পণ্যের নাম</th>
-                    <th className="p-2.5 font-semibold">প্রারম্ভিক</th>
-                    <th className="p-2.5 font-semibold">+ক্রয়</th>
-                    <th className="p-2.5 font-semibold">+স্থানান্তর আগত</th>
-                    <th className="p-2.5 font-semibold">-ইস্যু</th>
-                    <th className="p-2.5 font-semibold">-স্থানান্তর বহির্গমন</th>
-                    <th className="p-2.5 font-semibold">-ব্যবহার</th>
-                    <th className="p-2.5 font-semibold">বর্তমান মজুদ</th>
-                    <th className="p-2.5 font-semibold">মোট মূল্যমান</th>
+                    <th className="p-2.5">কোড ও নাম</th>
+                    <th className="p-2.5">ওপেনিং</th>
+                    <th className="p-2.5">+Pur</th>
+                    <th className="p-2.5">+TrfIn</th>
+                    <th className="p-2.5">-Iss</th>
+                    <th className="p-2.5">-TrfOut</th>
+                    <th className="p-2.5">-Con</th>
+                    <th className="p-2.5">বর্তমান স্টক</th>
+                    <th className="p-2.5">মূল্যায়ন</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {(data.materials || []).map((m: any) => (
-                    <tr key={m.id} className="hover:bg-slate-50 transition">
+                    <tr key={m.id} className="hover:bg-slate-50">
                       <td className="p-2.5">
                         <div className="font-bold text-slate-900">
                           {m.materialCode} — {m.name}
                         </div>
-                        <div className="text-[11px] text-slate-500">
-                          {m.warehouse} • দর: ৳{Number(m.unitCost).toLocaleString()}/{m.unit}
+                        <div className="text-[11px] text-slate-400">
+                          {m.warehouse} • Rate: ৳{Number(m.unitCost).toLocaleString()}/{m.unit}
                         </div>
                       </td>
                       <td className="p-2.5 font-mono">{Number(m.openingStock)}</td>
-                      <td className="p-2.5 font-mono text-emerald-600 font-bold">
+                      <td className="p-2.5 font-mono text-emerald-600">
                         +{Number(m.purchaseReceived)}
                       </td>
-                      <td className="p-2.5 font-mono text-emerald-600 font-bold">
+                      <td className="p-2.5 font-mono text-emerald-600">
                         +{Number(m.transferIn)}
                       </td>
-                      <td className="p-2.5 font-mono text-rose-600 font-bold">
+                      <td className="p-2.5 font-mono text-rose-600">
                         -{Number(m.issueQty)}
                       </td>
-                      <td className="p-2.5 font-mono text-rose-600 font-bold">
+                      <td className="p-2.5 font-mono text-rose-600">
                         -{Number(m.transferOut)}
                       </td>
-                      <td className="p-2.5 font-mono text-rose-600 font-bold">
+                      <td className="p-2.5 font-mono text-rose-600">
                         -{Number(m.consumptionQty)}
                       </td>
                       <td className="p-2.5">
                         <span
-                          className={`px-2 py-0.5 rounded-lg font-bold ${
+                          className={`px-2 py-0.5 rounded font-bold ${
                             m.isLowStock
                               ? "bg-rose-100 text-rose-700"
                               : "bg-emerald-100 text-emerald-800"
@@ -361,7 +359,7 @@ export function MaterialsAndInventoryView({
                         </span>
                         {m.isLowStock && (
                           <span className="ml-1 text-[10px] text-rose-600 font-bold">
-                            মজুদ কম!
+                            LOW!
                           </span>
                         )}
                       </td>
@@ -375,33 +373,33 @@ export function MaterialsAndInventoryView({
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                স্টক মুভমেন্ট লেনদেন লেজার (মোট {(data.stockMovements || []).length} টি এন্ট্রি)
+                স্টক মুভমেন্ট লেজার ({(data.stockMovements || []).length})
               </h3>
             </div>
             <div className="overflow-x-auto max-h-72">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                    <th className="p-2.5 font-semibold">তারিখ</th>
-                    <th className="p-2.5 font-semibold">মালামাল কোড</th>
-                    <th className="p-2.5 font-semibold">লেনদেনের ধরন</th>
-                    <th className="p-2.5 font-semibold">পরিমাণ</th>
-                    <th className="p-2.5 font-semibold">মূল্যমান (৳)</th>
-                    <th className="p-2.5 font-semibold">চালান / মন্তব্য</th>
+                    <th className="p-2.5">তারিখ</th>
+                    <th className="p-2.5">মালামাল আইডি</th>
+                    <th className="p-2.5">ধরন</th>
+                    <th className="p-2.5">পরিমাণ</th>
+                    <th className="p-2.5">মূল্য (৳)</th>
+                    <th className="p-2.5">রেফ / নোট</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {(data.stockMovements || []).map((sm: any) => (
-                    <tr key={sm.id} className="hover:bg-slate-50 transition">
+                    <tr key={sm.id}>
                       <td className="p-2.5">{sm.date}</td>
-                      <td className="p-2.5 font-mono font-bold">MAT #{sm.materialId}</td>
+                      <td className="p-2.5 font-mono">MAT #{sm.materialId}</td>
                       <td className="p-2.5 font-bold">{sm.movementType}</td>
                       <td className="p-2.5 font-mono font-bold">{sm.quantity}</td>
                       <td className="p-2.5">৳{Number(sm.totalValue).toLocaleString()}</td>
-                      <td className="p-2.5 text-slate-600">
+                      <td className="p-2.5 text-slate-500">
                         {sm.referenceCode} — {sm.notes}
                       </td>
                     </tr>
@@ -417,7 +415,7 @@ export function MaterialsAndInventoryView({
 }
 
 // ============================================================================
-// প্রকিউরমেন্ট ও সরবরাহকারী ব্যবস্থাপনা (/purchase-orders and /suppliers)
+// PROCUREMENT & SUPPLIERS VIEW (/purchase-orders and /suppliers)
 // ============================================================================
 export function ProcurementAndSuppliersView({
   data,
@@ -454,7 +452,6 @@ export function ProcurementAndSuppliersView({
     });
     setSupplierName("");
     setSupplierPhone("");
-    setProductsProvided("");
   }
 
   async function handleCreatePO(e: React.FormEvent) {
@@ -470,9 +467,9 @@ export function ProcurementAndSuppliersView({
       items: [
         {
           materialId: Number(materialId),
-          materialName: mat?.name || "নির্মাণ কাঁচামাল",
+          materialName: mat?.name || "Construction Material",
           orderedQty: Number(orderedQty),
-          unit: mat?.unit || "ব্যাগ",
+          unit: mat?.unit || "Bag",
           rate: Number(rate),
         },
       ],
@@ -481,27 +478,27 @@ export function ProcurementAndSuppliersView({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900">
-            প্রকিউরমেন্ট ও সরবরাহকারী দেনা খতিয়ান (PO &amp; Supplier AP)
+            Procurement (PR → PO → GRN Receive) & Supplier Payable Ledger
           </h1>
           <p className="text-xs text-slate-500">
-            পারচেজ অর্ডার রিসিভ (GRN) করার সাথে সাথে মালামাল স্টকে যুক্ত হয় এবং ডাবল-এন্ট্রি হিসাব স্বয়ংক্রিয়ভাবে আপডেট হয়
+            Receiving a PO automatically updates Material Inventory, generates Supplier Bill, updates Supplier Payable & posts Double-Entry Journal
           </p>
         </div>
         <button
           type="button"
           onClick={() =>
             exportToPDFPrint(
-              "সরবরাহকারী খতিয়ান ও পারচেজ অর্ডার",
-              "প্রকিউরমেন্ট হিসাব লেজার",
+              "Suppliers & Purchase Orders",
+              "Procurement Ledger",
               data.suppliers || []
             )
           }
-          className="px-3.5 py-2 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1.5 transition"
+          className="px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold flex items-center gap-1"
         >
-          <Printer className="w-3.5 h-3.5" /> খতিয়ান PDF প্রিন্ট
+          <Printer className="w-3.5 h-3.5" /> Print Ledger
         </button>
       </div>
 
@@ -509,19 +506,19 @@ export function ProcurementAndSuppliersView({
         <div className="lg:col-span-4 space-y-6">
           <form
             onSubmit={handleCreatePO}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <ShoppingCart className="w-4 h-4 text-emerald-600" /> নতুন পারচেজ অর্ডার ইস্যু করুন (PO-0001)
+              <ShoppingCart className="w-4 h-4 text-emerald-600" /> ক্রয় অর্ডার ইস্যু
             </h2>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                সরবরাহকারী নির্বাচন
+                Supplier
               </label>
               <select
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
               >
                 {(data.suppliers || []).map((s: any) => (
                   <option key={s.id} value={s.id}>
@@ -532,12 +529,12 @@ export function ProcurementAndSuppliersView({
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                মালামাল আইটেম
+                অর্ডারের মালামাল
               </label>
               <select
                 value={materialId}
                 onChange={(e) => setMaterialId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
               >
                 {(data.materials || []).map((m: any) => (
                   <option key={m.id} value={m.id}>
@@ -549,13 +546,13 @@ export function ProcurementAndSuppliersView({
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  অর্ডারের পরিমাণ
+                  অর্ডার পরিমাণ
                 </label>
                 <input
                   type="number"
                   value={orderedQty}
                   onChange={(e) => setOrderedQty(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 />
               </div>
               <div>
@@ -566,7 +563,7 @@ export function ProcurementAndSuppliersView({
                   type="number"
                   value={rate}
                   onChange={(e) => setRate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 />
               </div>
             </div>
@@ -574,7 +571,7 @@ export function ProcurementAndSuppliersView({
               <select
                 value={projectId}
                 onChange={(e) => setProjectId(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs"
               >
                 {(data.projects || []).map((p: any) => (
                   <option key={p.id} value={p.id}>
@@ -585,7 +582,7 @@ export function ProcurementAndSuppliersView({
               <select
                 value={siteId}
                 onChange={(e) => setSiteId(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs"
               >
                 {(data.sites || []).map((s: any) => (
                   <option key={s.id} value={s.id}>
@@ -596,23 +593,23 @@ export function ProcurementAndSuppliersView({
             </div>
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs"
             >
-              অনুমোদিত পারচেজ অর্ডার তৈরি করুন
+              অনুমোদিত PO তৈরি
             </button>
           </form>
 
           <form
             onSubmit={handleCreateSupplier}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Truck className="w-4 h-4 text-slate-800" /> নতুন সরবরাহকারী প্রতিষ্ঠান যোগ করুন
+              <Truck className="w-4 h-4 text-slate-800" /> নতুন সাপ্লায়ার
             </h2>
             <input
               type="text"
               required
-              placeholder="সরবরাহকারী প্রতিষ্ঠানের নাম *"
+              placeholder="Supplier Company Name *"
               value={supplierName}
               onChange={(e) => setSupplierName(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
@@ -620,51 +617,51 @@ export function ProcurementAndSuppliersView({
             <input
               type="text"
               required
-              placeholder="ফোন নম্বর *"
+              placeholder="Phone Number *"
               value={supplierPhone}
               onChange={(e) => setSupplierPhone(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
             <input
               type="text"
-              placeholder="সরবরাহকৃত মালামাল (যেমন: সিমেন্ট, রড)"
+              placeholder="Materials Supplied (e.g. Cement, Steel)"
               value={productsProvided}
               onChange={(e) => setProductsProvided(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2 rounded-xl bg-slate-900 text-white font-semibold text-xs"
             >
-              সরবরাহকারী নিবন্ধন করুন
+              সাপ্লায়ার নিবন্ধন
             </button>
           </form>
         </div>
 
         <div className="lg:col-span-8 space-y-6">
-          {/* সরবরাহকারী দেনা হিসাব টেবিল */}
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          {/* Suppliers Payable Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                সরবরাহকারী দেনা হিসাব (মোট বিল - পরিশোধ = বকেয়া দেনা)
+                Suppliers & Real Payable Calculation (Bill - Paid = বকেয়া পরিশোধযোগ্য)
               </h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                    <th className="p-3 font-semibold">কোড</th>
-                    <th className="p-3 font-semibold">সরবরাহকারীর নাম</th>
-                    <th className="p-3 font-semibold">পণ্যসমূহ</th>
-                    <th className="p-3 font-semibold">মোট বিলকৃত</th>
-                    <th className="p-3 font-semibold">মোট পরিশোধিত</th>
-                    <th className="p-3 font-semibold">বকেয়া দেনা (AP)</th>
-                    <th className="p-3 font-semibold">পেমেন্ট</th>
+                    <th className="p-3">কোড</th>
+                    <th className="p-3">সাপ্লায়ারের নাম</th>
+                    <th className="p-3">পণ্য</th>
+                    <th className="p-3">মোট বিল</th>
+                    <th className="p-3">মোট পরিশোধ</th>
+                    <th className="p-3">বকেয়া পরিশোধযোগ্য</th>
+                    <th className="p-3">দ্রুত পরিশোধ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {(data.suppliers || []).map((s: any) => (
-                    <tr key={s.id} className="hover:bg-slate-50 transition">
+                    <tr key={s.id}>
                       <td className="p-3 font-mono font-bold">{s.supplierCode}</td>
                       <td className="p-3 font-bold text-slate-900">
                         {s.name}
@@ -688,7 +685,7 @@ export function ProcurementAndSuppliersView({
                             type="button"
                             onClick={() => {
                               const amt = prompt(
-                                `${s.name}-কে পেমেন্ট প্রদান করুন (বকেয়া: ৳${s.outstandingPayable}):`,
+                                `Enter payment amount for ${s.name} (Due: ৳${s.outstandingPayable}):`,
                                 "50000"
                               );
                               if (!amt) return;
@@ -700,7 +697,7 @@ export function ProcurementAndSuppliersView({
                                 method: "Bank",
                               });
                             }}
-                            className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition shadow-xs text-[11px]"
+                            className="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold"
                           >
                             বিল পরিশোধ
                           </button>
@@ -713,31 +710,31 @@ export function ProcurementAndSuppliersView({
             </div>
           </div>
 
-          {/* পারচেজ অর্ডার ও জিআরএন স্টক রিসিভ */}
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          {/* Purchase Orders & GRN Receive */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                পারচেজ অর্ডার তালিকা (PO-0001) ও গুদাম রিসিভ (GRN)
+                Purchase Orders (PO-0001) & GRN Stock Receive
               </h3>
             </div>
             <div className="divide-y divide-slate-100">
               {(data.purchaseOrders || []).map((po: any) => (
                 <div
                   key={po.id}
-                  className="p-4 flex flex-wrap items-center justify-between gap-3 text-xs hover:bg-slate-50 transition"
+                  className="p-4 flex flex-wrap items-center justify-between gap-3 text-xs"
                 >
                   <div>
-                    <span className="font-mono font-bold px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-900">
+                    <span className="font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-900">
                       {po.poCode}
                     </span>
                     <span className="ml-2 font-bold text-slate-800">
-                      মোট বিল: ৳{Number(po.totalAmount).toLocaleString()} (রিসিভ: ৳
+                      Total: ৳{Number(po.totalAmount).toLocaleString()} (Received: ৳
                       {Number(po.receivedAmount).toLocaleString()})
                     </span>
                     <div className="text-slate-500 mt-1">
                       {(po.items || []).map((it: any, idx: number) => (
                         <span key={idx} className="mr-3">
-                          • {it.materialName}: অর্ডার {it.orderedQty} {it.unit} (রিসিভ:{" "}
+                          • {it.materialName}: Ordered {it.orderedQty} {it.unit} (Rec:{" "}
                           {it.receivedQty}) @ ৳{it.rate}
                         </span>
                       ))}
@@ -745,13 +742,13 @@ export function ProcurementAndSuppliersView({
                   </div>
                   <div className="flex items-center gap-2">
                     <span
-                      className={`px-2.5 py-1 rounded-full font-bold text-[11px] ${
+                      className={`px-2.5 py-0.5 rounded-full font-bold ${
                         po.status === "Received"
                           ? "bg-emerald-100 text-emerald-700"
                           : "bg-amber-100 text-amber-700"
                       }`}
                     >
-                      {po.status === "Received" ? "সম্পূর্ণ রিসিভ" : "অনুমোদিত"}
+                      {po.status}
                     </span>
                     {po.status !== "Received" && (
                       <>
@@ -764,9 +761,9 @@ export function ProcurementAndSuppliersView({
                               receiveRatio: 0.5,
                             })
                           }
-                          className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold transition text-[11px]"
+                          className="px-2.5 py-1 rounded bg-amber-600 text-white font-semibold"
                         >
-                          আংশিক রিসিভ (৫০%)
+                          আংশিক GRN (৫০%)
                         </button>
                         <button
                           type="button"
@@ -777,9 +774,9 @@ export function ProcurementAndSuppliersView({
                               receiveRatio: 1,
                             })
                           }
-                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition text-[11px]"
+                          className="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold"
                         >
-                          সম্পূর্ণ রিসিভ → স্টক ও দেনা
+                          Full GRN Receive → Stock & AP
                         </button>
                       </>
                     )}
@@ -795,7 +792,7 @@ export function ProcurementAndSuppliersView({
 }
 
 // ============================================================================
-// সাইট শ্রমিক ও সাব-ঠিকাদার বিল ব্যবস্থাপনা (/labour - 100% BANGLA)
+// LABOUR & CONTRACTOR VIEW (/labour)
 // ============================================================================
 export function LabourAndContractorsView({
   data,
@@ -811,7 +808,7 @@ export function LabourAndContractorsView({
   const [phone, setPhone] = useState("");
 
   const [conName, setConName] = useState("");
-  const [specialty, setSpecialty] = useState("আরসিসি ও শাটারিং কাজ");
+  const [specialty, setSpecialty] = useState("RCC & Shuttering Work");
   const [approvedBillAmount, setApprovedBillAmount] = useState("400000");
 
   async function handleAddLabour(e: React.FormEvent) {
@@ -827,7 +824,6 @@ export function LabourAndContractorsView({
       assignedSiteId: data.sites?.[0]?.id || 1,
     });
     setLabourName("");
-    setPhone("");
   }
 
   async function handleAddContractor(e: React.FormEvent) {
@@ -846,12 +842,12 @@ export function LabourAndContractorsView({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200">
         <h1 className="text-xl font-bold text-slate-900">
-          সাইট শ্রমিক মাস্টার রোল ও সাব-ঠিকাদার বিল ব্যবস্থাপনা
+          Site Labour Muster Roll & Sub-Contractor Bill Management
         </h1>
         <p className="text-xs text-slate-500">
-          প্রকৃত হিসাব: ঠিকাদারের অনুমোদিত বিল - পরিশোধিত অর্থ = বকেয়া দেনা
+          Real Calculation: Contractor অনুমোদিত বিল - পরিশোধিত = বকেয়া
         </p>
       </div>
 
@@ -859,15 +855,15 @@ export function LabourAndContractorsView({
         <div className="lg:col-span-4 space-y-6">
           <form
             onSubmit={handleAddContractor}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <HardHat className="w-4 h-4 text-emerald-600" /> সাব-ঠিকাদার ও অনুমোদিত বিল যোগ করুন
+              <HardHat className="w-4 h-4 text-emerald-600" /> ঠিকাদার ও অনুমোদিত বিল
             </h2>
             <input
               type="text"
               required
-              placeholder="ঠিকাদারের নাম লিখুন *"
+              placeholder="Contractor Name *"
               value={conName}
               onChange={(e) => setConName(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
@@ -875,7 +871,7 @@ export function LabourAndContractorsView({
             <input
               type="text"
               required
-              placeholder="কাজের ধরন (যেমন: পাইলিং, টাইলস, স্যানিটারি)"
+              placeholder="Specialty (e.g. Piling, Tiles)"
               value={specialty}
               onChange={(e) => setSpecialty(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
@@ -883,24 +879,24 @@ export function LabourAndContractorsView({
             <input
               type="number"
               required
-              placeholder="অনুমোদিত বিলের পরিমাণ (৳)"
+              placeholder="অনুমোদিত বিল Amount (৳)"
               value={approvedBillAmount}
               onChange={(e) => setApprovedBillAmount(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs"
             >
-              ঠিকাদার বিল সংরক্ষণ
+              ঠিকাদার নিবন্ধন
             </button>
           </form>
 
           <form
             onSubmit={handleAddLabour}
-            className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 shadow-xs"
+            className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
           >
-            <h2 className="text-sm font-bold text-slate-900">সাইট শ্রমিক যোগ করুন</h2>
+            <h2 className="text-sm font-bold text-slate-900">সাইট শ্রমিক যোগ</h2>
             <input
               type="text"
               required
@@ -914,61 +910,60 @@ export function LabourAndContractorsView({
                 type="text"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="ক্যাটাগরি"
                 className="px-2 py-2 rounded-xl border border-slate-300 text-xs"
               />
               <input
                 type="number"
                 value={dailyRate}
                 onChange={(e) => setDailyRate(e.target.value)}
-                placeholder="দৈনিক মজুরি"
-                className="px-2 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                placeholder="Daily Rate"
+                className="px-2 py-2 rounded-xl border border-slate-300 text-xs"
               />
               <input
                 type="number"
                 value={workDays}
                 onChange={(e) => setWorkDays(e.target.value)}
-                placeholder="কাজের দিন"
-                className="px-2 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                placeholder="Work Days"
+                className="px-2 py-2 rounded-xl border border-slate-300 text-xs"
               />
             </div>
             <input
               type="text"
-              placeholder="ফোন নম্বর"
+              placeholder="Phone"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs"
+              className="w-full py-2 rounded-xl bg-slate-900 text-white font-semibold text-xs"
             >
-              শ্রমিক রেকর্ড সংরক্ষণ করুন
+              শ্রমিক রেকর্ড যোগ
             </button>
           </form>
         </div>
 
         <div className="lg:col-span-8 space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                সাব-ঠিকাদার বিল খতিয়ান (অনুমোদিত বিল বনাম পরিশোধিত বনাম বকেয়া)
+                Sub-Contractors (অনুমোদিত বিল vs Paid vs বকেয়া)
               </h3>
             </div>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                  <th className="p-3 font-semibold">কোড</th>
-                  <th className="p-3 font-semibold">ঠিকাদার</th>
-                  <th className="p-3 font-semibold">অনুমোদিত বিল</th>
-                  <th className="p-3 font-semibold">পরিশোধিত অর্থ</th>
-                  <th className="p-3 font-semibold">বকেয়া দেনা</th>
-                  <th className="p-3 font-semibold">পদক্ষেপ</th>
+                  <th className="p-3">কোড</th>
+                  <th className="p-3">ঠিকাদার</th>
+                  <th className="p-3">অনুমোদিত বিল</th>
+                  <th className="p-3">পরিশোধিত</th>
+                  <th className="p-3">বকেয়া</th>
+                  <th className="p-3">অ্যাকশন</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(data.contractors || []).map((c: any) => (
-                  <tr key={c.id} className="hover:bg-slate-50 transition">
+                  <tr key={c.id}>
                     <td className="p-3 font-mono font-bold">{c.contractorCode}</td>
                     <td className="p-3">
                       <div className="font-bold text-slate-900">{c.name}</div>
@@ -989,7 +984,7 @@ export function LabourAndContractorsView({
                           type="button"
                           onClick={() => {
                             const amt = prompt(
-                              `${c.name}-কে পরিশোধ করুন (বকেয়া: ৳${c.outstandingDue}):`,
+                              `ঠিকাদারকে পরিশোধ ${c.name} (Due: ৳${c.outstandingDue}):`,
                               "50000"
                             );
                             if (!amt) return;
@@ -1001,9 +996,9 @@ export function LabourAndContractorsView({
                               method: "Bank",
                             });
                           }}
-                          className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition shadow-xs text-[11px]"
+                          className="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold"
                         >
-                          বিল পরিশোধ
+                          ঠিকাদারকে পরিশোধ
                         </button>
                       )}
                     </td>
@@ -1013,33 +1008,33 @@ export function LabourAndContractorsView({
             </table>
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">
-                সাইট শ্রমিক মাস্টার রোল (দৈনিক রেট × কাজের দিন = অর্জিত - পরিশোধ = বকেয়া)
+                Site Labour Roll (Rate × Work Days = Earned - Paid = Due)
               </h3>
             </div>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                  <th className="p-3 font-semibold">কোড</th>
-                  <th className="p-3 font-semibold">শ্রমিকের নাম</th>
-                  <th className="p-3 font-semibold">রেট × দিন</th>
-                  <th className="p-3 font-semibold">মোট অর্জিত</th>
-                  <th className="p-3 font-semibold">পরিশোধিত</th>
-                  <th className="p-3 font-semibold">বকেয়া</th>
-                  <th className="p-3 font-semibold">পদক্ষেপ</th>
+                  <th className="p-3">কোড</th>
+                  <th className="p-3">শ্রমিকের নাম</th>
+                  <th className="p-3">হার × দিন</th>
+                  <th className="p-3">মোট প্রাপ্য</th>
+                  <th className="p-3">পরিশোধ</th>
+                  <th className="p-3">বকেয়া</th>
+                  <th className="p-3">অ্যাকশন</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(data.labours || []).map((l: any) => (
-                  <tr key={l.id} className="hover:bg-slate-50 transition">
+                  <tr key={l.id}>
                     <td className="p-3 font-mono font-bold">{l.labourCode}</td>
                     <td className="p-3 font-bold">
                       {l.name} ({l.category})
                     </td>
                     <td className="p-3">
-                      ৳{Number(l.dailyRate)} × {Number(l.totalWorkDays)} দিন
+                      ৳{Number(l.dailyRate)} × {Number(l.totalWorkDays)}d
                     </td>
                     <td className="p-3 font-semibold">
                       ৳{Number(l.totalEarned).toLocaleString()}
@@ -1063,7 +1058,7 @@ export function LabourAndContractorsView({
                               method: "Cash",
                             })
                           }
-                          className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition shadow-xs text-[11px]"
+                          className="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold"
                         >
                           নগদ পরিশোধ
                         </button>
@@ -1081,3 +1076,4 @@ export function LabourAndContractorsView({
 }
 
 void Package;
+void AlertTriangle;

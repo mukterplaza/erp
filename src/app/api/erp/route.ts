@@ -38,23 +38,11 @@ import {
   auditLogs,
   dailyWorkPlans,
   reminderSettings,
-  companies,
   announcements,
+  announcementReads,
+  workFiles,
 } from "@/db";
-import {
-  COMPANY_IBDC,
-  COMPANY_IREL,
-  IBDC_SERVICE_TYPES,
-  IREL_PROPERTY_TYPES,
-  LEAD_PRIORITIES,
-  LEAD_STATUSES,
-  LEAD_CLOSED_STATUSES,
-  FOLLOWUP_METHODS,
-  FOLLOWUP_OUTCOMES,
-  OUTCOME_TO_STATUS,
-  daysBetween,
-} from "@/lib/crm-constants";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, isNull } from "drizzle-orm";
 import {
   getCurrentUser,
   hasPermission,
@@ -62,10 +50,9 @@ import {
   ROLE_DEFAULT_PERMISSIONS,
   canViewAllEmployeeProfiles,
   isSuperAdminRole,
-  isChairman,
+  leadCompanyAccess,
+  canCreateAnnouncement,
   isManagementRole,
-  canCreateAnnouncements,
-  canAccessMarketingLeads,
 } from "@/lib/auth";
 import { ensureSeeded } from "@/lib/seed";
 import {
@@ -77,6 +64,15 @@ import {
   postDoubleEntryJournalTx,
   computeExactMaterialStock,
 } from "@/lib/erp-engine";
+import { computeEmployeeWork } from "@/lib/work-tracking";
+import {
+  notifyUsers,
+  managementUserIds,
+  taskWatcherUserIds,
+  assigneeUserId,
+  runTaskDeadlineScan,
+  TASK_MGMT_ROLES,
+} from "@/lib/task-notify";
 
 export async function GET(req: NextRequest) {
   await ensureSeeded();
@@ -86,12 +82,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  try {
+    await runTaskDeadlineScan();
+  } catch (e) {
+    console.error("deadline scan failed", e);
+  }
+
   const section = req.nextUrl.searchParams.get("section") || "all";
   const requestedEmpId = req.nextUrl.searchParams.get("employeeId");
   const canSeeAllEmployees = canViewAllEmployeeProfiles(currentUser.role);
-  const isManagement = isManagementRole(currentUser.role);
 
-  // Security Test 1 & 2: Staff cannot view other employees' profiles/attendance/etc.
+  if (
+    (section === "leads" || section === "crm") &&
+    leadCompanyAccess(currentUser) === "NONE"
+  ) {
+    return NextResponse.json(
+      { error: "à¦²à¦¿à¦¡/CRM à¦¦à§‡à¦–à¦¾à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤ Access Denied." },
+      { status: 403 }
+    );
+  }
+
   if (
     requestedEmpId &&
     !canSeeAllEmployees &&
@@ -100,26 +110,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "403 Forbidden: অন্য কর্মকর্তার ব্যক্তিগত প্রোফাইল বা ডাটা দেখার অনুমতি আপনার নেই।",
+          "Forbidden: Staff can only view their own profile, attendance, salary, leave, performance, and daily activity.",
       },
       { status: 403 }
     );
-  }
-
-  // Security Test 3 & 4: Staff cannot access Leads through query parameters or direct API
-  const requestedCompanyId = req.nextUrl.searchParams.get("companyId");
-  const requestedLeadId = req.nextUrl.searchParams.get("leadId");
-  if (requestedCompanyId || requestedLeadId) {
-    const compCode = requestedCompanyId === "2" ? "IREL" : "IBDC";
-    if (!canAccessMarketingLeads(currentUser, compCode)) {
-      return NextResponse.json(
-        {
-          error:
-            "403 Forbidden: লিড বা গ্রাহক ডাটাবেজ অ্যাক্সেস করার অনুমতি আপনার নেই।",
-        },
-        { status: 403 }
-      );
-    }
   }
 
   const [
@@ -159,8 +153,8 @@ export async function GET(req: NextRequest) {
     allAuditLogs,
     allDailyWorkPlans,
     allReminderSettings,
-    allCompanies,
     allAnnouncements,
+    allAnnouncementReads,
   ] = await Promise.all([
     db.select({
       id: users.id,
@@ -207,12 +201,17 @@ export async function GET(req: NextRequest) {
     db.select().from(auditLogs).orderBy(desc(auditLogs.id)).limit(150),
     db.select().from(dailyWorkPlans).orderBy(desc(dailyWorkPlans.date), desc(dailyWorkPlans.id)),
     db.select().from(reminderSettings).orderBy(reminderSettings.id),
-    db.select().from(companies).orderBy(companies.id),
-    db.select().from(announcements).orderBy(desc(announcements.createdAt)),
+    db.select().from(announcements).orderBy(desc(announcements.id)),
+    db.select().from(announcementReads),
   ]);
 
   // GRANULAR SERVER-SIDE DATA SCOPING & STAFF PRIVACY ENFORCEMENT
-  const isFullAccess = isManagement;
+  const isFullAccess =
+    currentUser.role === "Owner" ||
+    currentUser.role === "Chairman" ||
+    currentUser.role === "MD" ||
+    currentUser.role === "Admin" ||
+    currentUser.role === "Manager";
   const isHR = currentUser.role === "HR";
   const isAccounts = currentUser.role === "Accounts";
   const isPM = currentUser.role === "Project Manager";
@@ -220,7 +219,6 @@ export async function GET(req: NextRequest) {
     currentUser.role === "Staff" ||
     currentUser.role === "Site Staff" ||
     currentUser.role === "Engineer" ||
-    currentUser.role === "Marketing" ||
     currentUser.role === "Sales";
 
   const myEmpId = currentUser.employeeId;
@@ -240,20 +238,15 @@ export async function GET(req: NextRequest) {
       ? allDailyWorkPlans
       : allDailyWorkPlans.filter((p) => p.employeeId === myEmpId);
 
-  // Task Visibility Scoping (Part 13):
-  // 1. Everyone / isCompanyWide -> visible to all
-  // 2. Assigned Staff -> assigned staff + manager + management
-  // 3. Management Only -> only Owner, Chairman, Manager, Admin
-  const scopedTasks = allTasks.filter((t) => {
-    if (t.visibility === "Management Only") {
-      return isManagement;
-    }
-    if (t.visibility === "Everyone" || t.isCompanyWide) {
-      return true;
-    }
-    if (isManagement || isPM) return true;
-    return t.assignedTo === myEmpId || t.managerId === myEmpId;
-  });
+  const scopedTasks =
+    isFullAccess || isHR || isPM
+      ? allTasks
+      : allTasks.filter((t) => {
+          const vis = t.visibility || (t.isCompanyWide ? "Everyone" : "Assigned");
+          if (vis === "Management") return false;
+          if (vis === "Everyone" || t.isCompanyWide) return true;
+          return t.assignedTo === myEmpId || t.managerId === myEmpId;
+        });
 
   const scopedProjects =
     isFullAccess || isAccounts || isHR || currentUser.role === "Sales"
@@ -306,13 +299,17 @@ export async function GET(req: NextRequest) {
 
   const scopedDirectory =
     isFullAccess || isHR || isPM || isAccounts
-      ? allEmployees.map((e) => ({
-          id: e.id,
-          empCode: e.empCode,
-          name: e.name,
-          department: e.department,
-          designation: e.designation,
-        }))
+      ? allEmployees
+          .filter((e) => !e.archived)
+          .map((e) => ({
+            id: e.id,
+            empCode: e.empCode,
+            name: e.name,
+            department: e.department,
+            designation: e.designation,
+            companyId: e.companyId,
+            assignedSite: e.assignedSite,
+          }))
       : allEmployees
           .filter((e) => e.id === myEmpId)
           .map((e) => ({
@@ -321,6 +318,8 @@ export async function GET(req: NextRequest) {
             name: e.name,
             department: e.department,
             designation: e.designation,
+            companyId: e.companyId,
+            assignedSite: e.assignedSite,
           }));
 
   // Enrich Projects with Real Dynamic Calculations (Budget vs Actual Cost vs Revenue vs Profit/Loss)
@@ -377,116 +376,6 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  // ---------------------------------------------------------------------------
-  // CRM FOLLOW-UP ENRICHMENT (Today / Overdue / Upcoming / Never Followed Up)
-  // ---------------------------------------------------------------------------
-  const crmToday = new Date().toISOString().split("T")[0];
-  const followupsByLead = new Map<number, typeof allFollowups>();
-  for (const f of allFollowups) {
-    const arr = followupsByLead.get(f.leadId) || [];
-    arr.push(f);
-    followupsByLead.set(f.leadId, arr);
-  }
-
-  const enrichedLeads = allLeads.map((l) => {
-    const history = (followupsByLead.get(l.id) || []).slice().sort((a, b) => {
-      if (a.date === b.date) return a.followupNumber - b.followupNumber;
-      return a.date < b.date ? -1 : 1;
-    });
-    const lastFollowup = history[history.length - 1] || null;
-    const lastContactDate = l.lastContactDate || lastFollowup?.date || null;
-    const followUpCount = history.length;
-    const isClosed = LEAD_CLOSED_STATUSES.includes(l.status);
-
-    const daysSinceLastContact = lastContactDate
-      ? daysBetween(lastContactDate, crmToday)
-      : null;
-
-    let followUpBucket: "Overdue" | "Today" | "Upcoming" | "Unscheduled" | "Closed" =
-      "Unscheduled";
-    let daysOverdue = 0;
-    let daysUntil = 0;
-
-    if (isClosed) {
-      followUpBucket = "Closed";
-    } else if (l.nextFollowUpDate) {
-      if (l.nextFollowUpDate < crmToday) {
-        followUpBucket = "Overdue";
-        daysOverdue = daysBetween(l.nextFollowUpDate, crmToday);
-      } else if (l.nextFollowUpDate === crmToday) {
-        followUpBucket = "Today";
-      } else {
-        followUpBucket = "Upcoming";
-        daysUntil = daysBetween(crmToday, l.nextFollowUpDate);
-      }
-    }
-
-    return {
-      ...l,
-      followUpCount,
-      lastContactDate,
-      lastOutcome: l.lastOutcome || lastFollowup?.outcome || "",
-      lastMethod: lastFollowup?.method || "",
-      daysSinceLastContact,
-      followUpBucket,
-      daysOverdue,
-      daysUntil,
-      isOverdue: followUpBucket === "Overdue",
-      isDueToday: followUpBucket === "Today",
-      neverFollowedUp: followUpCount === 0,
-      awaitingClientResponse:
-        lastFollowup?.outcome === "No Response" ||
-        lastFollowup?.outcome === "Call Back Later",
-    };
-  });
-
-  const followUpsCompletedToday = allFollowups.filter(
-    (f) => f.date === crmToday
-  ).length;
-
-  const crmFollowUpStats = {
-    today: crmToday,
-    dueToday: enrichedLeads.filter((l) => l.isDueToday).length,
-    overdue: enrichedLeads.filter((l) => l.isOverdue).length,
-    upcoming: enrichedLeads.filter((l) => l.followUpBucket === "Upcoming").length,
-    upcomingTomorrow: enrichedLeads.filter((l) => l.daysUntil === 1).length,
-    upcoming3Days: enrichedLeads.filter(
-      (l) => l.daysUntil >= 1 && l.daysUntil <= 3
-    ).length,
-    upcoming7Days: enrichedLeads.filter(
-      (l) => l.daysUntil >= 1 && l.daysUntil <= 7
-    ).length,
-    completedToday: followUpsCompletedToday,
-    withoutNextFollowUp: enrichedLeads.filter(
-      (l) => l.followUpBucket === "Unscheduled"
-    ).length,
-    neverFollowedUp: enrichedLeads.filter((l) => l.neverFollowedUp).length,
-    noResponse: enrichedLeads.filter((l) => l.lastOutcome === "No Response").length,
-    awaitingResponse: enrichedLeads.filter((l) => l.awaitingClientResponse).length,
-    multipleFollowUps: enrichedLeads.filter((l) => l.followUpCount > 1).length,
-    activeLeads: enrichedLeads.filter(
-      (l) => !LEAD_CLOSED_STATUSES.includes(l.status)
-    ).length,
-  };
-
-  // Per-staff follow-up performance (Management View)
-  const staffFollowUpStats = allEmployees.map((emp) => {
-    const myLeads = enrichedLeads.filter((l) => l.assignedStaffId === emp.id);
-    return {
-      employeeId: emp.id,
-      empCode: emp.empCode,
-      name: emp.name,
-      activeLeads: myLeads.filter(
-        (l) => !LEAD_CLOSED_STATUSES.includes(l.status)
-      ).length,
-      followUpsToday: allFollowups.filter(
-        (f) => f.staffId === emp.id && f.date === crmToday
-      ).length,
-      followUpsCompleted: allFollowups.filter((f) => f.staffId === emp.id).length,
-      overdueFollowUps: myLeads.filter((l) => l.isOverdue).length,
-    };
-  }).filter((s) => s.activeLeads > 0 || s.followUpsCompleted > 0);
-
   // Enrich Materials with verified Stock Formula & Valuation
   const enrichedMaterials = allMaterials.map((m) => {
     const calculatedStock = computeExactMaterialStock(m);
@@ -501,12 +390,219 @@ export async function GET(req: NextRequest) {
 
   void section;
 
+  // =========================================================================
+  // FOLLOW-UP ANALYTICS BOARD (Today / Overdue / Upcoming / Staff Performance)
+  // =========================================================================
+  const todayStr = new Date().toISOString().split("T")[0];
+  const dayMs = 86400000;
+  const tomorrowStr = new Date(Date.now() + dayMs).toISOString().split("T")[0];
+  const in3DaysStr = new Date(Date.now() + 3 * dayMs).toISOString().split("T")[0];
+  const in7DaysStr = new Date(Date.now() + 7 * dayMs).toISOString().split("T")[0];
+
+  const empDirMap = new Map(allEmployees.map((e) => [e.id, e.name]));
+  const allLeadRowsForBoard = allLeads;
+  const activeLeadRows = allLeadRowsForBoard.filter(
+    (l) => !["Won", "Lost", "On Hold"].includes(l.status)
+  );
+
+  const leadFollowUpMap = new Map<number, typeof allFollowups>();
+  allFollowups.forEach((f) => {
+    const arr = leadFollowUpMap.get(f.leadId) || [];
+    arr.push(f);
+    leadFollowUpMap.set(f.leadId, arr);
+  });
+
+  function daysBetween(from: string, to: string) {
+    return Math.round((new Date(to).getTime() - new Date(from).getTime()) / dayMs);
+  }
+
+  const followUpBoardRows = activeLeadRows.map((l) => {
+    const fus = (leadFollowUpMap.get(l.id) || []).sort(
+      (a, b) => b.followUpNumber - a.followUpNumber
+    );
+    const last = fus[0] || null;
+    const nextDate = l.nextFollowUpDate || null;
+    const overdueDays = nextDate && nextDate < todayStr ? daysBetween(nextDate, todayStr) : 0;
+
+    return {
+      leadId: l.id,
+      leadCode: l.leadCode,
+      companyId: l.companyId,
+      clientName: l.name,
+      phone: l.phone,
+      category: l.companyId === 2 ? l.propertyType : l.service,
+      projectName: l.projectName || "",
+      assignedStaffId: l.assignedStaffId,
+      assignedStaffName: l.assignedStaffId ? empDirMap.get(l.assignedStaffId) || "Unassigned" : "Unassigned",
+      priority: l.priority,
+      status: l.status,
+      totalFollowUps: fus.length,
+      lastContactDate: l.lastContactDate || last?.date || null,
+      lastContactMethod: last?.contactMethod || null,
+      lastOutcome: last?.outcome || null,
+      nextFollowUpDate: nextDate,
+      nextFollowUpTime: l.nextFollowUpTime || "10:00",
+      daysSinceLastContact: l.lastContactDate ? daysBetween(l.lastContactDate, todayStr) : null,
+      daysOverdue: overdueDays,
+      bucket:
+        nextDate === null
+          ? "No Next Follow-up"
+          : nextDate < todayStr
+          ? "Overdue"
+          : nextDate === todayStr
+          ? "Today"
+          : nextDate === tomorrowStr
+          ? "Tomorrow"
+          : nextDate <= in3DaysStr
+          ? "Next 3 Days"
+          : nextDate <= in7DaysStr
+          ? "Next 7 Days"
+          : "Later",
+    };
+  });
+
+  const bucketOf = (b: string) => followUpBoardRows.filter((r) => r.bucket === b);
+
+  const followUpBoard = {
+    today: bucketOf("Today"),
+    overdue: bucketOf("Overdue"),
+    tomorrow: bucketOf("Tomorrow"),
+    next3Days: bucketOf("Next 3 Days"),
+    next7Days: bucketOf("Next 7 Days"),
+    later: bucketOf("Later"),
+    noNextFollowUp: bucketOf("No Next Follow-up"),
+    neverFollowedUp: followUpBoardRows.filter((r) => r.totalFollowUps === 0),
+    multipleFollowUps: followUpBoardRows.filter((r) => r.totalFollowUps >= 2),
+    noResponseLeads: allLeadRowsForBoard.filter((l) => {
+      const fus = leadFollowUpMap.get(l.id) || [];
+      return fus.length > 0 && fus.every((f) => f.outcome === "No Response");
+    }).map((l) => ({
+      leadId: l.id,
+      leadCode: l.leadCode,
+      companyId: l.companyId,
+      clientName: l.name,
+      phone: l.phone,
+      assignedStaffName: l.assignedStaffId ? empDirMap.get(l.assignedStaffId) || "Unassigned" : "Unassigned",
+      totalFollowUps: (leadFollowUpMap.get(l.id) || []).length,
+      nextFollowUpDate: l.nextFollowUpDate,
+    })),
+    awaitingClientResponse: followUpBoardRows.filter((r) =>
+      ["Quotation Sent", "Need More Information", "Call Back Later", "Negotiating"].includes(
+        r.lastOutcome || ""
+      )
+    ),
+    // Dashboard KPIs (all dynamic)
+    summary: {
+      activeLeads: activeLeadRows.length,
+      totalLeads: allLeadRowsForBoard.length,
+      todaysFollowUps: bucketOf("Today").length,
+      overdueFollowUps: bucketOf("Overdue").length,
+      upcomingFollowUps:
+        bucketOf("Tomorrow").length +
+        bucketOf("Next 3 Days").length +
+        bucketOf("Next 7 Days").length,
+      followUpsCompletedToday: allFollowups.filter((f) => f.date === todayStr).length,
+      leadsWithoutNextFollowUp: bucketOf("No Next Follow-up").length,
+      leadsNeverFollowedUp: followUpBoardRows.filter((r) => r.totalFollowUps === 0).length,
+      leadsWithNoResponse: 0, // filled below
+      leadsAwaitingClientResponse: 0, // filled below
+      onHoldLeads: allLeadRowsForBoard.filter((l) => l.status === "On Hold").length,
+    },
+    staffPerformance: Array.from(
+      new Set(allLeadRowsForBoard.map((l) => l.assignedStaffId).filter(Boolean))
+    ).map((staffId) => {
+      const staffLeads = activeLeadRows.filter((l) => l.assignedStaffId === staffId);
+      const staffLeadIds = new Set(staffLeads.map((l) => l.id));
+      const staffFUs = allFollowups.filter((f) => staffLeadIds.has(f.leadId));
+      return {
+        staffId,
+        staffName: empDirMap.get(staffId as number) || "Unassigned",
+        activeLeads: staffLeads.length,
+        followUpsToday: staffFUs.filter((f) => f.date === todayStr).length,
+        totalFollowUps: staffFUs.length,
+        overdueFollowUps: followUpBoardRows.filter(
+          (r) => r.assignedStaffId === staffId && r.bucket === "Overdue"
+        ).length,
+        todaysFollowUps: followUpBoardRows.filter(
+          (r) => r.assignedStaffId === staffId && r.bucket === "Today"
+        ).length,
+      };
+    }),
+  };
+
+  followUpBoard.summary.leadsWithNoResponse = followUpBoard.noResponseLeads.length;
+  followUpBoard.summary.leadsAwaitingClientResponse =
+    followUpBoard.awaitingClientResponse.length;
+
+  // =========================================================================
+  // OPTION B â€” EMPLOYEE WORK TRACKING (same task data, no duplicate system)
+  // =========================================================================
+  const workTodayStr = new Date().toISOString().split("T")[0];
+  const canSeeTeamWork = isFullAccess || isHR;
+  const workScopeEmployees = allEmployees.filter(
+    (e) => !e.archived && (canSeeTeamWork || e.id === myEmpId)
+  );
+  const employeeWork = workScopeEmployees.map((emp) =>
+    computeEmployeeWork({
+      emp,
+      tasks: allTasks,
+      attendances: allAttendances,
+      dailyWorks: allDailyWorks,
+      leads: allLeads,
+      reviews: allPerformance,
+      comments: allTaskComments,
+      today: workTodayStr,
+    })
+  );
+  const workOverview = {
+    activeEmployees: workScopeEmployees.length,
+    presentToday: employeeWork.filter((w) => w.today.attendance && w.today.attendance.status !== "Absent" && w.today.attendance.status !== "Leave").length,
+    absentToday: employeeWork.filter((w) => !w.today.attendance || w.today.attendance.status === "Absent").length,
+    onLeaveToday: employeeWork.filter((w) => w.today.attendance?.status === "Leave").length,
+    activeTasks: employeeWork.reduce((s, w) => s + w.all.pending, 0),
+    completedToday: employeeWork.reduce((s, w) => s + w.today.completed, 0),
+    pending: employeeWork.reduce((s, w) => s + w.all.notStarted + w.all.inProgress, 0),
+    awaitingReview: employeeWork.reduce((s, w) => s + w.all.awaitingReview, 0),
+    overdue: employeeWork.reduce((s, w) => s + w.overdueCount, 0),
+    dailyUpdatesToday: employeeWork.reduce((s, w) => s + w.today.dailyUpdates, 0),
+  };
+  const visibleTaskIds = new Set<number>();
+  // tasks visible to this user (reuse existing scoping)
+  for (const t of allTasks) {
+    if (canSeeTeamWork || isPM || t.assignedTo === myEmpId || t.isCompanyWide) visibleTaskIds.add(t.id);
+  }
+  const workFileRows = await db
+    .select({
+      id: workFiles.id,
+      taskId: workFiles.taskId,
+      employeeId: workFiles.employeeId,
+      uploadedByName: workFiles.uploadedByName,
+      uploadedByUserId: workFiles.uploadedByUserId,
+      fileName: workFiles.fileName,
+      mimeType: workFiles.mimeType,
+      sizeBytes: workFiles.sizeBytes,
+      createdAt: workFiles.createdAt,
+    })
+    .from(workFiles)
+    .orderBy(desc(workFiles.id));
+  const scopedWorkFiles = workFileRows.filter(
+    (f) =>
+      canSeeTeamWork ||
+      f.employeeId === myEmpId ||
+      f.uploadedByUserId === currentUser.id ||
+      (f.taskId !== null && visibleTaskIds.has(f.taskId) && (isPM || false))
+  );
+
   return NextResponse.json({
     currentUser,
+    employeeWork,
+    workOverview,
+    workFiles: scopedWorkFiles,
+    followUpBoard: leadCompanyAccess(currentUser) === "NONE" ? { today: [], overdue: [], tomorrow: [], next3Days: [], next7Days: [], later: [], noNextFollowUp: [], neverFollowedUp: [], multipleFollowUps: [], noResponseLeads: [], awaitingClientResponse: [], summary: {}, staffPerformance: [] } : followUpBoard,
     users: isSuperAdminRole(currentUser.role) || isFullAccess ? allUsers : [],
     employees:
       isFullAccess || isHR
-        ? allEmployees
+        ? allEmployees.filter((e) => !e.archived)
         : allEmployees.filter((e) => e.id === myEmpId),
     allEmployeesDirectory: scopedDirectory,
     attendances: scopedAttendances,
@@ -514,37 +610,37 @@ export async function GET(req: NextRequest) {
       isFullAccess || isHR
         ? allCorrections
         : allCorrections.filter((c) => c.employeeId === myEmpId),
-    companies: allCompanies,
-    announcements: allAnnouncements,
-    leads: isManagement
-      ? enrichedLeads
-      : currentUser.role === "Marketing" || currentUser.role === "Sales"
-      ? currentUser.marketingScope === "IBDC"
-        ? enrichedLeads.filter((l) => l.companyId === 1)
-        : currentUser.marketingScope === "IREL"
-        ? enrichedLeads.filter((l) => l.companyId === 2)
-        : []
-      : [],
-    leadFollowups: isManagement
-      ? allFollowups
-      : currentUser.role === "Marketing" || currentUser.role === "Sales"
-      ? allFollowups.filter((f) => {
-          const l = enrichedLeads.find((lead) => lead.id === f.leadId);
-          if (!l) return false;
-          if (currentUser.marketingScope === "IBDC") return l.companyId === 1;
-          if (currentUser.marketingScope === "IREL") return l.companyId === 2;
-          return false;
-        })
-      : [],
-    crmFollowUpStats: isManagement || currentUser.role === "Marketing" || currentUser.role === "Sales" ? crmFollowUpStats : null,
-    staffFollowUpStats: isManagement ? staffFollowUpStats : [],
-    clients: isManagement || currentUser.role === "Marketing" || currentUser.role === "Sales" ? allClients : [],
+    leads: (() => {
+      const access = leadCompanyAccess(currentUser);
+      if (access === "NONE") return [];
+      if (access === "BOTH") return allLeads;
+      return allLeads.filter((l) => (l.companyId || "IBDC") === access);
+    })(),
+    leadFollowups: (() => {
+      const access = leadCompanyAccess(currentUser);
+      if (access === "NONE") return [];
+      if (access === "BOTH") return allFollowups;
+      const allowedIds = new Set(
+        allLeads.filter((l) => (l.companyId || "IBDC") === access).map((l) => l.id)
+      );
+      return allFollowups.filter((f) => allowedIds.has(f.leadId));
+    })(),
+    announcements: allAnnouncements.map((a) => ({
+      ...a,
+      isRead: allAnnouncementReads.some(
+        (r) => r.announcementId === a.id && r.userId === currentUser.id
+      ),
+    })),
+    clients: currentUser.role === "Staff" ? [] : allClients,
     projects: enrichedProjects,
     sites: scopedSites,
     siteReports: allSiteReports,
-    quotations: isManagement || currentUser.role === "Marketing" || currentUser.role === "Sales" ? allQuotations : [],
+    quotations: currentUser.role === "Staff" ? [] : allQuotations,
     tasks: scopedTasks,
-    taskComments: allTaskComments,
+    taskComments: (() => {
+      const ids = new Set(scopedTasks.map((t) => t.id));
+      return allTaskComments.filter((c) => ids.has(c.taskId));
+    })(),
     dailyWorks: scopedDailyWorks,
     dailyWorkPlans: scopedDailyWorkPlans,
     materials: enrichedMaterials,
@@ -565,16 +661,12 @@ export async function GET(req: NextRequest) {
     leaveRequests: scopedLeaves,
     performanceReviews: scopedPerformance,
     documents: scopedDocuments,
-    // Notifications are scoped per-user:
-    // - GLOBAL announcements (user_id IS NULL) are visible to every authenticated user
-    // - Private notifications (user_id = currentUser.id) are visible only to that user
-    notifications: allNotifications.filter((n: any) => {
-      const myUserId = currentUser?.id;
-      if (!myUserId) return false;
-      // GLOBAL: no specific user_id means visible to all (announcements)
-      if (n.user_id == null) return true;
-      // Private: only for me
-      return n.user_id === myUserId;
+    notifications: allNotifications.filter((n) => {
+      if (n.userId !== null) return n.userId === currentUser.id; // personal delivery only
+      // legacy / broadcast rows (no recipient)
+      if (n.type === "Announcement" || n.type === "ANNOUNCEMENT") return true; // GLOBAL company announcement
+      if (n.type === "Work Plan Reminder" || n.type === "Daily Work Reminder") return true;
+      return isFullAccess || isHR;
     }),
     reminderSettings: allReminderSettings[0] || {
       lateCheckInAfter: "09:30",
@@ -599,6 +691,79 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action } = body;
     const today = new Date().toISOString().split("T")[0];
+
+    const LEAD_ACTIONS = [
+      "createLead",
+      "addLeadFollowup",
+      "updateLeadStatus",
+      "convertLeadToClient",
+      "sendFollowUpReminders",
+    ];
+    if (LEAD_ACTIONS.includes(action) && leadCompanyAccess(currentUser) === "NONE") {
+      return NextResponse.json(
+        { error: "à¦²à¦¿à¦¡/CRM API à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦°à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤ à§ªà§¦à§© Forbidden." },
+        { status: 403 }
+      );
+    }
+
+    if (action === "createAnnouncement") {
+      if (!canCreateAnnouncement(currentUser.role)) {
+        return NextResponse.json(
+          { error: "à¦˜à§‹à¦·à¦£à¦¾ à¦¤à§ˆà¦°à¦¿à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" },
+          { status: 403 }
+        );
+      }
+      const { title, message, attachmentUrl } = body;
+      if (!title || !message) {
+        return NextResponse.json({ error: "à¦¶à¦¿à¦°à§‹à¦¨à¦¾à¦® à¦“ à¦¬à¦¾à¦°à§à¦¤à¦¾ à¦†à¦¬à¦¶à§à¦¯à¦•" }, { status: 400 });
+      }
+      const [ann] = await db
+        .insert(announcements)
+        .values({
+          title,
+          message,
+          createdBy: currentUser.name,
+          createdByUserId: currentUser.id,
+          published: true,
+          attachmentUrl: attachmentUrl || null,
+        })
+        .returning();
+      await createNotification({
+        targetRole: "All",
+        type: "ANNOUNCEMENT",
+        category: "Announcement",
+        title: `à¦˜à§‹à¦·à¦£à¦¾: ${title}`,
+        message,
+        createdBy: currentUser.name,
+        relatedUrl: "/dashboard",
+        relatedEntityCode: `ANN-${ann.id}`,
+      });
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "ANNOUNCEMENT_CREATE",
+        entity: "Announcement",
+        recordId: String(ann.id),
+        afterData: { title },
+      });
+      return NextResponse.json({ success: true, announcement: ann });
+    }
+
+    if (action === "markAnnouncementRead") {
+      const { announcementId } = body;
+      const existing = await db
+        .select()
+        .from(announcementReads)
+        .where(eq(announcementReads.userId, currentUser.id));
+      if (!existing.some((r) => r.announcementId === Number(announcementId))) {
+        await db.insert(announcementReads).values({
+          announcementId: Number(announcementId),
+          userId: currentUser.id,
+        });
+      }
+      return NextResponse.json({ success: true });
+    }
 
     // =========================================================================
     // SECURITY RULE: FINANCIAL RECORDS CANNOT BE HARD-DELETED
@@ -650,9 +815,19 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "updateUserStatusAndRole") {
-      if (!isSuperAdminRole(currentUser.role) && !isChairman(currentUser.role)) {
+      if (
+        currentUser.role !== "Owner" &&
+        currentUser.role !== "Admin" &&
+        currentUser.role !== "Manager"
+      ) {
         return NextResponse.json(
-          { error: "403 Forbidden: ব্যবহারকারী ও পদবী পরিবর্তনের অনুমতি শুধুমাত্র প্রতিষ্ঠাতা ও চেয়ারম্যানের রয়েছে।" },
+          { error: "à¦­à§‚à¦®à¦¿à¦•à¦¾/à¦…à¦¨à§à¦®à¦¤à¦¿ à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" },
+          { status: 403 }
+        );
+      }
+      if (Number(body.userId) === currentUser.id && body.role && body.role !== currentUser.role) {
+        return NextResponse.json(
+          { error: "à¦¨à¦¿à¦œà§‡à¦° à¦­à§‚à¦®à¦¿à¦•à¦¾ à¦¨à¦¿à¦œà§‡ à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨ à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼ à¦¨à¦¾à¥¤" },
           { status: 403 }
         );
       }
@@ -940,17 +1115,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "requestAttendanceCorrection") {
-      if (
-        !canViewAllEmployeeProfiles(currentUser.role) &&
-        body.employeeId &&
-        Number(body.employeeId) !== currentUser.employeeId
-      ) {
-        return NextResponse.json(
-          { error: "403 Forbidden: অন্য কর্মকর্তার উপস্থিতি সংশোধনের আবেদন করা সম্পূর্ণ নিষিদ্ধ।" },
-          { status: 403 }
-        );
-      }
-      const employeeId = Number(currentUser.employeeId || body.employeeId || 1);
+      const employeeId = Number(body.employeeId || currentUser.employeeId);
       const { attendanceId, date, requestedCheckIn, requestedCheckOut, reason } = body;
       if (!date || !requestedCheckIn || !requestedCheckOut || !reason) {
         return NextResponse.json({ error: "All correction fields are required" }, { status: 400 });
@@ -1097,6 +1262,19 @@ export async function POST(req: NextRequest) {
       }
 
       const prog = Math.min(100, Math.max(0, Number(progressPercent ?? 100)));
+      const isDwMgmt =
+        canViewAllEmployeeProfiles(currentUser.role) || currentUser.role === "Project Manager";
+
+      if (taskId) {
+        const [chk] = await db.select().from(tasks).where(eq(tasks.id, Number(taskId)));
+        if (!chk) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+        if (!isDwMgmt && chk.assignedTo !== employeeId && !chk.isCompanyWide) {
+          return NextResponse.json(
+            { error: "à¦¨à¦¿à¦œà§‡à¦° à¦¨à¦¯à¦¼ à¦à¦®à¦¨ à¦Ÿà¦¾à¦¸à§à¦•à§‡ à¦¦à§ˆà¦¨à¦¿à¦• à¦•à¦¾à¦œ à¦¯à§à¦•à§à¦¤ à¦•à¦°à¦¾ à¦¯à¦¾à¦¬à§‡ à¦¨à¦¾à¥¤" },
+            { status: 403 }
+          );
+        }
+      }
 
       const [dw] = await db
         .insert(dailyWorks)
@@ -1127,10 +1305,11 @@ export async function POST(req: NextRequest) {
           .select()
           .from(tasks)
           .where(eq(tasks.id, Number(taskId)));
-        if (linkedTask) {
+        if (linkedTask && linkedTask.status !== "Completed" && linkedTask.status !== "Cancelled") {
+          // 100% from staff goes to management review (no self-approval)
           const newStatus =
             prog >= 100
-              ? "Completed"
+              ? isDwMgmt && linkedTask.assignedTo !== currentUser.employeeId ? "Completed" : "Review"
               : prog > 0
               ? "In Progress"
               : linkedTask.status;
@@ -1140,17 +1319,38 @@ export async function POST(req: NextRequest) {
             .set({
               progressPercent: prog,
               status: newStatus,
+              reviewStatus: newStatus === "Review" ? "Pending Review" : newStatus === "Completed" ? "Approved" : linkedTask.reviewStatus,
+              nextAction: tomorrowPlan ? String(tomorrowPlan) : linkedTask.nextAction,
+              delayReason: problems ? String(problems) : linkedTask.delayReason,
+              startDate: linkedTask.startDate || today,
+              lastUpdateAt: new Date(),
               completedBy: newStatus === "Completed" ? currentUser.name : linkedTask.completedBy,
               completedAt: newStatus === "Completed" ? new Date() : linkedTask.completedAt,
             })
             .where(eq(tasks.id, linkedTask.id));
 
+          const dwFileIds = (Array.isArray(attachments) ? attachments : [])
+            .map((a: { url?: string }) => Number(String(a?.url || "").split("/api/files/")[1]))
+            .filter((n: number) => Number.isFinite(n) && n > 0);
+
           await db.insert(taskComments).values({
             taskId: linkedTask.id,
             userId: currentUser.id,
             authorName: currentUser.name,
-            comment: `Daily Work Summary (${prog}%): ${workSummary}`,
-            actionType: "ProgressUpdate",
+            actorEmployeeId: currentUser.employeeId,
+            actorDesignation: currentUser.designation,
+            comment: `à¦¦à§ˆà¦¨à¦¿à¦• à¦•à¦¾à¦œ (${prog}%): ${workSummary}`,
+            actionType: newStatus === "Review" ? "SubmittedForReview" : dwFileIds.length ? "ProofSubmitted" : "ProgressUpdate",
+            eventType:
+              newStatus === "Review"
+                ? linkedTask.status === "Reopened" || linkedTask.correctionCount > 0
+                  ? "TASK_RESUBMITTED"
+                  : "TASK_COMPLETED"
+                : "DAILY_WORK_SUBMITTED",
+            oldStatus: linkedTask.status,
+            newStatus,
+            progressPercent: prog,
+            fileIds: dwFileIds,
           });
         }
       }
@@ -1166,30 +1366,32 @@ export async function POST(req: NextRequest) {
           .where(eq(sites.id, Number(siteId)));
       }
 
-      // দৈনিক কাজের বিবরণ জমা দেওয়া হয়েছে Management কে notification পাঠানো
-      await createNotification({
-        targetRole: "All",
-        type: "Daily Work Submitted",
-        title: `দৈনিক কাজের বিবরণ: ${currentUser.name} (${dw.date})`,
-        message: `অগ্রগতি ${dw.progressPercent}% • ${dw.workSummary.slice(0, 140)}${dw.workSummary.length > 140 ? "…" : ""}`,
-        createdBy: currentUser.name,
-        priority: "Normal",
-        assignedPersonOrTeam: "Management",
-        relatedUrl: "/my-day",
-        relatedTaskId: dw.taskId || undefined,
-        relatedEntityCode: `DW-${dw.id}`,
-      });
-
       if (problems && String(problems).trim().length > 3) {
         await createNotification({
           targetRole: "Manager",
           type: "Project Update",
-          title: `সমস্যা রিপোর্ট: ${currentUser.name}`,
+          title: `Operational Issue Reported by ${currentUser.name}`,
           message: problems,
           createdBy: currentUser.name,
           relatedUrl: "/daily-works",
-          relatedTaskId: dw.taskId || undefined,
           relatedEntityCode: `DW-${dw.id}`,
+        });
+      }
+
+      {
+        const empRow = (await db.select().from(employees).where(eq(employees.id, employeeId)))[0];
+        const linked = taskId ? (await db.select().from(tasks).where(eq(tasks.id, Number(taskId))))[0] : null;
+        const recipients = linked ? await taskWatcherUserIds(linked) : await managementUserIds();
+        await notifyUsers({
+          recipientUserIds: recipients,
+          actor: { id: currentUser.id, name: currentUser.name },
+          category: "Daily Work",
+          eventType: "DAILY_WORK_SUBMITTED",
+          title: `à¦¦à§ˆà¦¨à¦¿à¦• à¦†à¦ªà¦¡à§‡à¦Ÿ: ${empRow?.name || currentUser.name}`,
+          message: `${String(workSummary).slice(0, 200)}${linked ? `\nà¦Ÿà¦¾à¦¸à§à¦•: ${linked.taskCode} â€” ${linked.title} (${prog}%)` : ""}${problems ? `\nà¦¸à¦®à¦¸à§à¦¯à¦¾: ${problems}` : ""}`,
+          task: linked || null,
+          relatedEmployeeId: employeeId,
+          relatedUrl: linked ? `/tasks/${linked.id}` : `/employees/${employeeId}/daily`,
         });
       }
 
@@ -1379,43 +1581,38 @@ export async function POST(req: NextRequest) {
         dueDate,
         requiresReview,
         attachmentUrl,
-        visibility,
       } = body;
 
       if (!title || (!assignedTo && !assignToAllStaff) || !dueDate) {
         return NextResponse.json(
-          { error: "টাস্কের শিরোনাম, দায়িত্বপ্রাপ্ত ব্যক্তি এবং সময়সীমা প্রদান করা আবশ্যক।" },
+          { error: "Title, Assignee (or All Staff), and Due Date are required" },
           { status: 400 }
-        );
-      }
-
-      const effectiveVisibility = visibility || (assignToAllStaff ? "Everyone" : "Assigned Staff");
-
-      // Security: Non-management cannot create Management-Only tasks
-      if (effectiveVisibility === "Management Only" && !isManagementRole(currentUser.role)) {
-        return NextResponse.json(
-          { error: "403 Forbidden: শুধুমাত্র ম্যানেজমেন্ট গোপনীয় টাস্ক তৈরি করতে পারে।" },
-          { status: 403 }
-        );
-      }
-
-      // Security: Non-management cannot assign tasks to other staff without permission
-      if (!isManagementRole(currentUser.role) && !hasPermission(currentUser, "tasks.manage")) {
-        return NextResponse.json(
-          { error: "403 Forbidden: অন্যান্য কর্মকর্তাদের দায়িত্ব বণ্টন করার অনুমতি আপনার নেই।" },
-          { status: 403 }
         );
       }
 
       const existingTasks = await db.select().from(tasks);
       const taskCode = `TSK-${String(existingTasks.length + 1).padStart(4, "0")}`;
+      const canAssignOthers =
+        canViewAllEmployeeProfiles(currentUser.role) || currentUser.role === "Project Manager";
+      if (!canAssignOthers) {
+        // Only Founder/CEO, Chairman, MD/Admin, General Manager, HR and Project Manager may create/assign tasks
+        return NextResponse.json(
+          { error: "à¦Ÿà¦¾à¦¸à§à¦• à¦¤à§ˆà¦°à¦¿/à¦¬à¦£à§à¦Ÿà¦¨à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" },
+          { status: 403 }
+        );
+      }
       const allEmps = await db.select().from(employees);
-      const targetEmp = allEmps.find((e) => e.id === Number(assignedTo));
-      const assignedLabel = assignToAllStaff
-        ? "All Staff"
-        : targetEmp
-        ? `${targetEmp.name} (${targetEmp.empCode})`
-        : `EMP-${assignedTo}`;
+      const targetEmp = allEmps.find((e) => e.id === Number(assignedTo || currentUser.employeeId));
+      if (!assignToAllStaff && (!targetEmp || targetEmp.archived || targetEmp.employmentStatus !== "Active")) {
+        return NextResponse.json({ error: "à¦¸à¦•à§à¦°à¦¿à¦¯à¦¼ à¦•à¦°à§à¦®à§€ à¦¨à¦¿à¦°à§à¦¬à¦¾à¦šà¦¨ à¦•à¦°à§à¦¨" }, { status: 400 });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate))) {
+        return NextResponse.json({ error: "à¦¸à¦ à¦¿à¦• à¦¡à§‡à¦¡à¦²à¦¾à¦‡à¦¨ à¦¤à¦¾à¦°à¦¿à¦– à¦¦à¦¿à¦¨" }, { status: 400 });
+      }
+      const dueTimeVal = body.dueTime && /^\d{2}:\d{2}$/.test(String(body.dueTime)) ? String(body.dueTime) : null;
+      const assigner = allEmps.find((e) => e.id === currentUser.employeeId);
+      const assignedLabel = assignToAllStaff ? "à¦¸à¦•à¦² à¦¸à§à¦Ÿà¦¾à¦«" : targetEmp!.name;
+      const assigneeEmp = targetEmp || assigner;
 
       const [created] = await db
         .insert(tasks)
@@ -1423,73 +1620,90 @@ export async function POST(req: NextRequest) {
           taskCode,
           title,
           description: description || "",
-          assignedTo: Number(assignedTo || currentUser.employeeId || 1),
+          assignedTo: Number(assigneeEmp!.id),
           managerId: managerId ? Number(managerId) : currentUser.employeeId,
           projectId: projectId ? Number(projectId) : null,
           siteId: siteId ? Number(siteId) : null,
           clientId: clientId ? Number(clientId) : null,
           priority: priority || "Medium",
           dueDate,
+          dueTime: dueTimeVal,
           status: "Todo",
           progressPercent: 0,
           requiresReview: Boolean(requiresReview),
-          visibility: effectiveVisibility,
-          createdBy: `${currentUser.name} (${currentUser.designation || currentUser.role})`,
+          createdBy: currentUser.name,
+          assignedByUserId: currentUser.id,
+          assignedByEmployeeId: assigner?.id ?? null,
+          assignedByName: assigner?.name || currentUser.name,
+          assignedByDesignation: assigner?.designation || currentUser.role,
+          assignedToName: assignToAllStaff ? "à¦¸à¦•à¦² à¦¸à§à¦Ÿà¦¾à¦«" : targetEmp!.name,
+          assignedToDesignation: assignToAllStaff ? "" : targetEmp!.designation,
           attachmentUrl: attachmentUrl || null,
-          isCompanyWide: Boolean(assignToAllStaff) || effectiveVisibility === "Everyone",
+          isCompanyWide: Boolean(assignToAllStaff) || body.visibility === "Everyone",
+          visibility: body.visibility || (assignToAllStaff ? "Everyone" : "Assigned"),
+          category: body.category || "General",
+          lastUpdateAt: new Date(),
         })
         .returning();
 
-      // নির্দিষ্ট কর্মকর্তার private notification (userId-based) — কেবল assigned employee দেখবে
-      if (targetEmp && targetEmp.userId) {
-        await createNotification({
-          userId: targetEmp.userId,
-          targetRole: "User",
-          type: "TASK_ASSIGNED",
-          title: `টাস্ক অর্পিত: ${taskCode} — ${title}`,
-          message:
-            description ||
-            `${title} (Deadline: ${dueDate}). অর্পণকারী: ${currentUser.name} (${currentUser.designation || currentUser.role})।`,
-          createdBy: currentUser.name,
-          priority: priority || "Medium",
-          assignedPersonOrTeam: assignedLabel,
-          dueDate,
-          attachmentUrl: attachmentUrl || null,
-          relatedTaskId: created.id,
-          relatedUrl: `/tasks/${created.id}`,
-          relatedEntityCode: taskCode,
-        });
-      }
+      await db.insert(taskComments).values({
+        taskId: created.id,
+        userId: currentUser.id,
+        authorName: currentUser.name,
+        actorEmployeeId: currentUser.employeeId,
+        actorDesignation: currentUser.designation,
+        comment: `${created.assignedByName} â†’ ${assignedLabel}-à¦•à§‡ à¦Ÿà¦¾à¦¸à§à¦• à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨ â€¢ à¦¡à§‡à¦¡à¦²à¦¾à¦‡à¦¨ ${dueDate}${dueTimeVal ? ` ${dueTimeVal}` : ""}`,
+        actionType: "Assigned",
+        eventType: "TASK_ASSIGNED",
+        oldStatus: null,
+        newStatus: "Todo",
+        progressPercent: 0,
+      });
 
-      // Management-side update (Founder/Chairman/GM/PM can see)
-      if (isManagementRole(currentUser.role) || currentUser.employeeId !== created.assignedTo) {
-        await createNotification({
-          targetRole: "Manager",
-          type: "TASK_ASSIGNED",
-          title: `নতুন টাস্ক অর্পিত: ${taskCode} — ${title}`,
-          message: `অর্পণকারী: ${currentUser.name} (${currentUser.designation || currentUser.role}) → প্রাপক: ${assignedLabel}। Deadline: ${dueDate}।`,
-          createdBy: currentUser.name,
-          priority: priority || "Medium",
-          assignedPersonOrTeam: created.createdBy || "Management",
+      const allUserRows = await db.select().from(users);
+      const recipientIds = assignToAllStaff
+        ? allUserRows.filter((u) => u.status === "Active").map((u) => u.id)
+        : [targetEmp!.userId];
+      const project = projectId ? (await db.select().from(projects).where(eq(projects.id, Number(projectId))))[0] : null;
+      const site = siteId ? (await db.select().from(sites).where(eq(sites.id, Number(siteId))))[0] : null;
+      const priorityBn: Record<string, string> = { Critical: "à¦…à¦¤à¦¿ à¦œà¦°à§à¦°à¦¿", High: "à¦œà¦°à§à¦°à¦¿", Medium: "à¦®à¦¾à¦à¦¾à¦°à¦¿", Low: "à¦¸à¦¾à¦§à¦¾à¦°à¦£" };
+      await notifyUsers({
+        recipientUserIds: recipientIds,
+        actor: { id: currentUser.id, name: currentUser.name },
+        category: "Task Assigned",
+        eventType: "TASK_ASSIGNED",
+        title: `à¦¨à¦¤à§à¦¨ à¦¦à¦¾à¦¯à¦¼à¦¿à¦¤à§à¦¬ à¦¦à§‡à¦“à¦¯à¦¼à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${title}`,
+        message:
+          `à¦•à¦¾à¦œ: ${title}\n` +
+          `à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨: ${created.assignedByName}${created.assignedByDesignation ? ` (${created.assignedByDesignation})` : ""}\n` +
+          `à¦¦à§‡à¦“à¦¯à¦¼à¦¾à¦° à¦¸à¦®à¦¯à¦¼: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}\n` +
+          `à¦¡à§‡à¦¡à¦²à¦¾à¦‡à¦¨: ${dueDate}${dueTimeVal ? ` ${dueTimeVal}` : ""}\n` +
+          `à¦…à¦—à§à¦°à¦¾à¦§à¦¿à¦•à¦¾à¦°: ${priorityBn[created.priority] || created.priority}` +
+          (project ? `\nà¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ: ${project.name}` : "") +
+          (site ? `\nà¦¸à¦¾à¦‡à¦Ÿ: ${site.name}` : ""),
+        task: created,
+      });
+
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "TASK_ASSIGNED",
+        entity: "Task",
+        recordId: created.taskCode,
+        afterData: {
+          assignedBy: created.assignedByName,
+          assignedTo: created.assignedToName,
           dueDate,
-          relatedTaskId: created.id,
-          relatedUrl: `/tasks/${created.id}`,
-          relatedEntityCode: taskCode,
-        });
-      }
+          dueTime: dueTimeVal,
+          priority: created.priority,
+        },
+      });
 
       return NextResponse.json({ success: true, task: created });
     }
 
     if (action === "createAnnouncement") {
-      // Security: Only Owner/Founder, Chairman, and General Manager can publish company-wide announcements
-      if (!canCreateAnnouncements(currentUser.role)) {
-        return NextResponse.json(
-          { error: "403 Forbidden: শুধুমাত্র ম্যানেজমেন্ট (প্রতিষ্ঠাতা ও সিইও, চেয়ারম্যান, জেনারেল ম্যানেজার) নোটিশ তৈরি করতে পারেন।" },
-          { status: 403 }
-        );
-      }
-
       const {
         title,
         message,
@@ -1500,67 +1714,25 @@ export async function POST(req: NextRequest) {
       } = body;
       if (!title || !message) {
         return NextResponse.json(
-          { error: "নোটিশের শিরোনাম এবং বিস্তারিত বিবরণ প্রদান করা বাধ্যতামূলক।" },
+          { error: "Title and Announcement Description are required" },
           { status: 400 }
         );
       }
 
-      const [ann] = await db
-        .insert(announcements)
-        .values({
-          title,
-          message,
-          createdBy: `${currentUser.name} (${currentUser.designation || currentUser.role})`,
-          createdById: currentUser.id,
-          priority: priority || "Normal",
-          publishedStatus: "Published",
-          attachmentUrl: attachmentUrl || null,
-          readByUserIds: [currentUser.id],
-        })
-        .returning();
-
       await createNotification({
         targetRole: "All",
         type: "Announcement",
-        title: `নতুন নোটিশ: ${title}`,
+        title,
         message,
-        createdBy: `${currentUser.name} (${currentUser.designation || currentUser.role})`,
+        createdBy: currentUser.name,
         priority: priority || "High",
         assignedPersonOrTeam: assignedPersonOrTeam || "All Staff",
         dueDate: dueDate || today,
         attachmentUrl: attachmentUrl || null,
-        relatedUrl: "/dashboard",
-        relatedEntityCode: `ANN-${ann.id}`,
+        relatedUrl: "/notifications",
+        relatedEntityCode: `NOTICE-${Date.now().toString().slice(-4)}`,
       });
 
-      await logAudit({
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userRole: currentUser.role,
-        action: "CREATE_ANNOUNCEMENT",
-        entity: "Announcement",
-        recordId: String(ann.id),
-        afterData: ann,
-      });
-
-      return NextResponse.json({ success: true, announcement: ann });
-    }
-
-    if (action === "markAnnouncementRead") {
-      const { announcementId } = body;
-      const [ann] = await db
-        .select()
-        .from(announcements)
-        .where(eq(announcements.id, Number(announcementId)));
-      if (ann) {
-        const currentRead = ann.readByUserIds || [];
-        if (!currentRead.includes(currentUser.id)) {
-          await db
-            .update(announcements)
-            .set({ readByUserIds: [...currentRead, currentUser.id] })
-            .where(eq(announcements.id, ann.id));
-        }
-      }
       return NextResponse.json({ success: true });
     }
 
@@ -1581,22 +1753,35 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Task not found" }, { status: 404 });
       }
 
+      const isTaskMgmt = canViewAllEmployeeProfiles(currentUser.role) || currentUser.role === "Project Manager";
+      const isOwnTask = task.assignedTo === currentUser.employeeId;
+      if (!isTaskMgmt && !isOwnTask && !task.isCompanyWide) {
+        return NextResponse.json(
+          { error: "à¦…à¦¨à§à¦¯à§‡à¦° à¦Ÿà¦¾à¦¸à§à¦• à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" },
+          { status: 403 }
+        );
+      }
+
       let finalStatus = status || task.status;
+      // No self-approval: "Completed" from a non-manager, or from anyone (except top management) on their OWN task, becomes "Review"
+      const topMgmt = ["Owner", "Chairman", "MD", "Admin"].includes(currentUser.role);
+      if (finalStatus === "Completed" && (!isTaskMgmt || (isOwnTask && !topMgmt))) {
+        finalStatus = "Review";
+      }
+      if (!isTaskMgmt && (finalStatus === "Cancelled" || finalStatus === "Reopened")) {
+        return NextResponse.json(
+          { error: "à¦à¦‡ à¦¸à§à¦Ÿà§à¦¯à¦¾à¦Ÿà¦¾à¦¸ à¦¶à§à¦§à§ à¦®à§à¦¯à¦¾à¦¨à§‡à¦œà¦®à§‡à¦¨à§à¦Ÿ à¦¦à¦¿à¦¤à§‡ à¦ªà¦¾à¦°à§‡à¥¤" },
+          { status: 403 }
+        );
+      }
+      // Progress only changes when the employee reports it; status changes never invent a %.
       let finalProgress =
         progressPercent !== undefined
-          ? Number(progressPercent)
-          : finalStatus === "Completed"
-          ? 100
-          : finalStatus === "Review"
-          ? 90
-          : finalStatus === "In Progress"
-          ? Math.max(40, task.progressPercent)
-          : finalStatus === "Accepted"
-          ? Math.max(15, task.progressPercent)
+          ? Math.min(100, Math.max(0, Number(progressPercent)))
           : task.progressPercent;
 
-      if (finalStatus === "Completed") {
-        finalProgress = 100;
+      if (finalStatus === "Completed" || finalStatus === "Review") {
+        finalProgress = 100; // submitted/approved as done
       }
 
       const newEvidence = Array.isArray(evidenceAttachments)
@@ -1616,188 +1801,94 @@ export async function POST(req: NextRequest) {
             completionNote !== undefined ? completionNote : task.completionNote,
           attachmentUrl: attachmentUrl || task.attachmentUrl,
           evidenceAttachments: newEvidence,
+          reviewStatus:
+            finalStatus === "Review"
+              ? "Pending Review"
+              : finalStatus === "Completed"
+              ? "Approved"
+              : task.reviewStatus,
+          startDate:
+            !task.startDate && (finalStatus === "In Progress" || finalStatus === "Accepted")
+              ? new Date().toISOString().split("T")[0]
+              : task.startDate,
+          lastUpdateAt: new Date(),
         })
         .where(eq(tasks.id, task.id))
         .returning();
 
-      // নতুন taskComments actionType অনুসারে সঠিক history entry তৈরি করা হচ্ছে
-      const historyComment =
-        comment ||
-        completionNote ||
-        `স্ট্যাটাস পরিবর্তন: ${finalStatus} (${finalProgress}%)`;
-      const historyActionType =
-        finalStatus === "Completed"
-          ? "ReviewApproved"
-          : finalStatus === "Accepted"
-          ? "Accepted"
+      const isResubmission = task.status === "Reopened" || task.correctionCount > 0;
+      const statusEvent =
+        finalStatus === "Accepted"
+          ? "TASK_ACCEPTED"
           : finalStatus === "In Progress"
-          ? "ProgressUpdate"
-          : finalStatus === "Blocked" || finalStatus === "Reopened"
-          ? "StatusChange"
-          : "ProgressUpdate";
+          ? "TASK_STARTED"
+          : finalStatus === "Review"
+          ? isResubmission ? "TASK_RESUBMITTED" : "TASK_COMPLETED"
+          : finalStatus === "Completed"
+          ? "TASK_APPROVED"
+          : finalStatus === "Blocked"
+          ? "TASK_PROBLEM_REPORTED"
+          : "TASK_STATUS_CHANGED";
 
       await db.insert(taskComments).values({
         taskId: task.id,
         userId: currentUser.id,
         authorName: currentUser.name,
-        comment: historyComment,
-        actionType: historyActionType,
+        actorEmployeeId: currentUser.employeeId,
+        actorDesignation: currentUser.designation,
+        comment:
+          comment ||
+          completionNote ||
+          `Status updated to ${finalStatus} (${finalProgress}%)`,
+        actionType:
+          finalStatus === "Completed"
+            ? "ReviewApproved"
+            : finalStatus === "Review"
+            ? "SubmittedForReview"
+            : finalStatus === "Accepted"
+            ? "Accepted"
+            : finalStatus === "In Progress"
+            ? "Started"
+            : "StatusChange",
+        eventType: statusEvent,
+        oldStatus: task.status,
+        newStatus: finalStatus,
+        progressPercent: finalProgress,
       });
 
-      // প্রতিটি lifecycle event-এর জন্য Notification পাঠানো হচ্ছে:
-      // Assigned person-এর পরিবর্তন (অর্পণের পরে গৃহীত/শুরু/অগ্রগতি/সম্পন্ন)
-      // Management-এ (অর্পণকারী) পাওয়ার জন্য
-
-      // সর্বদা অর্পণকারী ও Management কাছে update পাঠানো
-      const notifyTargetRole =
-        finalStatus === "Completed"
-          ? "Manager"
-          : "All"; // All = creator/assigner can receive too
-
-      // Recipient-scoped notification system:
-      // - privateUserId = assigned employee's user_id (only this user sees the notification in their payload)
-      // - managementCopy  = a copy to the task creator/assigner (Founder/CEO/Chairman/GM/PM)
-      // - We DO NOT use targetRole="All" for private task events.
-
-      const hadOldEvidence = (task.evidenceAttachments || []).length;
-      const hasNewEvidence = (newEvidence || []).length > hadOldEvidence;
-
-      // Lookup the assigned employee's user_id so private notifications land only in their inbox
-      const [assignedEmp] = task.assignedTo
-        ? await db
-            .select({
-                id: employees.id,
-                userId: employees.userId,
-                name: employees.name,
-                empCode: employees.empCode,
-              })
-            .from(employees)
-            .where(eq(employees.id, task.assignedTo))
-            .limit(1)
-        : [];
-      const privateUserId = assignedEmp?.userId ?? null;
-
-      // Helper to insert a private notification to a specific user
-      const pushPrivate = async (
-        userId: number | null,
-        nType: string,
-        title: string,
-        message: string
-      ) => {
-        if (!userId) return;
-        await createNotification({
-          userId,
-          targetRole: "User",
-          type: nType,
-          title,
-          message,
-          createdBy: currentUser.name,
-          priority: task.priority,
-          assignedPersonOrTeam: assignedEmp ? `${assignedEmp.name} (${assignedEmp.empCode})` : "",
-          dueDate: task.dueDate,
-          attachmentUrl: attachmentUrl || task.attachmentUrl,
-          relatedTaskId: task.id,
-          relatedUrl: `/tasks/${task.id}`,
-          relatedEntityCode: task.taskCode,
-        });
-      };
-
-      // Helper to insert a management-side update notification
-      const pushManagement = async (
-        nType: string,
-        title: string,
-        message: string
-      ) => {
-        await createNotification({
-          targetRole: "Manager",
-          type: nType,
-          title,
-          message,
-          createdBy: currentUser.name,
-          priority: task.priority,
-          assignedPersonOrTeam: task.createdBy || "Management",
-          dueDate: task.dueDate,
-          relatedTaskId: task.id,
-          relatedUrl: `/tasks/${task.id}`,
-          relatedEntityCode: task.taskCode,
-        });
-      };
-
-      // Resolve event type
-      let eventType = "TASK_PROGRESS_UPDATED";
-      if (finalStatus === "Completed") eventType = "TASK_COMPLETED";
-      else if (finalStatus === "Accepted") eventType = "TASK_ACCEPTED";
-      else if (finalStatus === "In Progress") eventType = "TASK_STARTED";
-
-      // Build shared event message
-      const baseMsg = `${currentUser.name} — ${task.taskCode} — ${task.title}`;
-
-      // Build event-specific messages
-      let privateTitle = `কাজের হালনাগাদ: ${task.taskCode}`;
-      let privateMessage = `${baseMsg} (${finalProgress}%) হালনাগাদ করা হয়েছে।`;
-      let managementTitle = `টাস্ক হালনাগাদ: ${task.taskCode}`;
-      let managementMessage = `${baseMsg} — ${finalStatus} (${finalProgress}%)।`;
-
-      if (finalStatus === "Completed") {
-        privateTitle = `টাস্ক সম্পন্ন: ${task.taskCode}`;
-        privateMessage = `${baseMsg} সম্পন্ন হয়েছে। ${completionNote ? `মন্তব্য: ${completionNote}` : ""}`;
-        managementTitle = `টাস্ক সম্পন্ন: ${task.taskCode}`;
-        managementMessage = `${baseMsg} ${currentUser.name} সম্পন্ন করেছেন (${finalProgress}%)।`;
-      } else if (finalStatus === "Accepted") {
-        privateTitle = `কাজ গৃহীত: ${task.taskCode}`;
-        privateMessage = `${baseMsg} গৃহীত হয়েছে। Deadline: ${task.dueDate}।`;
-        managementTitle = `কাজ গৃহীত: ${task.taskCode}`;
-        managementMessage = `${baseMsg} ${currentUser.name} গ্রহণ করেছেন।`;
-      } else if (finalStatus === "In Progress") {
-        privateTitle = `কাজ শুরু: ${task.taskCode}`;
-        privateMessage = `${baseMsg} কাজ শুরু হয়েছে।`;
-        managementTitle = `কাজ শুরু: ${task.taskCode}`;
-        managementMessage = `${baseMsg} ${currentUser.name} কাজ শুরু করেছেন।`;
-      } else if (
-        typeof progressPercent === "number" &&
-        finalStatus === task.status
-      ) {
-        // শুধু অগ্রগতি update
-        privateTitle = `কাজের অগ্রগতি: ${task.taskCode} (${finalProgress}%)`;
-        privateMessage = `${baseMsg} অগ্রগতি ${finalProgress}% হালনাগাদ হয়েছে। ${comment ? `মন্তব্য: ${comment}` : ""}`;
-        managementTitle = `কাজের অগ্রগতি: ${task.taskCode} (${finalProgress}%)`;
-        managementMessage = `${baseMsg} ${currentUser.name} অগ্রগতি ${finalProgress}% হালনাগাদ করেছেন।`;
-      }
-
-      // Send PRIVATE notification to assigned employee (userId-targeted)
-      // Skip if the actor is the same user as the recipient (employee self-updating)
-      if (privateUserId && privateUserId !== currentUser.id) {
-        await pushPrivate(privateUserId, eventType, privateTitle, privateMessage);
-      }
-
-      // Send MANAGEMENT notification if the actor is the employee (then the creator must know)
-      if (currentUser.id !== (task.createdBy ? null : null) || true) {
-        // always send to management (creator + monitoring team) for visibility
-        // unless the currentUser is itself management
-        if (currentUser.employeeId !== task.assignedTo) {
-          // actor is management → management already knows; skip
-        } else {
-          // actor is the employee → notify management
-          await pushManagement(eventType, managementTitle, managementMessage);
+      {
+        const actor = { id: currentUser.id, name: currentUser.name };
+        const watchers = await taskWatcherUserIds(task);
+        const assigneeUid = await assigneeUserId(task);
+        const who = updated.assignedToName || currentUser.name;
+        const reviewer = { name: currentUser.name };
+        if (statusEvent === "TASK_ACCEPTED" && task.status !== "Accepted") {
+          await notifyUsers({ recipientUserIds: watchers, actor, category: "Task Update", eventType: "TASK_ACCEPTED",
+            title: `à¦Ÿà¦¾à¦¸à§à¦• à¦—à§à¦°à¦¹à¦£ à¦•à¦°à§‡à¦›à§‡à¦¨: ${task.title}`, message: `${who} à¦Ÿà¦¾à¦¸à§à¦•à¦Ÿà¦¿ à¦—à§à¦°à¦¹à¦£ à¦•à¦°à§‡à¦›à§‡à¦¨ (${task.taskCode})à¥¤`, task: updated });
+        } else if (statusEvent === "TASK_STARTED" && task.status !== "In Progress") {
+          await notifyUsers({ recipientUserIds: watchers, actor, category: "Task Update", eventType: "TASK_STARTED",
+            title: `à¦•à¦¾à¦œ à¦¶à§à¦°à§ à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${task.title}`, message: `${who} à¦•à¦¾à¦œ à¦¶à§à¦°à§ à¦•à¦°à§‡à¦›à§‡à¦¨ (${task.taskCode}) â€¢ à¦…à¦—à§à¦°à¦—à¦¤à¦¿ ${finalProgress}%`, task: updated });
+        } else if (statusEvent === "TASK_COMPLETED" || statusEvent === "TASK_RESUBMITTED") {
+          await notifyUsers({ recipientUserIds: watchers, actor, category: "Approval", eventType: statusEvent,
+            title: statusEvent === "TASK_RESUBMITTED" ? `à¦¸à¦‚à¦¶à§‹à¦§à¦¨à§‡à¦° à¦ªà¦° à¦ªà§à¦¨à¦°à¦¾à¦¯à¦¼ à¦œà¦®à¦¾: ${task.title}` : `à¦•à¦¾à¦œ à¦¸à¦®à§à¦ªà¦¨à§à¦¨ â€” à¦…à¦¨à§à¦®à§‹à¦¦à¦¨ à¦ªà§à¦°à¦¯à¦¼à§‹à¦œà¦¨: ${task.title}`,
+            message: `${who} ${statusEvent === "TASK_RESUBMITTED" ? "à¦¸à¦‚à¦¶à§‹à¦§à¦¨ à¦•à¦°à§‡ à¦†à¦¬à¦¾à¦° à¦œà¦®à¦¾ à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨" : "à¦•à¦¾à¦œà¦Ÿà¦¿ à¦¸à¦®à§à¦ªà¦¨à§à¦¨ à¦¹à¦¿à¦¸à§‡à¦¬à§‡ à¦œà¦®à¦¾ à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨"} (${task.taskCode})à¥¤ à¦…à¦¨à§à¦®à§‹à¦¦à¦¨ à¦¬à¦¾ à¦¸à¦‚à¦¶à§‹à¦§à¦¨ à¦¦à¦¿à¦¨à¥¤${completionNote ? ` à¦¨à§‹à¦Ÿ: ${completionNote}` : ""}`,
+            task: updated });
+        } else if (statusEvent === "TASK_APPROVED") {
+          // management completed directly â†’ assignee only
+          await notifyUsers({ recipientUserIds: [assigneeUid], actor, category: "Approval", eventType: "TASK_APPROVED",
+            title: `à¦Ÿà¦¾à¦¸à§à¦• à¦…à¦¨à§à¦®à§‹à¦¦à¦¿à¦¤: ${task.title}`,
+            message: `à¦Ÿà¦¾à¦¸à§à¦•: ${task.title} (${task.taskCode})\nà¦…à¦¨à§à¦®à§‹à¦¦à¦¨ à¦•à¦°à§‡à¦›à§‡à¦¨: ${reviewer.name}\nà¦…à¦¨à§à¦®à§‹à¦¦à¦¨à§‡à¦° à¦¸à¦®à¦¯à¦¼: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}`,
+            task: updated });
+        } else if (statusEvent === "TASK_PROBLEM_REPORTED") {
+          await notifyUsers({ recipientUserIds: watchers, actor, category: "Task Update", eventType: "TASK_PROBLEM_REPORTED",
+            title: `à¦¸à¦®à¦¸à§à¦¯à¦¾/à¦†à¦Ÿà¦•à§‡ à¦†à¦›à§‡: ${task.title}`, message: `${who} â€¢ ${task.taskCode}${comment ? ` â€” ${comment}` : ""}`, task: updated });
+        } else if ((finalStatus === "Reopened" || finalStatus === "Cancelled") && assigneeUid) {
+          await notifyUsers({ recipientUserIds: [assigneeUid], actor, category: "Task Update", eventType: "TASK_STATUS_CHANGED",
+            title: `à¦Ÿà¦¾à¦¸à§à¦• ${finalStatus === "Cancelled" ? "à¦¬à¦¾à¦¤à¦¿à¦²" : "à¦ªà§à¦¨à¦°à¦¾à¦¯à¦¼ à¦–à§‹à¦²à¦¾"} à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${task.title}`,
+            message: `${task.taskCode} â€” ${currentUser.name}`, task: updated });
         }
       }
 
-      // নতুন attachment সংযুক্ত হলে — assigned employee + management both notified
-      if (hasNewEvidence && finalStatus !== "Completed") {
-        if (privateUserId && privateUserId !== currentUser.id) {
-          await pushPrivate(
-            privateUserId,
-            "TASK_ATTACHMENT_ADDED",
-            `প্রমাণপত্র সংযুক্ত: ${task.taskCode}`,
-            `${baseMsg} — ${newEvidence.length - hadOldEvidence}টি নতুন ফাইল/ইমেজ সংযুক্ত হয়েছে।`
-          );
-        }
-        await pushManagement(
-          "TASK_ATTACHMENT_ADDED",
-          `প্রমাণপত্র সংযুক্ত: ${task.taskCode}`,
-          `${baseMsg} — ${currentUser.name} ${newEvidence.length - hadOldEvidence}টি নতুন ফাইল আপলোড করেছেন।`
-        );
-      }
 
       return NextResponse.json({ success: true, task: updated });
     }
@@ -1835,74 +1926,219 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, task: updated });
     }
 
-    if (action === "addTaskComment") {
-      const { taskId, comment } = body;
-      if (!comment) {
-        return NextResponse.json({ error: "Comment cannot be empty" }, { status: 400 });
-      }
-      const [c] = await db
-        .insert(taskComments)
-        .values({
-          taskId: Number(taskId),
-          userId: currentUser.id,
-          authorName: currentUser.name,
-          comment,
-          actionType: "Comment",
-        })
-        .returning();
-      return NextResponse.json({ success: true, comment: c });
-    }
-
-    // =========================================================
-    // OPTION B: ADVANCED EMPLOYEE WORK TRACKING & MANAGEMENT REVIEW
-    // =========================================================
-
-    if (action === "submitTaskProgress") {
-      const {
-        taskId,
-        progressPercent,
-        nextAction,
-        delayReason,
-        note,
-        attachments,
-        attachmentsInput,
-        completionStatus,
-      } = body;
-      if (!taskId) {
-        return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
-      }
+    if (action === "updateTaskProgress") {
+      // Employee (own task) or management: progress %, update note, next action, delay reason, proof files
+      const { taskId, progressPercent, note, nextAction, delayReason, fileIds, blocked, remaining } = body;
       const [task] = await db.select().from(tasks).where(eq(tasks.id, Number(taskId)));
       if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      const isTaskMgmt = canViewAllEmployeeProfiles(currentUser.role) || currentUser.role === "Project Manager";
+      if (!isTaskMgmt && task.assignedTo !== currentUser.employeeId) {
+        return NextResponse.json({ error: "à¦…à¦¨à§à¦¯à§‡à¦° à¦Ÿà¦¾à¦¸à§à¦• à¦†à¦ªà¦¡à§‡à¦Ÿà§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
+      }
+      if (task.status === "Completed" || task.status === "Cancelled") {
+        return NextResponse.json({ error: "à¦¸à¦®à§à¦ªà¦¨à§à¦¨/à¦¬à¦¾à¦¤à¦¿à¦² à¦Ÿà¦¾à¦¸à§à¦• à¦†à¦ªà¦¡à§‡à¦Ÿ à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼ à¦¨à¦¾à¥¤" }, { status: 400 });
+      }
+      const pct = Math.min(100, Math.max(0, Number(progressPercent ?? task.progressPercent)));
+      if (!note || !String(note).trim()) {
+        return NextResponse.json({ error: "à¦†à¦ªà¦¡à§‡à¦Ÿ à¦¨à§‹à¦Ÿ à¦²à¦¿à¦–à§à¦¨" }, { status: 400 });
+      }
 
-      // Security: A Staff employee may only update their OWN assigned tasks.
-      if (currentUser.role === "Staff" || currentUser.role === "Site Staff" || currentUser.role === "Engineer" || currentUser.role === "Marketing" || currentUser.role === "Sales") {
-        if (task.assignedTo !== currentUser.employeeId) {
-          return NextResponse.json(
-            { error: "403 Forbidden: কর্মকর্তারা শুধুমাত্র নিজের অর্পিত কাজের আপডেট দিতে পারেন।" },
-            { status: 403 }
-          );
+      // Validate proof files belong to this task
+      const ids: number[] = Array.isArray(fileIds) ? fileIds.map(Number).filter(Boolean) : [];
+      if (ids.length) {
+        const owned = await db.select().from(workFiles).where(eq(workFiles.taskId, task.id));
+        const ownedIds = new Set(owned.map((f) => f.id));
+        if (!ids.every((i) => ownedIds.has(i))) {
+          return NextResponse.json({ error: "à¦…à¦¬à§ˆà¦§ à¦«à¦¾à¦‡à¦² à¦¸à¦‚à¦¯à§à¦•à§à¦¤à¦¿" }, { status: 400 });
         }
       }
 
-      const pct = Math.min(100, Math.max(0, Number(progressPercent ?? task.progressPercent ?? 0)));
-      const mergedAttachments = [
-        ...(Array.isArray(attachments) ? attachments : []),
-        ...(Array.isArray(attachmentsInput) ? attachmentsInput : []),
-      ];
-      const completed = completionStatus === "Completed" || pct >= 100;
+      const newStatus = blocked
+        ? "Blocked"
+        : task.status === "Todo" || task.status === "Accepted" || task.status === "Blocked" || task.status === "Reopened"
+        ? pct > 0 ? "In Progress" : task.status
+        : task.status;
 
       const [updated] = await db
         .update(tasks)
         .set({
-          progressPercent: completed ? 100 : pct,
-          status: completed ? "Completed" : task.status,
-          completedBy: completed ? currentUser.name : task.completedBy,
-          completedAt: completed ? new Date() : task.completedAt,
-          completionNote: note ?? task.completionNote,
-          nextAction: nextAction ?? task.nextAction,
-          delayReason: delayReason ?? task.delayReason,
-          evidenceAttachments: mergedAttachments.length > 0 ? mergedAttachments : task.evidenceAttachments,
+          progressPercent: pct,
+          status: newStatus,
+          nextAction: nextAction !== undefined ? String(nextAction) : task.nextAction,
+          delayReason: delayReason !== undefined ? String(delayReason) : task.delayReason,
+          startDate: task.startDate || (pct > 0 ? new Date().toISOString().split("T")[0] : null),
+          lastUpdateAt: new Date(),
         })
+        .where(eq(tasks.id, task.id))
+        .returning();
+
+      const progressWho = task.assignedToName || currentUser.name;
+      const problemText = String(delayReason || "").trim();
+      const problemReported = Boolean(blocked) || (problemText !== "" && problemText !== (task.delayReason || ""));
+      const baseHistory = {
+        taskId: task.id,
+        userId: currentUser.id,
+        authorName: currentUser.name,
+        actorEmployeeId: currentUser.employeeId,
+        actorDesignation: currentUser.designation,
+        oldStatus: task.status,
+        newStatus: updated.status,
+        progressPercent: pct,
+      };
+      // 1) progress
+      await db.insert(taskComments).values({
+        ...baseHistory,
+        comment: `${String(note)}${remaining ? `\nà¦¬à¦¾à¦•à¦¿ à¦•à¦¾à¦œ: ${String(remaining)}` : ""}${nextAction ? `\nà¦ªà¦°à¦¬à¦°à§à¦¤à§€: ${String(nextAction)}` : ""}`,
+        actionType: "ProgressUpdate",
+        eventType: "TASK_PROGRESS_UPDATED",
+      });
+      // 2) attachment (separate event)
+      if (ids.length) {
+        await db.insert(taskComments).values({
+          ...baseHistory,
+          comment: `${ids.length}à¦Ÿà¦¿ à¦«à¦¾à¦‡à¦²/à¦ªà§à¦°à¦®à¦¾à¦£ à¦œà¦®à¦¾`,
+          actionType: "ProofSubmitted",
+          eventType: "TASK_ATTACHMENT_ADDED",
+          fileIds: ids,
+        });
+      }
+      // 3) problem / blocker (separate event)
+      if (problemReported) {
+        await db.insert(taskComments).values({
+          ...baseHistory,
+          comment: `à¦¸à¦®à¦¸à§à¦¯à¦¾: ${problemText || "à¦•à¦¾à¦œ à¦†à¦Ÿà¦•à§‡ à¦†à¦›à§‡"}`,
+          actionType: "StatusChange",
+          eventType: "TASK_PROBLEM_REPORTED",
+        });
+      }
+
+      {
+        const actor = { id: currentUser.id, name: currentUser.name };
+        const watchers = await taskWatcherUserIds(task);
+        await notifyUsers({
+          recipientUserIds: watchers,
+          actor,
+          category: "Task Update",
+          eventType: "TASK_PROGRESS_UPDATED",
+          title: `à¦…à¦—à§à¦°à¦—à¦¤à¦¿ ${pct}%: ${task.title}`,
+          message: `${progressWho} â€¢ ${task.taskCode} â€¢ ${task.progressPercent}% â†’ ${pct}%\n${String(note)}${remaining ? `\nà¦¬à¦¾à¦•à¦¿: ${String(remaining)}` : ""}`,
+          task: updated,
+        });
+        if (ids.length) {
+          await notifyUsers({
+            recipientUserIds: watchers,
+            actor,
+            category: "Task Update",
+            eventType: "TASK_ATTACHMENT_ADDED",
+            title: `à¦ªà§à¦°à¦®à¦¾à¦£/à¦«à¦¾à¦‡à¦² à¦œà¦®à¦¾: ${task.title}`,
+            message: `${progressWho} ${ids.length}à¦Ÿà¦¿ à¦«à¦¾à¦‡à¦² à¦œà¦®à¦¾ à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨ (${task.taskCode})à¥¤`,
+            task: updated,
+          });
+        }
+        if (problemReported) {
+          await notifyUsers({
+            recipientUserIds: watchers,
+            actor,
+            category: "Task Update",
+            eventType: "TASK_PROBLEM_REPORTED",
+            title: `à¦¸à¦®à¦¸à§à¦¯à¦¾ à¦°à¦¿à¦ªà§‹à¦°à§à¦Ÿ: ${task.title}`,
+            message: `${progressWho} â€¢ ${task.taskCode}\nà¦¸à¦®à¦¸à§à¦¯à¦¾: ${problemText || "à¦•à¦¾à¦œ à¦†à¦Ÿà¦•à§‡ à¦†à¦›à§‡"}`,
+            task: updated,
+          });
+        }
+      }
+
+      return NextResponse.json({ success: true, task: updated });
+    }
+
+    if (action === "markTaskViewed") {
+      // Only the assignee's own first view is recorded
+      const [task] = await db.select().from(tasks).where(eq(tasks.id, Number(body.taskId)));
+      if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      if (task.assignedTo !== currentUser.employeeId) {
+        return NextResponse.json({ success: true, recorded: false });
+      }
+      if (task.viewedAt) return NextResponse.json({ success: true, recorded: false });
+      const claimed = await db
+        .update(tasks)
+        .set({ viewedAt: new Date() })
+        .where(and(eq(tasks.id, task.id), isNull(tasks.viewedAt)))
+        .returning();
+      if (claimed.length === 0) return NextResponse.json({ success: true, recorded: false });
+      await db.insert(taskComments).values({
+        taskId: task.id,
+        userId: currentUser.id,
+        authorName: currentUser.name,
+        actorEmployeeId: currentUser.employeeId,
+        actorDesignation: currentUser.designation,
+        comment: `${currentUser.name} à¦Ÿà¦¾à¦¸à§à¦•à¦Ÿà¦¿ à¦¦à§‡à¦–à§‡à¦›à§‡à¦¨`,
+        actionType: "Viewed",
+        eventType: "TASK_VIEWED",
+        oldStatus: task.status,
+        newStatus: task.status,
+        progressPercent: task.progressPercent,
+      });
+      await notifyUsers({
+        recipientUserIds: [task.assignedByUserId],
+        actor: { id: currentUser.id, name: currentUser.name },
+        category: "Task Update",
+        eventType: "TASK_VIEWED",
+        title: `à¦Ÿà¦¾à¦¸à§à¦• à¦¦à§‡à¦–à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${task.title}`,
+        message: `${currentUser.name} ${task.taskCode} à¦Ÿà¦¾à¦¸à§à¦•à¦Ÿà¦¿ à¦¦à§‡à¦–à§‡à¦›à§‡à¦¨à¥¤`,
+        task: claimed[0],
+      });
+      return NextResponse.json({ success: true, recorded: true });
+    }
+
+    if (action === "reviewTask") {
+      // Management: Approve or Correction Required (reason mandatory)
+      const isTaskMgmt = canViewAllEmployeeProfiles(currentUser.role) || currentUser.role === "Project Manager";
+      if (!isTaskMgmt) {
+        return NextResponse.json({ error: "à¦°à¦¿à¦­à¦¿à¦‰ à¦•à¦°à¦¾à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
+      }
+      const { taskId, decision, reason } = body;
+      const [task] = await db.select().from(tasks).where(eq(tasks.id, Number(taskId)));
+      if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      if (
+        task.assignedTo === currentUser.employeeId &&
+        !["Owner", "Chairman", "MD", "Admin"].includes(currentUser.role)
+      ) {
+        return NextResponse.json({ error: "à¦¨à¦¿à¦œà§‡à¦° à¦•à¦¾à¦œ à¦¨à¦¿à¦œà§‡ à¦…à¦¨à§à¦®à§‹à¦¦à¦¨ à¦•à¦°à¦¾ à¦¯à¦¾à¦¬à§‡ à¦¨à¦¾à¥¤" }, { status: 403 });
+      }
+      if (decision !== "Approve" && decision !== "Correction") {
+        return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
+      }
+      if (decision === "Correction" && (!reason || !String(reason).trim())) {
+        return NextResponse.json({ error: "à¦¸à¦‚à¦¶à§‹à¦§à¦¨à§‡à¦° à¦•à¦¾à¦°à¦£ à¦²à¦¿à¦–à¦¤à§‡ à¦¹à¦¬à§‡" }, { status: 400 });
+      }
+
+      const approve = decision === "Approve";
+      const [updated] = await db
+        .update(tasks)
+        .set(
+          approve
+            ? {
+                status: "Completed",
+                progressPercent: 100,
+                reviewStatus: "Approved",
+                reviewNote: reason ? String(reason) : "",
+                reviewedBy: currentUser.name,
+                reviewedAt: new Date(),
+                completedBy: task.completedBy || currentUser.name,
+                completedAt: task.completedAt || new Date(),
+                lastUpdateAt: new Date(),
+              }
+            : {
+                status: "Reopened",
+                progressPercent: Math.min(task.progressPercent, 90),
+                reviewStatus: "Correction Required",
+                reviewNote: String(reason),
+                correctionCount: task.correctionCount + 1,
+                reviewedBy: currentUser.name,
+                reviewedAt: new Date(),
+                lastUpdateAt: new Date(),
+              }
+        )
         .where(eq(tasks.id, task.id))
         .returning();
 
@@ -1910,95 +2146,178 @@ export async function POST(req: NextRequest) {
         taskId: task.id,
         userId: currentUser.id,
         authorName: currentUser.name,
-        comment: `অগ্রগতি আপডেট: ${pct}%${nextAction ? ` | পরবর্তী পদক্ষেপ: ${nextAction}` : ""}${delayReason ? ` | বিলম্ব: ${delayReason}` : ""}${note ? ` | নোট: ${note}` : ""}`,
-        actionType: "ProgressUpdate",
+        actorEmployeeId: currentUser.employeeId,
+        actorDesignation: currentUser.designation,
+        comment: approve ? `à¦…à¦¨à§à¦®à§‹à¦¦à¦¿à¦¤${reason ? `: ${reason}` : ""}` : `à¦¸à¦‚à¦¶à§‹à¦§à¦¨ à¦ªà§à¦°à¦¯à¦¼à§‹à¦œà¦¨: ${reason}`,
+        actionType: approve ? "ReviewApproved" : "CorrectionRequired",
+        eventType: approve ? "TASK_APPROVED" : "TASK_CORRECTION_REQUIRED",
+        oldStatus: task.status,
+        newStatus: updated.status,
+        progressPercent: updated.progressPercent,
+      });
+
+      const reviewedAtBd = new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
+      await notifyUsers({
+        recipientUserIds: [await assigneeUserId(task)], // assigned employee ONLY
+        actor: { id: currentUser.id, name: currentUser.name },
+        category: approve ? "Approval" : "Correction",
+        eventType: approve ? "TASK_APPROVED" : "TASK_CORRECTION_REQUIRED",
+        title: approve ? `à¦Ÿà¦¾à¦¸à§à¦• à¦…à¦¨à§à¦®à§‹à¦¦à¦¿à¦¤: ${task.title}` : `à¦¸à¦‚à¦¶à§‹à¦§à¦¨ à¦ªà§à¦°à¦¯à¦¼à§‹à¦œà¦¨: ${task.title}`,
+        message: approve
+          ? `à¦Ÿà¦¾à¦¸à§à¦•: ${task.title} (${task.taskCode})\nà¦…à¦¨à§à¦®à§‹à¦¦à¦¨ à¦•à¦°à§‡à¦›à§‡à¦¨: ${currentUser.name}${currentUser.designation ? ` (${currentUser.designation})` : ""}\nà¦…à¦¨à§à¦®à§‹à¦¦à¦¨à§‡à¦° à¦¸à¦®à¦¯à¦¼: ${reviewedAtBd}${reason ? `\nà¦®à¦¨à§à¦¤à¦¬à§à¦¯: ${reason}` : ""}`
+          : `à¦Ÿà¦¾à¦¸à§à¦•: ${task.title} (${task.taskCode})\nà¦•à¦¾à¦°à¦£: ${reason}\nà¦°à¦¿à¦­à¦¿à¦‰ à¦•à¦°à§‡à¦›à§‡à¦¨: ${currentUser.name}${currentUser.designation ? ` (${currentUser.designation})` : ""}\nà¦¸à¦®à¦¯à¦¼: ${reviewedAtBd}`,
+        task: updated,
+      });
+
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: approve ? "TASK_APPROVED" : "TASK_CORRECTION_REQUIRED",
+        entity: "Task",
+        recordId: task.taskCode,
+        beforeData: { status: task.status },
+        afterData: { status: updated.status, reason },
       });
 
       return NextResponse.json({ success: true, task: updated });
     }
 
-    if (action === "managementReviewTask") {
-      if (!isManagementRole(currentUser.role)) {
-        return NextResponse.json(
-          { error: "403 Forbidden: শুধুমাত্র ম্যানেজমেন্ট অনুমোদন বা সংশোধন করতে পারে।" },
-          { status: 403 }
-        );
+    if (action === "updateTaskAssignment") {
+      // Management: reassign / change deadline / priority
+      const isTaskMgmt = canViewAllEmployeeProfiles(currentUser.role) || currentUser.role === "Project Manager";
+      if (!isTaskMgmt) {
+        return NextResponse.json({ error: "à¦Ÿà¦¾à¦¸à§à¦• à¦ªà§à¦¨à¦ƒà¦¬à¦£à§à¦Ÿà¦¨à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
       }
-      const { taskId, decision, correctionReason } = body;
-      if (!taskId || !decision || !["Approved", "Correction Required"].includes(decision)) {
-        return NextResponse.json(
-          { error: "taskId এবং decision (Approved / Correction Required) প্রয়োজন।" },
-          { status: 400 }
-        );
-      }
-      if (decision === "Correction Required" && !correctionReason) {
-        return NextResponse.json(
-          { error: "Correction Required-এর জন্য কারণ বিবরণ আবশ্যক।" },
-          { status: 400 }
-        );
-      }
+      const { taskId, assignedTo, dueDate, priority } = body;
       const [task] = await db.select().from(tasks).where(eq(tasks.id, Number(taskId)));
       if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
-
-      const reviewByFull = `${currentUser.name} (${currentUser.designation || currentUser.role})`;
-
+      if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate))) {
+        return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+      }
+      let newAssignee = task.assignedTo;
+      let newEmpRow: typeof employees.$inferSelect | null = null;
+      if (assignedTo && Number(assignedTo) !== task.assignedTo) {
+        const [emp] = await db.select().from(employees).where(eq(employees.id, Number(assignedTo)));
+        if (!emp || emp.archived) return NextResponse.json({ error: "Invalid employee" }, { status: 400 });
+        newAssignee = emp.id;
+        newEmpRow = emp;
+      }
       const [updated] = await db
         .update(tasks)
         .set({
-          status: decision === "Approved" ? "Completed" : "In Progress",
-          managementReviewStatus: decision,
-          managementReviewBy: reviewByFull,
-          managementReviewAt: new Date(),
-          correctionReason:
-            decision === "Correction Required"
-              ? correctionReason
-              : "",
-          reviewedBy: reviewByFull,
-          reviewedAt: new Date(),
-          completedBy:
-            decision === "Approved" ? reviewByFull : task.completedBy,
-          completedAt:
-            decision === "Approved" ? new Date() : task.completedAt,
-          progressPercent:
-            decision === "Approved" ? 100 : task.progressPercent,
+          assignedTo: newAssignee,
+          assignedToName: newEmpRow ? newEmpRow.name : task.assignedToName,
+          assignedToDesignation: newEmpRow ? newEmpRow.designation : task.assignedToDesignation,
+          dueDate: dueDate || task.dueDate,
+          dueTime: body.dueTime !== undefined ? (body.dueTime || null) : task.dueTime,
+          priority: priority || task.priority,
+          overdueNotifiedAt: dueDate && dueDate !== task.dueDate ? null : task.overdueNotifiedAt,
+          deadlineReminderSentAt: dueDate && dueDate !== task.dueDate ? null : task.deadlineReminderSentAt,
+          lastUpdateAt: new Date(),
         })
         .where(eq(tasks.id, task.id))
         .returning();
 
+      const changes: string[] = [];
+      if (newAssignee !== task.assignedTo) changes.push("à¦•à¦°à§à¦®à§€ à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨");
+      if (dueDate && dueDate !== task.dueDate) changes.push(`à¦¡à§‡à¦¡à¦²à¦¾à¦‡à¦¨ ${task.dueDate} â†’ ${dueDate}`);
+      if (priority && priority !== task.priority) changes.push(`à¦…à¦—à§à¦°à¦¾à¦§à¦¿à¦•à¦¾à¦° ${task.priority} â†’ ${priority}`);
       await db.insert(taskComments).values({
         taskId: task.id,
         userId: currentUser.id,
-        authorName: reviewByFull,
-        comment:
-          decision === "Approved"
-            ? `Approved by Management (${reviewByFull})`
-            : `Correction Required by Management (${reviewByFull}): ${correctionReason}`,
-        actionType: decision === "Approved" ? "Approved" : "Correction",
+        authorName: currentUser.name,
+        actorEmployeeId: currentUser.employeeId,
+        actorDesignation: currentUser.designation,
+        comment: changes.join(", ") || "à¦•à§‹à¦¨à§‹ à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨ à¦¨à§‡à¦‡",
+        actionType: newAssignee !== task.assignedTo ? "Reassigned" : "DeadlineChanged",
+        eventType: newAssignee !== task.assignedTo ? "TASK_REASSIGNED" : "TASK_DEADLINE_CHANGED",
+        oldStatus: task.status,
+        newStatus: updated.status,
       });
-
-      // কে কাজটি করছে তাকে notification
-      const assignedEmpId = task.assignedTo;
-      await createNotification({
-        targetRole: "All",
-        type: decision === "Approved" ? "Task Update" : "Correction",
-        title:
-          decision === "Approved"
-            ? `কাজ অনুমোদিত: ${task.taskCode}`
-            : `সংশোধন প্রয়োজন: ${task.taskCode}`,
-        message:
-          decision === "Approved"
-            ? `${reviewByFull} আপনার কাজ "${task.title}" সফলভাবে অনুমোদন করেছেন।`
-            : `${reviewByFull} আপনার কাজ "${task.title}" এ সংশোধন প্রয়োজন। কারণ: ${correctionReason}`,
-        createdBy: reviewByFull,
-        priority: task.priority,
-        assignedPersonOrTeam: task.createdBy || "Management",
-        dueDate: task.dueDate,
-        relatedTaskId: task.id,
-        relatedUrl: `/tasks/${task.id}`,
-        relatedEntityCode: task.taskCode,
+      await notifyUsers({
+        recipientUserIds: newEmpRow ? [newEmpRow.userId, await assigneeUserId(task)] : [await assigneeUserId(task)],
+        actor: { id: currentUser.id, name: currentUser.name },
+        category: newEmpRow ? "Task Assigned" : "Deadline",
+        eventType: newEmpRow ? "TASK_REASSIGNED" : "TASK_DEADLINE_CHANGED",
+        title: newEmpRow ? `à¦¨à¦¤à§à¦¨ à¦¦à¦¾à¦¯à¦¼à¦¿à¦¤à§à¦¬ (à¦ªà§à¦¨à¦ƒà¦¬à¦£à§à¦Ÿà¦¨): ${task.title}` : `à¦Ÿà¦¾à¦¸à§à¦• à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨: ${task.title}`,
+        message: `${task.taskCode} â€¢ ${changes.join(", ") || "à¦¹à¦¾à¦²à¦¨à¦¾à¦—à¦¾à¦¦"} â€¢ à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨ ${currentUser.name}`,
+        task: updated,
       });
-
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "TASK_ASSIGNMENT_UPDATE",
+        entity: "Task",
+        recordId: task.taskCode,
+        beforeData: { assignedTo: task.assignedTo, dueDate: task.dueDate, priority: task.priority },
+        afterData: { assignedTo: newAssignee, dueDate: updated.dueDate, priority: updated.priority },
+      });
       return NextResponse.json({ success: true, task: updated });
+    }
+
+    if (action === "addManualPerformanceScore") {
+      if (!isManagementRole(currentUser.role) && currentUser.role !== "HR") {
+        return NextResponse.json({ error: "à¦ªà¦¾à¦°à¦«à¦°à¦®à§à¦¯à¦¾à¦¨à§à¦¸ à¦°à¦¿à¦­à¦¿à¦‰ à¦¦à§‡à¦“à¦¯à¦¼à¦¾à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
+      }
+      const { employeeId, period, score, comments } = body;
+      const s = Number(score);
+      if (!employeeId || isNaN(s) || s < 0 || s > 100) {
+        return NextResponse.json({ error: "à¦¸à§à¦•à§‹à¦° à§¦â€“à§§à§¦à§¦ à¦à¦° à¦®à¦§à§à¦¯à§‡ à¦¦à¦¿à¦¨" }, { status: 400 });
+      }
+      const [rev] = await db
+        .insert(performanceReviews)
+        .values({
+          employeeId: Number(employeeId),
+          period: period || new Date().toISOString().slice(0, 7),
+          managerReviewPoints: Math.round(s / 10),
+          totalPoints: Math.round(s),
+          managerComments: comments || "",
+          reviewedBy: currentUser.name,
+        })
+        .returning();
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "PERFORMANCE_MANUAL_REVIEW",
+        entity: "PerformanceReview",
+        recordId: String(rev.id),
+        afterData: { employeeId, score: s, comments },
+      });
+      return NextResponse.json({ success: true, review: rev });
+    }
+
+    if (action === "addTaskComment") {
+      const { taskId, comment } = body;
+      if (!comment) {
+        return NextResponse.json({ error: "Comment cannot be empty" }, { status: 400 });
+      }
+      const [cTask] = await db.select().from(tasks).where(eq(tasks.id, Number(taskId)));
+      if (!cTask) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      if (
+        !canViewAllEmployeeProfiles(currentUser.role) &&
+        currentUser.role !== "Project Manager" &&
+        cTask.assignedTo !== currentUser.employeeId &&
+        !cTask.isCompanyWide
+      ) {
+        return NextResponse.json({ error: "à¦…à¦¨à§à¦¯à§‡à¦° à¦Ÿà¦¾à¦¸à§à¦•à§‡ à¦®à¦¨à§à¦¤à¦¬à§à¦¯à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
+      }
+      const [c] = await db
+        .insert(taskComments)
+        .values({
+          taskId: Number(taskId),
+          userId: currentUser.id,
+          authorName: currentUser.name,
+          actorEmployeeId: currentUser.employeeId,
+          actorDesignation: currentUser.designation,
+          comment,
+          actionType: "Comment",
+          eventType: "TASK_COMMENT",
+        })
+        .returning();
+      return NextResponse.json({ success: true, comment: c });
     }
 
     // =========================================================================
@@ -2012,443 +2331,392 @@ export async function POST(req: NextRequest) {
         whatsapp,
         location,
         source,
-        priority,
-        status,
-        requirement,
-        budget,
-        assignedStaffId,
-        nextFollowUpDate,
-        // IBDC fields
         service,
+        requirement,
         landSize,
         roadWidth,
-        // IREL fields
+        budget,
+        // Real Estate specific fields
         propertyType,
         projectName,
-        unitNo,
+        unitFlatShop,
         preferredLocation,
-        propertySize,
+        size,
         floor,
         bedrooms,
         purpose,
         expectedPurchaseDate,
+        clientRequirement,
+        priority,
+        assignedStaffId,
+        nextFollowUpDate,
       } = body;
 
       if (!name || !phone) {
-        return NextResponse.json(
-          { error: "Lead Name and Phone are required" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Lead Name and Phone are required" }, { status: 400 });
       }
 
-      const allComps = await db.select().from(companies);
-      const targetCompany =
-        allComps.find((c) => c.id === Number(companyId)) ||
-        allComps.find((c) => c.code === COMPANY_IBDC);
-
-      if (!targetCompany) {
+      const resolvedCompany = companyId === "IREL" ? "IREL" : "IBDC";
+      const access = leadCompanyAccess(currentUser);
+      if (access !== "BOTH" && access !== resolvedCompany) {
         return NextResponse.json(
-          { error: "Invalid business unit. Select IBDC or IREL." },
-          { status: 400 }
-        );
-      }
-
-      // Security (Part 11 & 12): Strictly verify if user can create leads for this business unit
-      if (!canAccessMarketingLeads(currentUser, targetCompany.code)) {
-        return NextResponse.json(
-          { error: `403 Forbidden: ${targetCompany.shortName}-এর লিড ডাটাবেজ অ্যাক্সেস করার অনুমতি আপনার নেই।` },
+          { error: "à¦à¦‡ à¦•à§‹à¦®à§à¦ªà¦¾à¦¨à¦¿à¦° à¦²à¦¿à¦¡ à¦¤à§ˆà¦°à¦¿/à¦¦à§‡à¦–à¦¾à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" },
           { status: 403 }
         );
       }
-
-      const isIbdc = targetCompany.code === COMPANY_IBDC;
 
       // STRICT BUSINESS-UNIT CATEGORY SEPARATION
-      if (isIbdc) {
-        if (!service || !IBDC_SERVICE_TYPES.includes(service)) {
-          return NextResponse.json(
-            {
-              error: `Invalid Service Type for ${targetCompany.shortName}. Allowed: ${IBDC_SERVICE_TYPES.join(", ")}`,
-            },
-            { status: 400 }
-          );
-        }
-        if (propertyType && IREL_PROPERTY_TYPES.includes(propertyType)) {
-          return NextResponse.json(
-            {
-              error:
-                "Data Separation Violation: Real Estate property types cannot be used for Building Design leads.",
-            },
-            { status: 400 }
-          );
-        }
-      } else {
-        if (!propertyType || !IREL_PROPERTY_TYPES.includes(propertyType)) {
-          return NextResponse.json(
-            {
-              error: `Invalid Property Type for ${targetCompany.shortName}. Allowed: ${IREL_PROPERTY_TYPES.join(", ")}`,
-            },
-            { status: 400 }
-          );
-        }
-        if (service && IBDC_SERVICE_TYPES.includes(service) && service !== "Other") {
-          return NextResponse.json(
-            {
-              error:
-                "Data Separation Violation: Building Design services (e.g. RAJUK Approval) cannot be used for Real Estate leads.",
-            },
-            { status: 400 }
-          );
-        }
-      }
+      const IBDC_SERVICES = [
+        "Architectural Design",
+        "Structural Design",
+        "Electrical Design",
+        "Plumbing Design",
+        "Costing & Estimating",
+        "RAJUK Plan Approval",
+        "Plan Design + RAJUK Approval",
+        "Interior Design",
+        "3D Visualization & VR",
+        "3D View",
+        "Construction Management",
+        "Package Building Work",
+        "Documents",
+        "Other",
+      ];
+      const IREL_PROPERTY_TYPES = [
+        "Flat",
+        "Shop",
+        "Office Space",
+        "Commercial Space",
+        "Apartment",
+        "Land/Plot",
+        "Investment",
+        "Project",
+        "Other",
+      ];
 
-      const finalPriority = LEAD_PRIORITIES.includes(priority) ? priority : "Warm";
-      const finalStatus = LEAD_STATUSES.includes(status) ? status : "New";
-      const budgetNum = Number(budget || 0);
-      if (budgetNum < 0) {
-        return NextResponse.json(
-          { error: "Budget cannot be negative" },
-          { status: 400 }
-        );
-      }
-
-      const companyLeads = (await db.select().from(leads)).filter(
-        (l) => l.companyId === targetCompany.id
-      );
-      const leadCode = `${targetCompany.leadPrefix}-${String(
-        companyLeads.length + 1
-      ).padStart(4, "0")}`;
-
-      const [lead] = await db
-        .insert(leads)
-        .values({
-          leadCode,
-          companyId: targetCompany.id,
-          name,
-          phone,
-          whatsapp: whatsapp || phone,
-          location: location || "",
-          source: source || "Direct",
-          priority: finalPriority,
-          service: isIbdc ? service : "",
-          landSize: isIbdc ? landSize || "" : "",
-          roadWidth: isIbdc ? roadWidth || "" : "",
-          propertyType: isIbdc ? "" : propertyType,
-          projectName: isIbdc ? "" : projectName || "",
-          unitNo: isIbdc ? "" : unitNo || "",
-          preferredLocation: isIbdc ? "" : preferredLocation || "",
-          propertySize: isIbdc ? "" : propertySize || "",
-          floor: isIbdc ? "" : floor || "",
-          bedrooms: isIbdc ? "" : bedrooms || "",
-          purpose: isIbdc ? "" : purpose || "",
-          expectedPurchaseDate: isIbdc ? null : expectedPurchaseDate || null,
-          requirement: requirement || "",
-          budget: budgetNum.toFixed(2),
-          status: finalStatus,
-          assignedStaffId: assignedStaffId
-            ? Number(assignedStaffId)
-            : currentUser.employeeId,
-          nextFollowUpDate: nextFollowUpDate || today,
-          nextFollowUpTime: body.nextFollowUpTime || "10:00",
-          followUpCount: 0,
-          lastContactDate: null,
-          lastOutcome: "",
-          reminder1: body.reminder1 || "",
-          reminder2: body.reminder2 || "",
-          reminder3: body.reminder3 || "",
-        })
-        .returning();
-
-      await logAudit({
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userRole: currentUser.role,
-        action: "CREATE",
-        entity: "Lead",
-        recordId: lead.leadCode,
-        afterData: { company: targetCompany.code, ...lead },
-      });
-
-      return NextResponse.json({ success: true, lead });
-    }
-
-    if (action === "updateLeadStatusPriority") {
-      const { leadId, status, priority, nextFollowUpDate } = body;
-      const [existingLead] = await db
-        .select()
-        .from(leads)
-        .where(eq(leads.id, Number(leadId)));
-      if (!existingLead) {
-        return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-      }
-
-      const allComps = await db.select().from(companies);
-      const targetCompany = allComps.find((c) => c.id === existingLead.companyId);
-      if (targetCompany && !canAccessMarketingLeads(currentUser, targetCompany.code)) {
-        return NextResponse.json(
-          { error: `403 Forbidden: ${targetCompany.shortName}-এর লিড ডাটাবেজ অ্যাক্সেস করার অনুমতি আপনার নেই।` },
-          { status: 403 }
-        );
-      }
-
-      if (status && !LEAD_STATUSES.includes(status)) {
-        return NextResponse.json({ error: "Invalid lead status" }, { status: 400 });
-      }
-      if (priority && !LEAD_PRIORITIES.includes(priority)) {
-        return NextResponse.json({ error: "Invalid lead priority" }, { status: 400 });
-      }
-
-      const [updated] = await db
-        .update(leads)
-        .set({
-          status: status || existingLead.status,
-          priority: priority || existingLead.priority,
-          nextFollowUpDate: nextFollowUpDate || existingLead.nextFollowUpDate,
-        })
-        .where(eq(leads.id, existingLead.id))
-        .returning();
-
-      await logAudit({
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userRole: currentUser.role,
-        action: "UPDATE",
-        entity: "Lead",
-        recordId: existingLead.leadCode,
-        beforeData: { status: existingLead.status, priority: existingLead.priority },
-        afterData: { status: updated.status, priority: updated.priority },
-      });
-
-      return NextResponse.json({ success: true, lead: updated });
-    }
-
-    if (action === "addLeadFollowup") {
-      // UNLIMITED REPEATED FOLLOW-UP — NEVER overwrite history, always append.
-      const {
-        leadId,
-        method,
-        outcome,
-        clientResponse,
-        note,
-        nextFollowUpDate,
-        nextFollowUpTime,
-        attachments,
-        newStatus,
-        // legacy aliases still accepted
-        discussion,
-        nextAction,
-        result,
-      } = body;
-
-      if (!leadId) {
-        return NextResponse.json({ error: "Lead is required" }, { status: 400 });
-      }
-
-      const [lead] = await db
-        .select()
-        .from(leads)
-        .where(eq(leads.id, Number(leadId)));
-      if (!lead) {
-        return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-      }
-
-      const allComps = await db.select().from(companies);
-      const targetCompany = allComps.find((c) => c.id === lead.companyId);
-      if (targetCompany && !canAccessMarketingLeads(currentUser, targetCompany.code)) {
-        return NextResponse.json(
-          { error: `403 Forbidden: ${targetCompany.shortName}-এর লিড ডাটাবেজ অ্যাক্সেস করার অনুমতি আপনার নেই।` },
-          { status: 403 }
-        );
-      }
-
-      const finalMethod = FOLLOWUP_METHODS.includes(method) ? method : "Phone Call";
-      const finalOutcome = FOLLOWUP_OUTCOMES.includes(outcome)
-        ? outcome
-        : FOLLOWUP_OUTCOMES.includes(result)
-        ? result
-        : "Contacted";
-      const finalNote = note || discussion || "";
-      const finalResponse = clientResponse || nextAction || "";
-
-      if (!finalNote.trim()) {
-        return NextResponse.json(
-          { error: "Staff Note / discussion is required for every follow-up" },
-          { status: 400 }
-        );
-      }
-
-      // Resolve the new lead status from the outcome (No Response / Call Back
-      // Later keep the lead ACTIVE — it must never auto-convert to Lost).
-      const resolvedStatus =
-        newStatus && LEAD_STATUSES.includes(newStatus)
-          ? newStatus
-          : OUTCOME_TO_STATUS[finalOutcome] || "Follow-up Required";
-
-      const isClosed = LEAD_CLOSED_STATUSES.includes(resolvedStatus);
-
-      // Next Follow-up is MANDATORY unless the lead is Won / Lost / On Hold
-      if (!isClosed && !nextFollowUpDate) {
+      if (resolvedCompany === "IREL" && service && service !== "Other" && IBDC_SERVICES.includes(service)) {
         return NextResponse.json(
           {
-            error:
-              "Next Follow-up Date is required. Active leads (not Won/Lost/On Hold) must always have the next follow-up scheduled so they are never forgotten.",
+            error: `Data Separation Violation: "${service}" is a Building Design (IBDC) service and cannot be used for an Insaf Real Estate Ltd. lead. Please select a Property Interest such as Flat, Shop or Land/Plot.`,
           },
           { status: 400 }
         );
       }
 
-      if (nextFollowUpDate && nextFollowUpDate < today) {
+      if (resolvedCompany === "IBDC" && propertyType && propertyType !== "Other" && IREL_PROPERTY_TYPES.includes(propertyType)) {
         return NextResponse.json(
-          { error: "Next Follow-up Date cannot be in the past" },
+          {
+            error: `Data Separation Violation: "${propertyType}" is a Real Estate (IREL) property type and cannot be used for an Insaf Building Design & Consultant Ltd. lead. Please select a Building Design Service.`,
+          },
           { status: 400 }
         );
       }
 
-      const existingFollowups = (await db.select().from(leadFollowups)).filter(
-        (f) => f.leadId === lead.id
-      );
-      const nextNumber = existingFollowups.length + 1;
+      const existing = await db.select().from(leads);
+      const leadCode = `LEAD-${String(existing.length + 1).padStart(4, "0")}`;
+
+      const finalService =
+        resolvedCompany === "IBDC"
+          ? IBDC_SERVICES.includes(service)
+            ? service
+            : "Other"
+          : "Other";
+      const finalPropertyType =
+        resolvedCompany === "IREL"
+          ? IREL_PROPERTY_TYPES.includes(propertyType)
+            ? propertyType
+            : "Other"
+          : "Other";
+
+      const [lead] = await db
+        .insert(leads)
+        .values({
+          leadCode,
+          companyId: resolvedCompany === 'IREL' ? 2 : 1,
+          name,
+          phone,
+          whatsapp: whatsapp || phone,
+          location: location || "",
+          source: source || "Direct",
+          service: finalService,
+          propertyType: finalPropertyType,
+          projectName: resolvedCompany === "IREL" ? projectName || "" : "",
+          unitFlatShop: resolvedCompany === "IREL" ? unitFlatShop || "" : "",
+          preferredLocation: resolvedCompany === "IREL" ? preferredLocation || "" : "",
+          size: resolvedCompany === "IREL" ? size || "" : "",
+          floor: resolvedCompany === "IREL" ? floor || "" : "",
+          bedrooms: resolvedCompany === "IREL" ? bedrooms || "" : "",
+          purpose: resolvedCompany === "IREL" ? purpose || "" : "",
+          expectedPurchaseDate:
+            resolvedCompany === "IREL" ? expectedPurchaseDate || "" : "",
+          clientRequirement: resolvedCompany === "IREL" ? clientRequirement || "" : "",
+          requirement: resolvedCompany === "IBDC" ? requirement || "" : "",
+          landSize: resolvedCompany === "IBDC" ? landSize || "" : "",
+          roadWidth: resolvedCompany === "IBDC" ? roadWidth || "" : "",
+          budget: Number(budget || 0).toFixed(2),
+          priority: ["Hot", "Warm", "Cold"].includes(priority) ? priority : "Warm",
+          status: "New",
+          assignedStaffId: assignedStaffId
+            ? Number(assignedStaffId)
+            : currentUser.employeeId,
+          nextFollowUpDate: nextFollowUpDate || today,
+        })
+        .returning();
+
+      return NextResponse.json({ success: true, lead });
+    }
+
+    if (action === "addLeadFollowup") {
+      // =========================================================================
+      // UNLIMITED, APPEND-ONLY FOLLOW-UP ENGINE
+      // Never overwrites history. Stores follow-up number, method, outcome,
+      // client response, staff note, next date/time and attachment.
+      // =========================================================================
+      const {
+        leadId,
+        contactMethod,
+        outcome,
+        clientResponse,
+        note,
+        nextAction,
+        nextFollowUpDate,
+        nextFollowUpTime,
+        attachment,
+        newStatus,
+      } = body;
+
+      if (!leadId || !note || !outcome || !contactMethod) {
+        return NextResponse.json(
+          { error: "Contact Method, Outcome and Staff Note are required" },
+          { status: 400 }
+        );
+      }
+
+      const [lead] = await db.select().from(leads).where(eq(leads.id, Number(leadId)));
+      if (!lead) {
+        return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+      }
+
+      const VALID_METHODS = [
+        "Phone Call", "WhatsApp", "Facebook", "SMS", "Email",
+        "Meeting", "Office Visit", "Site Visit", "Other",
+      ];
+      const VALID_OUTCOMES = [
+        "No Response", "Contacted", "Interested", "Qualified", "Need More Information",
+        "Quotation Sent", "Negotiating", "Call Back Later", "Not Interested",
+        "Won", "Lost", "Other",
+      ];
+      const CLOSED = ["Won", "Lost", "Not Interested"];
+
+      const method = VALID_METHODS.includes(contactMethod) ? contactMethod : "Phone Call";
+      const resolvedOutcome = VALID_OUTCOMES.includes(outcome) ? outcome : "Contacted";
+      const isClosed = CLOSED.includes(resolvedOutcome);
+      const leadOnHold = lead.status === "On Hold";
+
+      // Rule 3 & 12: Next Follow-up Date is REQUIRED for active leads
+      if (!isClosed && !leadOnHold && !nextFollowUpDate) {
+        return NextResponse.json(
+          {
+            error:
+              "Next Follow-up Date is required. Active leads must always have a next follow-up scheduled so they are never forgotten.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const existingFollowUps = await db
+        .select()
+        .from(leadFollowups)
+        .where(eq(leadFollowups.leadId, Number(leadId)));
+      const followUpNumber = existingFollowUps.length + 1;
       const nowTime = new Date().toTimeString().slice(0, 5);
 
       const [f] = await db
         .insert(leadFollowups)
         .values({
-          leadId: lead.id,
-          followupNumber: nextNumber,
+          leadId: Number(leadId),
+          followUpNumber,
           staffId: currentUser.employeeId,
           staffName: currentUser.name,
           date: today,
           time: nowTime,
-          method: finalMethod,
-          outcome: finalOutcome,
-          clientResponse: finalResponse,
-          note: finalNote,
-          // legacy columns kept populated for backward compatibility
-          discussion: finalNote,
-          nextAction: finalResponse || finalOutcome,
-          result: finalOutcome,
+          contactMethod: method,
+          outcome: resolvedOutcome,
+          clientResponse: clientResponse || "",
+          discussion: note,
+          nextAction: nextAction || (isClosed ? "No further follow-up" : "Follow up as scheduled"),
           nextFollowUpDate: isClosed ? null : nextFollowUpDate,
-          nextFollowUpTime: isClosed ? null : nextFollowUpTime || "10:00",
-          attachments: Array.isArray(attachments) ? attachments : [],
+          nextFollowUpTime: nextFollowUpTime || "10:00",
+          attachmentName: attachment?.name || null,
+          attachmentType: attachment?.type || null,
+          attachmentSize: attachment?.size || null,
+          attachmentUrl: attachment?.url || null,
+          reminderKey: isClosed ? null : `FU-${leadId}-${followUpNumber}`,
+          reminderNotified: false,
+          result: resolvedOutcome,
         })
         .returning();
 
-      const [updatedLead] = await db
+      let nextStatus = newStatus;
+      if (!nextStatus) {
+        if (isClosed) nextStatus = resolvedOutcome === "Won" ? "Won" : "Lost";
+        else if (resolvedOutcome === "Qualified") nextStatus = "Qualified";
+        else if (resolvedOutcome === "Quotation Sent") nextStatus = "Quotation";
+        else if (resolvedOutcome === "Negotiating") nextStatus = "Negotiating";
+        else if (resolvedOutcome === "Contacted") nextStatus = "Contacted";
+        else nextStatus = "Follow-up";
+      }
+
+      await db
         .update(leads)
         .set({
-          status: resolvedStatus,
+          status: nextStatus,
           lastContactDate: today,
-          lastOutcome: finalOutcome,
-          followUpCount: nextNumber,
           nextFollowUpDate: isClosed ? null : nextFollowUpDate,
-          nextFollowUpTime: isClosed ? null : nextFollowUpTime || "10:00",
-          lastReminderNotifiedDate: null, // allow a fresh reminder for the new date
+          nextFollowUpTime: nextFollowUpTime || "10:00",
         })
-        .where(eq(leads.id, lead.id))
-        .returning();
+        .where(eq(leads.id, lead.id));
 
-      // Reminder / notification for the newly scheduled follow-up
-      if (!isClosed && nextFollowUpDate) {
-        await createNotification({
-          targetRole: "All",
-          type: "Follow-up Due",
-          title: `Follow-up #${nextNumber + 1} scheduled: ${lead.name}`,
-          message: `${finalOutcome} via ${finalMethod}. Next follow-up on ${nextFollowUpDate} at ${
-            nextFollowUpTime || "10:00"
-          }. Note: ${finalNote}`,
-          createdBy: currentUser.name,
-          priority: lead.priority === "Hot" ? "High" : "Medium",
-          assignedPersonOrTeam: currentUser.name,
-          dueDate: nextFollowUpDate,
-          relatedUrl: "/leads",
-          relatedEntityCode: lead.leadCode,
-        });
-      } else if (isClosed) {
-        await createNotification({
-          targetRole: "Manager",
-          type: "Project Update",
-          title: `Lead ${resolvedStatus}: ${lead.name} (${lead.leadCode})`,
-          message: `${currentUser.name} closed this lead as ${resolvedStatus} after ${nextNumber} follow-up(s). Final note: ${finalNote}`,
-          createdBy: currentUser.name,
-          relatedUrl: "/leads",
-          relatedEntityCode: lead.leadCode,
-        });
-      }
+      await createNotification({
+        targetRole: "All",
+        type: resolvedOutcome === "Won" ? "Project Update" : "Follow-up Due",
+        title: isClosed
+          ? `Lead ${resolvedOutcome}: ${lead.name} (${lead.leadCode})`
+          : `Follow-up #${followUpNumber} logged for ${lead.name}`,
+        message: isClosed
+          ? `${lead.name} (${lead.leadCode}) marked ${resolvedOutcome} by ${currentUser.name} after ${followUpNumber} follow-up(s).`
+          : `${lead.name} (${lead.leadCode}) â€” ${method} â€¢ ${resolvedOutcome}. Next follow-up: ${nextFollowUpDate} ${nextFollowUpTime || "10:00"}. ${clientResponse || note}`,
+        createdBy: currentUser.name,
+        priority: lead.priority,
+        assignedPersonOrTeam: lead.name,
+        dueDate: isClosed ? null : nextFollowUpDate,
+        relatedUrl: "/leads",
+        relatedEntityCode: lead.leadCode,
+      });
 
       await logAudit({
         userId: currentUser.id,
         userName: currentUser.name,
         userRole: currentUser.role,
-        action: "LEAD_FOLLOWUP",
-        entity: "Lead",
-        recordId: lead.leadCode,
+        action: "FOLLOW_UP_CREATE",
+        entity: "LeadFollowup",
+        recordId: `${lead.leadCode}-FU-${followUpNumber}`,
         beforeData: {
           status: lead.status,
-          followUpCount: lead.followUpCount,
           nextFollowUpDate: lead.nextFollowUpDate,
+          followUpCount: existingFollowUps.length,
         },
         afterData: {
-          followupNumber: nextNumber,
-          method: finalMethod,
-          outcome: finalOutcome,
-          status: resolvedStatus,
+          followUpNumber,
+          contactMethod: method,
+          outcome: resolvedOutcome,
+          clientResponse: clientResponse || "",
+          note,
           nextFollowUpDate: isClosed ? null : nextFollowUpDate,
+          nextFollowUpTime: nextFollowUpTime || "10:00",
+          newStatus: nextStatus,
         },
       });
 
-      return NextResponse.json({ success: true, followup: f, lead: updatedLead });
+      return NextResponse.json({ success: true, followup: f });
     }
 
-    // Dispatch due / overdue follow-up reminders (no duplicates per day)
-    if (action === "runFollowUpReminders") {
-      const allLeadsForRem = await db.select().from(leads);
-      let dueCount = 0;
-      let overdueCount = 0;
+    if (action === "updateLeadStatus") {
+      const { leadId, status } = body;
+      if (!leadId || !status) {
+        return NextResponse.json({ error: "Lead ID and Status are required" }, { status: 400 });
+      }
+      const [lead] = await db.select().from(leads).where(eq(leads.id, Number(leadId)));
+      if (!lead) {
+        return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+      }
 
-      for (const l of allLeadsForRem) {
-        if (
-          !l.nextFollowUpDate ||
-          LEAD_CLOSED_STATUSES.includes(l.status) ||
-          l.lastReminderNotifiedDate === today // already notified today
-        ) {
-          continue;
-        }
+      await db
+        .update(leads)
+        .set({
+          status,
+          nextFollowUpDate:
+            status === "Won" || status === "Lost" || status === "On Hold"
+              ? null
+              : lead.nextFollowUpDate,
+        })
+        .where(eq(leads.id, lead.id));
 
-        const isDueToday = l.nextFollowUpDate === today;
-        const isOverdue = l.nextFollowUpDate < today;
-        if (!isDueToday && !isOverdue) continue;
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "LEAD_STATUS_UPDATE",
+        entity: "Lead",
+        recordId: lead.leadCode,
+        beforeData: { status: lead.status },
+        afterData: { status },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === "sendFollowUpReminders") {
+      // Idempotent follow-up reminders (never duplicated for the same follow-up)
+      const allLeadRows = await db.select().from(leads);
+      const allFollowUps = await db.select().from(leadFollowups);
+      const allEmpRows = await db.select().from(employees);
+      const empNameMap = new Map(allEmpRows.map((e) => [e.id, e.name]));
+
+      let dueToday = 0;
+      let overdueSent = 0;
+
+      for (const lead of allLeadRows) {
+        if (!lead.nextFollowUpDate) continue;
+        if (["Won", "Lost", "On Hold"].includes(lead.status)) continue;
+
+        const isToday = lead.nextFollowUpDate === today;
+        const isOverdue = lead.nextFollowUpDate < today;
+        if (!isToday && !isOverdue) continue;
+
+        const leadFUs = allFollowUps
+          .filter((f) => f.leadId === lead.id)
+          .sort((a, b) => b.followUpNumber - a.followUpNumber);
+        const latest = leadFUs[0];
+        if (latest && latest.reminderNotified) continue;
 
         const daysOverdue = isOverdue
-          ? daysBetween(l.nextFollowUpDate, today)
+          ? Math.round(
+              (new Date(today).getTime() - new Date(lead.nextFollowUpDate).getTime()) / 86400000
+            )
           : 0;
 
         await createNotification({
           targetRole: "All",
-          type: isOverdue ? "Task Overdue" : "Follow-up Due",
+          type: isOverdue ? "Approval Required" : "Follow-up Due",
           title: isOverdue
-            ? `Follow-up overdue: ${l.name} — ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue`
-            : `Follow-up due today: ${l.name}`,
-          message: `${l.leadCode} • ${l.phone} • Priority: ${l.priority} • Status: ${l.status} • Total follow-ups so far: ${l.followUpCount}`,
+            ? `Follow-up overdue: ${lead.name} â€” ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue`
+            : `Follow-up due today: ${lead.name}`,
+          message: isOverdue
+            ? `${lead.name} (${lead.leadCode}) was scheduled for follow-up on ${lead.nextFollowUpDate} and is now ${daysOverdue} day(s) overdue. Assigned to ${empNameMap.get(lead.assignedStaffId || 0) || "Unassigned"}.`
+            : `${lead.name} (${lead.leadCode}) is due for follow-up today (${lead.nextFollowUpDate} ${lead.nextFollowUpTime}). Priority: ${lead.priority}.`,
           createdBy: "Follow-up Automation",
-          priority: isOverdue || l.priority === "Hot" ? "Critical" : "High",
-          assignedPersonOrTeam: "CRM Team",
-          dueDate: l.nextFollowUpDate,
+          priority: lead.priority,
+          assignedPersonOrTeam: lead.name,
+          dueDate: lead.nextFollowUpDate,
           relatedUrl: "/leads",
-          relatedEntityCode: l.leadCode,
+          relatedEntityCode: lead.leadCode,
         });
 
-        await db
-          .update(leads)
-          .set({ lastReminderNotifiedDate: today })
-          .where(eq(leads.id, l.id));
+        if (latest) {
+          await db
+            .update(leadFollowups)
+            .set({ reminderNotified: true })
+            .where(eq(leadFollowups.id, latest.id));
+        }
 
-        if (isOverdue) overdueCount++;
-        else dueCount++;
+        if (isToday) dueToday++;
+        else overdueSent++;
       }
 
       return NextResponse.json({
         success: true,
-        dispatched: { dueToday: dueCount, overdue: overdueCount },
+        dispatched: { dueToday, overdue: overdueSent },
       });
     }
 
@@ -2457,15 +2725,6 @@ export async function POST(req: NextRequest) {
       const [lead] = await db.select().from(leads).where(eq(leads.id, Number(leadId)));
       if (!lead) {
         return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-      }
-
-      const allComps = await db.select().from(companies);
-      const targetCompany = allComps.find((c) => c.id === lead.companyId);
-      if (targetCompany && !canAccessMarketingLeads(currentUser, targetCompany.code)) {
-        return NextResponse.json(
-          { error: `403 Forbidden: ${targetCompany.shortName}-এর লিড রূপান্তর করার অনুমতি আপনার নেই।` },
-          { status: 403 }
-        );
       }
 
       const existingClients = await db.select().from(clients);
@@ -2921,7 +3180,7 @@ export async function POST(req: NextRequest) {
         targetRole: "Manager",
         type: "Purchase Request",
         title: `New Site Purchase Request: ${prCode}`,
-        message: `Estimated value: ৳${totalEstimated.toLocaleString()} requested by ${currentUser.name}.`,
+        message: `Estimated value: à§³${totalEstimated.toLocaleString()} requested by ${currentUser.name}.`,
         relatedUrl: "/purchase-orders",
         relatedEntityCode: prCode,
       });
@@ -3449,7 +3708,7 @@ export async function POST(req: NextRequest) {
           if (!inv) throw new Error("Invoice not found");
           if (amt > Number(inv.outstandingAmount) + 0.01) {
             throw new Error(
-              `Payment (৳${amt}) exceeds invoice outstanding balance (৳${inv.outstandingAmount})`
+              `Payment (à§³${amt}) exceeds invoice outstanding balance (à§³${inv.outstandingAmount})`
             );
           }
 
@@ -3839,17 +4098,7 @@ export async function POST(req: NextRequest) {
     // 14. LEAVE MANAGEMENT (Auto-reflects in Attendance when Approved)
     // =========================================================================
     if (action === "applyLeave") {
-      if (
-        !canViewAllEmployeeProfiles(currentUser.role) &&
-        body.employeeId &&
-        Number(body.employeeId) !== currentUser.employeeId
-      ) {
-        return NextResponse.json(
-          { error: "403 Forbidden: অন্য কর্মকর্তার ছুটির আবেদন করা সম্পূর্ণ নিষিদ্ধ।" },
-          { status: 403 }
-        );
-      }
-      const employeeId = Number(currentUser.employeeId || body.employeeId || 1);
+      const employeeId = Number(body.employeeId || currentUser.employeeId || 1);
       const { leaveType, startDate, endDate, totalDays, reason } = body;
       if (!leaveType || !startDate || !endDate || !reason) {
         return NextResponse.json({ error: "All leave application fields required" }, { status: 400 });
@@ -3942,6 +4191,9 @@ export async function POST(req: NextRequest) {
     // =========================================================================
     // 15. PERFORMANCE REVIEW (Real Activity Calculation)
     // =========================================================================
+    if (action === "generatePerformanceReview" && !isManagementRole(currentUser.role) && currentUser.role !== "HR") {
+      return NextResponse.json({ error: "à¦ªà¦¾à¦°à¦«à¦°à¦®à§à¦¯à¦¾à¦¨à§à¦¸ à¦°à¦¿à¦­à¦¿à¦‰ à¦¦à§‡à¦“à¦¯à¦¼à¦¾à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
+    }
     if (action === "generatePerformanceReview") {
       const { employeeId, period, managerReviewPoints, managerComments } = body;
       const empId = Number(employeeId);
@@ -4044,15 +4296,19 @@ export async function POST(req: NextRequest) {
     // =========================================================================
     if (action === "markNotificationRead") {
       const { notificationId } = body;
-      await db
-        .update(notifications)
-        .set({ isRead: true })
-        .where(eq(notifications.id, Number(notificationId)));
+      const [n] = await db.select().from(notifications).where(eq(notifications.id, Number(notificationId)));
+      if (!n) return NextResponse.json({ error: "Notification not found" }, { status: 404 });
+      const mgmtOrHr = isManagementRole(currentUser.role) || currentUser.role === "HR";
+      if (n.userId !== null ? n.userId !== currentUser.id : !mgmtOrHr) {
+        return NextResponse.json({ error: "à¦à¦‡ à¦¨à§‹à¦Ÿà¦¿à¦«à¦¿à¦•à§‡à¦¶à¦¨ à¦†à¦ªà¦¨à¦¾à¦° à¦¨à¦¯à¦¼à¥¤" }, { status: 403 });
+      }
+      await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, n.id));
       return NextResponse.json({ success: true });
     }
 
     if (action === "markAllNotificationsRead") {
-      await db.update(notifications).set({ isRead: true });
+      // Only the caller's own notifications
+      await db.update(notifications).set({ isRead: true }).where(eq(notifications.userId, currentUser.id));
       return NextResponse.json({ success: true });
     }
 
@@ -4145,7 +4401,7 @@ export async function POST(req: NextRequest) {
           targetRole: "All",
           type: "Work Plan Reminder",
           title: `Work Plan Reminder (${settings?.workPlanReminderTime || "10:00"} AM)`,
-          message: `আজকের Today's Work Plan এখনও সাবমিট করেননি: ${missingPlanNames.join(", ")}। অনুগ্রহ করে My Day-তে পরিকল্পনা যুক্ত করুন।`,
+          message: `à¦†à¦œà¦•à§‡à¦° Today's Work Plan à¦à¦–à¦¨à¦“ à¦¸à¦¾à¦¬à¦®à¦¿à¦Ÿ à¦•à¦°à§‡à¦¨à¦¨à¦¿: ${missingPlanNames.join(", ")}à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ My Day-à¦¤à§‡ à¦ªà¦°à¦¿à¦•à¦²à§à¦ªà¦¨à¦¾ à¦¯à§à¦•à§à¦¤ à¦•à¦°à§à¦¨à¥¤`,
           createdBy: "Reminder Automation",
           priority: "High",
           assignedPersonOrTeam: "All Staff",
@@ -4160,7 +4416,7 @@ export async function POST(req: NextRequest) {
           targetRole: "All",
           type: "Daily Work Reminder",
           title: `Daily Work Summary Reminder (${settings?.dailySummaryReminderTime || "18:30"} PM)`,
-          message: `অফিস শেষ হওয়ার আগে আজকের কাজের সারাংশ (Daily Work Summary) সাবমিট করুন। পেন্ডিং: ${missingSummaryNames.join(", ")}`,
+          message: `à¦…à¦«à¦¿à¦¸ à¦¶à§‡à¦· à¦¹à¦“à§Ÿà¦¾à¦° à¦†à¦—à§‡ à¦†à¦œà¦•à§‡à¦° à¦•à¦¾à¦œà§‡à¦° à¦¸à¦¾à¦°à¦¾à¦‚à¦¶ (Daily Work Summary) à¦¸à¦¾à¦¬à¦®à¦¿à¦Ÿ à¦•à¦°à§à¦¨à¥¤ à¦ªà§‡à¦¨à§à¦¡à¦¿à¦‚: ${missingSummaryNames.join(", ")}`,
           createdBy: "Reminder Automation",
           priority: "High",
           assignedPersonOrTeam: "All Staff",
@@ -4175,7 +4431,7 @@ export async function POST(req: NextRequest) {
           targetRole: "All",
           type: "Attendance Correction",
           title: `IN TIME Reminder (After ${settings?.lateCheckInAfter || "09:30"} AM)`,
-          message: `${missingCheckInNames.join(", ")} এখনও আজকের IN TIME দেননি।`,
+          message: `${missingCheckInNames.join(", ")} à¦à¦–à¦¨à¦“ à¦†à¦œà¦•à§‡à¦° IN TIME à¦¦à§‡à¦¨à¦¨à¦¿à¥¤`,
           createdBy: "Reminder Automation",
           priority: "Medium",
           assignedPersonOrTeam: "All Staff",
@@ -4224,3 +4480,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
+
+
+

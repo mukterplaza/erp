@@ -50,8 +50,10 @@ export async function createNotification(params: {
   relatedTaskId?: number | null;
   relatedUrl: string;
   relatedEntityCode?: string;
+  category?: string | null;
 }) {
   await db.insert(notifications).values({
+    category: params.category ?? null,
     userId: params.userId ?? null,
     targetRole: params.targetRole || "All",
     type: params.type,
