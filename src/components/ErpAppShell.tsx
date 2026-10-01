@@ -35,6 +35,7 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
+  TrendingUp,  // ⭐ NEW: Added for Executive Dashboard
 } from "lucide-react";
 
 import {
@@ -44,10 +45,10 @@ import {
   TasksView,
 } from "./modules/OperationsViews";
 import {
-
   LeaveView,
   PayrollView,
   PerformanceView,
+  ExecutivePayrollDashboard,  // ⭐ NEW: Import Executive Dashboard
 } from "./modules/HrPayrollViews";
 import {
   ClientsAndQuotationsView,
@@ -118,6 +119,7 @@ const NAV_GROUPS = [
     items: [
       { label: "কর্মচারী", href: "/employees", icon: Users },
       { label: "পে-রোল", href: "/payroll", icon: DollarSign },
+      { label: "Executive Dashboard", href: "/executive-payroll", icon: TrendingUp, execOnly: true },  // ⭐ NEW: execOnly flag
       { label: "ছুটি", href: "/leave", icon: Calendar },
       { label: "পারফরম্যান্স", href: "/performance", icon: Award },
     ],
@@ -204,7 +206,18 @@ export default function ErpAppShell({
     router.push("/login");
   }
 
-
+  // ⭐ NEW: Helper to check if user can access Executive Dashboard
+  const canViewExecutive = (role: string) => {
+    return [
+      "Owner",
+      "Chairman",
+      "MD",
+      "Admin",
+      "Manager",
+      "HR",
+      "Accounts",
+    ].includes(role);
+  };
 
   if (loading) {
     return (
@@ -225,7 +238,6 @@ export default function ErpAppShell({
   }
 
   const unreadCount = (data.notifications || []).filter(
-     
     (n: any) => !n.isRead
   ).length;
 
@@ -280,6 +292,26 @@ export default function ErpAppShell({
     }
     if (activeRoute === "/payroll") {
       return <PayrollView data={data} onMutate={handleMutate} />;
+    }
+    // ⭐ NEW: Executive Payroll Dashboard
+    if (activeRoute === "/executive-payroll") {
+      if (!canViewExecutive(data.currentUser.role)) {
+        return (
+          <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-8 text-center space-y-3">
+            <h2 className="text-xl font-bold text-rose-900">403 Forbidden</h2>
+            <p className="text-xs text-rose-700 max-w-xl mx-auto">
+              Executive Dashboard শুধুমাত্র Owner, MD, Chairman, Admin, Manager, HR ও Accounts এর জন্য।
+            </p>
+            <Link
+              href="/dashboard"
+              className="inline-block px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-semibold min-h-[44px]"
+            >
+              ড্যাশবোর্ডে ফিরুন
+            </Link>
+          </div>
+        );
+      }
+      return <ExecutivePayrollDashboard data={data} onMutate={handleMutate} />;
     }
     if (activeRoute === "/performance") {
       return <PerformanceView data={data} onMutate={handleMutate} />;
@@ -362,7 +394,8 @@ export default function ErpAppShell({
         activeRoute === "/income" ||
         activeRoute === "/payments" ||
         activeRoute === "/users" ||
-        activeRoute === "/payroll")
+        activeRoute === "/payroll" ||
+        activeRoute === "/executive-payroll")  // ⭐ NEW: Also block executive-payroll
     ) {
       return (
         <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-6 sm:p-8 text-center space-y-3">
@@ -479,12 +512,16 @@ export default function ErpAppShell({
               </p>
               <div className="space-y-0.5">
                 {grp.items.filter((item) => {
-                  if ((item as { needsLeads?: boolean }).needsLeads) {
+                  if ((item as { needsLeads?: boolean; execOnly?: boolean }).needsLeads) {
                     return !(
                       data.currentUser.role === "Staff" ||
                       data.currentUser.role === "Site Staff" ||
                       data.currentUser.role === "Engineer"
                     );
+                  }
+                  // ⭐ NEW: Hide Executive Dashboard from non-management roles
+                  if ((item as { execOnly?: boolean }).execOnly) {
+                    return canViewExecutive(data.currentUser.role);
                   }
                   return true;
                 }).map((item) => {
@@ -505,6 +542,12 @@ export default function ErpAppShell({
                       <span className="flex items-center gap-2.5">
                         <Icon className="w-4 h-4" />
                         {item.label}
+                        {/* ⭐ NEW: Gold badge for Executive Dashboard */}
+                        {(item as { execOnly?: boolean }).execOnly && (
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-400 text-amber-900">
+                            MD
+                          </span>
+                        )}
                       </span>
                       {item.href === "/notifications" && unreadCount > 0 && (
                         <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white">
@@ -592,20 +635,35 @@ export default function ErpAppShell({
         {mobileMenuOpen && (
           <div className="lg:hidden bg-slate-950 text-white p-4 space-y-3 border-b border-slate-800">
             <div className="grid grid-cols-2 gap-1.5">
-              {NAV_GROUPS.flatMap((g) => g.items).map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`px-3 py-2 rounded-xl text-xs font-medium ${
-                    pathname === item.href
-                      ? "bg-emerald-500 text-slate-950 font-bold"
-                      : "bg-slate-900 text-slate-300"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {NAV_GROUPS.flatMap((g) => g.items)
+                .filter((item) => {
+                  if ((item as { needsLeads?: boolean }).needsLeads) {
+                    return !(
+                      data.currentUser.role === "Staff" ||
+                      data.currentUser.role === "Site Staff" ||
+                      data.currentUser.role === "Engineer"
+                    );
+                  }
+                  // ⭐ NEW: Hide Executive Dashboard from non-managers
+                  if ((item as { execOnly?: boolean }).execOnly) {
+                    return canViewExecutive(data.currentUser.role);
+                  }
+                  return true;
+                })
+                .map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`px-3 py-2 rounded-xl text-xs font-medium ${
+                      pathname === item.href
+                        ? "bg-emerald-500 text-slate-950 font-bold"
+                        : "bg-slate-900 text-slate-300"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
             </div>
           </div>
         )}

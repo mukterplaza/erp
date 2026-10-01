@@ -1,5 +1,7 @@
+
+
 import ErpAppShell from "@/components/ErpAppShell";
 
 export default function Page() {
-  return <ErpAppShell routeKey="/payroll" />;
+  return <ErpAppShell routeKey="/executive-payroll" />;
 }

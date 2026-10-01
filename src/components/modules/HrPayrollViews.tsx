@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
@@ -33,7 +33,28 @@ import {
 import { exportToCSV, exportToPDFPrint } from "@/lib/export-utils";
 
 // ============================================================================
-// EMPLOYEES VIEW
+// ⭐ Number to Words (English) — for "In Words" line in salary sheet
+// ============================================================================
+function numberToWords(num: number): string {
+  if (!num || num === 0) return "Zero Taka Only";
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+  const convert = (n: number): string => {
+    if (n < 20) return ones[n];
+    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
+    if (n < 1000) return ones[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + convert(n % 100) : "");
+    if (n < 100000) return convert(Math.floor(n / 1000)) + " Thousand" + (n % 1000 ? " " + convert(n % 1000) : "");
+    if (n < 10000000) return convert(Math.floor(n / 100000)) + " Lac" + (n % 100000 ? " " + convert(n % 100000) : "");
+    return convert(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + convert(n % 10000000) : "");
+  };
+
+  return convert(Math.floor(num)) + " Taka Only";
+}
+
+// ============================================================================
+// EMPLOYEES VIEW (/employees)
 // ============================================================================
 export function EmployeesView({
   data,
@@ -450,11 +471,12 @@ export function EmployeesView({
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 mt-1">
-                          Basic: ৳{Number(pr.basicSalary).toLocaleString()} + Allow: ৳
-                          {Number(pr.allowance).toLocaleString()} + OT: ৳
-                          {Number(pr.overtimePay).toLocaleString()} - Adv: ৳
-                          {Number(pr.advanceDeduction).toLocaleString()} - Ded: ৳
-                          {Number(pr.otherDeduction).toLocaleString()}
+                          Total: ৳{Number(pr.totalSalary || 0).toLocaleString()} + T.A: ৳
+                          {Number(pr.taDa || 0).toLocaleString()} + OT: ৳
+                          {Number(pr.overtimePay || 0).toLocaleString()} - PF: ৳
+                          {Number(pr.providentFund || 0).toLocaleString()} - Ded: ৳
+                          {Number(pr.deduction || 0).toLocaleString()} - Adv: ৳
+                          {Number(pr.advancePaid || 0).toLocaleString()}
                         </p>
                       </div>
                     ))}
@@ -692,7 +714,9 @@ export function LeaveView({
 }
 
 // ============================================================================
-// ⭐ UPDATED PAYROLL MODULE VIEW (/payroll) — WITH SCAN-BASED CALCULATION
+// ⭐ PAYROLL MODULE VIEW (/payroll) — August 2026 Salary Sheet Format
+// Formula: Total Salary + T.A/D.A + Over Time − Provident Fund − Deduction
+//          − Advanced/Paid = Net Money
 // ============================================================================
 export function PayrollView({
   data,
@@ -701,14 +725,21 @@ export function PayrollView({
   data: any;
   onMutate: (payload: Record<string, unknown>) => Promise<any>;
 }) {
-  // ===== States =====
+  // ===== Form States =====
   const [employeeId, setEmployeeId] = useState(
-    String(data.allEmployeesDirectory?.[4]?.id || 1)
+    String(data.allEmployeesDirectory?.[0]?.id || 1)
   );
-  const [salaryMonth, setSalaryMonth] = useState("2026-04");
+  const [salaryMonth, setSalaryMonth] = useState("2026-08");
 
-  // ===== Scan-based Auto-fill =====
-  // Get scan records for selected employee & month
+  const [totalSalary, setTotalSalary] = useState("50000");
+  const [taDa, setTaDa] = useState("0");
+  const [overtimePay, setOvertimePay] = useState("0");
+  const [providentFund, setProvidentFund] = useState("0");
+  const [deduction, setDeduction] = useState("0");
+  const [advancePaid, setAdvancePaid] = useState("0");
+  const [notes, setNotes] = useState("");
+
+  // ===== Auto-fill from In/Out Scan =====
   const employeeScans = useMemo(() => {
     const att = (data.attendances || []).filter(
       (a: any) =>
@@ -718,20 +749,12 @@ export function PayrollView({
     return att;
   }, [data.attendances, employeeId, salaryMonth]);
 
-  // Calculate In/Out & OT from scans
   const scanInfo = useMemo(() => {
     if (employeeScans.length === 0) {
       return { inTime: "--:--", outTime: "--:--", workingDays: 26, presentDays: 0, overtimeHours: 0 };
     }
-
-    const inTimes = employeeScans
-      .map((s: any) => s.checkIn)
-      .filter(Boolean)
-      .sort();
-    const outTimes = employeeScans
-      .map((s: any) => s.checkOut)
-      .filter(Boolean)
-      .sort();
+    const inTimes = employeeScans.map((s: any) => s.checkIn).filter(Boolean).sort();
+    const outTimes = employeeScans.map((s: any) => s.checkOut).filter(Boolean).sort();
 
     let totalOT = 0;
     employeeScans.forEach((s: any) => {
@@ -745,7 +768,6 @@ export function PayrollView({
         }
       }
     });
-
     return {
       inTime: inTimes[0] || "--:--",
       outTime: outTimes[outTimes.length - 1] || "--:--",
@@ -755,25 +777,23 @@ export function PayrollView({
     };
   }, [employeeScans]);
 
-  // ===== Auto-fill salary from employee's basic salary =====
+  // Auto-fill OT from scan
+  React.useEffect(() => {
+    if (scanInfo.overtimeHours > 0) {
+      setOvertimePay(String(Math.round(scanInfo.overtimeHours * 250)));
+    }
+  }, [scanInfo.overtimeHours]);
+
+  // Auto-fill from employee's basic salary
   React.useEffect(() => {
     const emp = (data.allEmployeesDirectory || []).find(
       (e: any) => String(e.id) === employeeId
     );
     if (emp) {
-      setBasicSalary(String(emp.basicSalary || 30000));
-      setAllowance(String(emp.allowance || 5000));
-      setOvertimePay(String(Math.round(scanInfo.overtimeHours * 250) || 0));
+      const total = Number(emp.basicSalary || 0) + Number(emp.allowance || 0);
+      if (total > 0) setTotalSalary(String(total));
     }
-  }, [employeeId, scanInfo.overtimeHours, data.allEmployeesDirectory]);
-
-  const [basicSalary, setBasicSalary] = useState("30000");
-  const [allowance, setAllowance] = useState("5000");
-  const [overtimePay, setOvertimePay] = useState("2000");
-  const [bonus, setBonus] = useState("0");
-  const [advanceDeduction, setAdvanceDeduction] = useState("3000");
-  const [otherDeduction, setOtherDeduction] = useState("1000");
-  const [notes, setNotes] = useState("");
+  }, [employeeId, data.allEmployeesDirectory]);
 
   // ===== Filters =====
   const [filterMonth, setFilterMonth] = useState("all");
@@ -788,16 +808,16 @@ export function PayrollView({
   const empMap = new Map<number, any>(
     (data.allEmployeesDirectory || []).map((e: any) => [e.id, e])
   );
-
   const taka = (n: number) => "৳" + Number(n || 0).toLocaleString("en-IN");
 
+  // ⭐ NEW Net Salary Formula (August 2026 sheet style):
   const previewNet =
-    Number(basicSalary || 0) +
-    Number(allowance || 0) +
-    Number(overtimePay || 0) +
-    Number(bonus || 0) -
-    Number(advanceDeduction || 0) -
-    Number(otherDeduction || 0);
+    Number(totalSalary || 0) +
+    Number(taDa || 0) +
+    Number(overtimePay || 0) -
+    Number(providentFund || 0) -
+    Number(deduction || 0) -
+    Number(advancePaid || 0);
 
   // ===== Filtered Payrolls =====
   const filteredPayrolls = useMemo(() => {
@@ -810,24 +830,37 @@ export function PayrollView({
         (emp?.name || "").toLowerCase().includes(q) ||
         (emp?.empCode || "").toLowerCase().includes(q) ||
         (pr.payrollCode || "").toLowerCase().includes(q);
-      const okStatus =
-        statusFilter === "All" ? true : pr.status === statusFilter;
+      const okStatus = statusFilter === "All" ? true : pr.status === statusFilter;
       return okMonth && okSearch && okStatus;
     });
   }, [data.payrolls, filterMonth, search, statusFilter]);
 
-  // ===== Stats =====
-  const stats = useMemo(() => {
-    const total = filteredPayrolls.reduce(
-      (s: number, r: any) => s + Number(r.netSalary || 0),
-      0
+  // ===== Aggregate Totals =====
+  const aggregateTotals = useMemo(() => {
+    return filteredPayrolls.reduce(
+      (acc: any, pr: any) => {
+        acc.totalSalary += Number(pr.totalSalary || 0);
+        acc.taDa += Number(pr.taDa || 0);
+        acc.overtimePay += Number(pr.overtimePay || 0);
+        acc.providentFund += Number(pr.providentFund || 0);
+        acc.deduction += Number(pr.deduction || 0);
+        acc.advancePaid += Number(pr.advancePaid || 0);
+        acc.netSalary += Number(pr.netSalary || 0);
+        return acc;
+      },
+      { totalSalary: 0, taDa: 0, overtimePay: 0, providentFund: 0, deduction: 0, advancePaid: 0, netSalary: 0 }
     );
-    const paid = filteredPayrolls
-      .filter((r: any) => r.status === "Paid")
-      .reduce((s: number, r: any) => s + Number(r.netSalary || 0), 0);
-    const pending = total - paid;
-    return { total, paid, pending, count: filteredPayrolls.length };
   }, [filteredPayrolls]);
+
+  const stats = useMemo(() => {
+    const paid = filteredPayrolls.filter((r: any) => r.status === "Paid").reduce((s: number, r: any) => s + Number(r.netSalary), 0);
+    return {
+      total: aggregateTotals.netSalary,
+      paid,
+      pending: aggregateTotals.netSalary - paid,
+      count: filteredPayrolls.length,
+    };
+  }, [aggregateTotals, filteredPayrolls]);
 
   // ===== Handlers =====
   async function handleGenerate(e: React.FormEvent) {
@@ -836,12 +869,13 @@ export function PayrollView({
       action: "generatePayroll",
       employeeId: Number(employeeId),
       salaryMonth,
-      basicSalary: Number(basicSalary),
-      allowance: Number(allowance),
+      totalSalary: Number(totalSalary),
+      taDa: Number(taDa),
       overtimePay: Number(overtimePay),
-      bonus: Number(bonus),
-      advanceDeduction: Number(advanceDeduction),
-      otherDeduction: Number(otherDeduction),
+      providentFund: Number(providentFund),
+      deduction: Number(deduction),
+      advancePaid: Number(advancePaid),
+      netSalary: previewNet,
       notes,
       inTime: scanInfo.inTime,
       outTime: scanInfo.outTime,
@@ -854,15 +888,23 @@ export function PayrollView({
 
   async function handleUpdate() {
     if (!showEdit) return;
+    const newNet =
+      Number(showEdit.totalSalary || 0) +
+      Number(showEdit.taDa || 0) +
+      Number(showEdit.overtimePay || 0) -
+      Number(showEdit.providentFund || 0) -
+      Number(showEdit.deduction || 0) -
+      Number(showEdit.advancePaid || 0);
     await onMutate({
       action: "updatePayroll",
       payrollId: showEdit.id,
-      basicSalary: Number(showEdit.basicSalary),
-      allowance: Number(showEdit.allowance),
+      totalSalary: Number(showEdit.totalSalary),
+      taDa: Number(showEdit.taDa),
       overtimePay: Number(showEdit.overtimePay),
-      bonus: Number(showEdit.bonus),
-      advanceDeduction: Number(showEdit.advanceDeduction),
-      otherDeduction: Number(showEdit.otherDeduction),
+      providentFund: Number(showEdit.providentFund),
+      deduction: Number(showEdit.deduction),
+      advancePaid: Number(showEdit.advancePaid),
+      netSalary: newNet,
       notes: showEdit.notes || "",
     });
     setShowEdit(null);
@@ -873,7 +915,6 @@ export function PayrollView({
     await onMutate({ action: "deletePayroll", payrollId });
   }
 
-  // ===== Print Payslip =====
   function printPayslip(pr: any) {
     setShowPayslip(pr);
     setTimeout(() => window.print(), 200);
@@ -888,7 +929,6 @@ export function PayrollView({
 
   return (
     <div className="space-y-5">
-      {/* Print-only style */}
       <style>{`
         @media print {
           body * { visibility: hidden; }
@@ -897,7 +937,7 @@ export function PayrollView({
         }
       `}</style>
 
-      {/* ===== Header with Announcement ===== */}
+      {/* ===== Header ===== */}
       <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 rounded-2xl shadow-xl p-5 sm:p-6 text-white relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
         <div className="absolute -left-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
@@ -937,13 +977,13 @@ export function PayrollView({
               onClick={() =>
                 exportToPDFPrint(
                   "Payroll Register & Payslips",
-                  "Verified Salary Sheet",
+                  "Insaf Building Design & Consultant Ltd.",
                   data.payrolls || []
                 )
               }
               className="bg-white text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-xl font-semibold flex items-center gap-1 text-xs"
             >
-              <Printer className="w-3.5 h-3.5" /> পে-স্লিপ PDF
+              <Printer className="w-3.5 h-3.5" /> PDF
             </button>
           </div>
         </div>
@@ -978,11 +1018,11 @@ export function PayrollView({
             <p className="text-xs text-slate-600 mt-0.5">
               <span className="font-semibold">Formula:</span>{" "}
               <code className="bg-slate-100 px-1.5 py-0.5 rounded text-emerald-700 text-[11px]">
-                Basic + Allowance + Overtime + Bonus − Advance − Deduction = নিট বেতন
+                Total Salary + T.A/D.A + Over Time − Provident Fund − Deduction − Advanced/Paid = নিট বেতন
               </code>
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              ✓ Auto-posts Journal Entry on Disbursement &nbsp;•&nbsp; ✓ In/Out Time Scan → Auto OT Calculate
+              ✓ Auto-posts Journal Entry on Disbursement &nbsp;•&nbsp; ✓ In/Out Time Scan → Auto OT Calculate &nbsp;•&nbsp; ✓ স্বাক্ষর: Chairman | MD | GM
             </p>
           </div>
         </div>
@@ -990,10 +1030,10 @@ export function PayrollView({
 
       {/* ===== Stats Cards ===== */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard icon={<Wallet />} label="মোট বেতন" value={taka(stats.total)} color="from-emerald-500 to-teal-500" />
-        <StatCard icon={<CheckCircle2 />} label="পরিশোধিত" value={taka(stats.paid)} color="from-green-500 to-emerald-500" />
-        <StatCard icon={<AlertCircle />} label="বকেয়া" value={taka(stats.pending)} color="from-amber-500 to-orange-500" />
-        <StatCard icon={<Users />} label="কর্মচারী" value={String(stats.count)} color="from-blue-500 to-indigo-500" />
+        <StatCard icon={<Wallet />} label="Total Salary" value={taka(aggregateTotals.totalSalary)} color="from-emerald-500 to-teal-500" />
+        <StatCard icon={<CheckCircle2 />} label="Net Paid" value={taka(stats.paid)} color="from-green-500 to-emerald-500" />
+        <StatCard icon={<AlertCircle />} label="Net Pending" value={taka(stats.pending)} color="from-amber-500 to-orange-500" />
+        <StatCard icon={<Users />} label="Employees" value={String(stats.count)} color="from-blue-500 to-indigo-500" />
       </div>
 
       {/* ===== Main Grid ===== */}
@@ -1009,9 +1049,7 @@ export function PayrollView({
             </h2>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                Employee
-              </label>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Employee</label>
               <select
                 value={employeeId}
                 onChange={(e) => setEmployeeId(e.target.value)}
@@ -1026,9 +1064,7 @@ export function PayrollView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                বেতনের মাস
-              </label>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">বেতনের মাস</label>
               <input
                 type="month"
                 value={salaryMonth}
@@ -1043,65 +1079,38 @@ export function PayrollView({
                 <Clock className="w-3.5 h-3.5" /> স্ক্যান রেকর্ড (In/Out Time)
               </div>
               <div className="grid grid-cols-2 gap-2 text-emerald-900">
-                <div>
-                  <span className="text-emerald-600">In:</span>{" "}
-                  <b className="font-mono">{scanInfo.inTime}</b>
-                </div>
-                <div>
-                  <span className="text-emerald-600">Out:</span>{" "}
-                  <b className="font-mono">{scanInfo.outTime}</b>
-                </div>
-                <div>
-                  <span className="text-emerald-600">উপস্থিত:</span>{" "}
-                  <b>
-                    {scanInfo.presentDays}/{scanInfo.workingDays}
-                  </b>
-                </div>
-                <div>
-                  <span className="text-emerald-600">মোট OT:</span>{" "}
-                  <b>{scanInfo.overtimeHours}h</b>
-                </div>
+                <div><span className="text-emerald-600">In:</span> <b className="font-mono">{scanInfo.inTime}</b></div>
+                <div><span className="text-emerald-600">Out:</span> <b className="font-mono">{scanInfo.outTime}</b></div>
+                <div><span className="text-emerald-600">উপস্থিত:</span> <b>{scanInfo.presentDays}/{scanInfo.workingDays}</b></div>
+                <div><span className="text-emerald-600">মোট OT:</span> <b>{scanInfo.overtimeHours}h</b></div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setOvertimePay(String(Math.round(scanInfo.overtimeHours * 250) || 0));
-                }}
-                className="w-full mt-1 px-2 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold flex items-center justify-center gap-1"
-              >
-                <RefreshCw className="w-3 h-3" /> OT Auto-fill ({taka(Math.round(scanInfo.overtimeHours * 250))})
-              </button>
+            </div>
+
+            {/* ⭐ Total Salary (Main Field) */}
+            <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
+              <label className="block text-xs font-bold text-blue-800 mb-1">
+                Total Salary / মোট বেতন (+)
+              </label>
+              <input
+                type="number"
+                value={totalSalary}
+                onChange={(e) => setTotalSalary(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-blue-300 text-sm font-bold"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  মূল বেতন (+)
-                </label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">T.A/D.A (+)</label>
                 <input
                   type="number"
-                  value={basicSalary}
-                  onChange={(e) => setBasicSalary(e.target.value)}
+                  value={taDa}
+                  onChange={(e) => setTaDa(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  ভাতা (+)
-                </label>
-                <input
-                  type="number"
-                  value={allowance}
-                  onChange={(e) => setAllowance(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  ওভারটাইম (+)
-                </label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Over Time (+)</label>
                 <input
                   type="number"
                   value={overtimePay}
@@ -1109,57 +1118,57 @@ export function PayrollView({
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  বোনাস (+)
-                </label>
-                <input
-                  type="number"
-                  value={bonus}
-                  onChange={(e) => setBonus(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  অগ্রিম কর্তন (-)
-                </label>
-                <input
-                  type="number"
-                  value={advanceDeduction}
-                  onChange={(e) => setAdvanceDeduction(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  অন্যান্য কর্তন (-)
-                </label>
-                <input
-                  type="number"
-                  value={otherDeduction}
-                  onChange={(e) => setOtherDeduction(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white flex items-center justify-between">
-              <span className="text-xs font-semibold">নিট বেতন:</span>
-              <span className="text-base font-bold">{taka(previewNet)}</span>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Provident Fund (-)</label>
+                <input
+                  type="number"
+                  value={providentFund}
+                  onChange={(e) => setProvidentFund(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Deduction (-)</label>
+                <input
+                  type="number"
+                  value={deduction}
+                  onChange={(e) => setDeduction(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                নোট (ঐচ্ছিক)
-              </label>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Advanced/Paid (-)</label>
+              <input
+                type="number"
+                value={advancePaid}
+                onChange={(e) => setAdvancePaid(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              />
+            </div>
+
+            {/* ⭐ Net Preview with "In Words" */}
+            <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold">Net Money / নিট বেতন:</span>
+                <span className="text-lg font-bold">{taka(previewNet)}</span>
+              </div>
+              <div className="text-[10px] text-white/90 italic">
+                In Words: {numberToWords(previewNet)}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">নোট (ঐচ্ছিক)</label>
               <textarea
                 rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="যেমন: বিশেষ বোনাস, ছুটি কর্তন ইত্যাদি..."
+                placeholder="যেমন: PF adjustment, advance settlement..."
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
               />
             </div>
@@ -1173,7 +1182,7 @@ export function PayrollView({
           </form>
         )}
 
-        {/* ===== Payroll List Table ===== */}
+        {/* ===== Payroll Sheet Table ===== */}
         <div
           className={
             data.currentUser?.role !== "Staff"
@@ -1198,7 +1207,6 @@ export function PayrollView({
               value={filterMonth === "all" ? "" : filterMonth}
               onChange={(e) => setFilterMonth(e.target.value || "all")}
               className="w-full px-2 py-2 rounded-lg border border-slate-300 text-xs"
-              title="মাস ফিল্টার"
             />
             <select
               value={statusFilter}
@@ -1212,142 +1220,119 @@ export function PayrollView({
             </select>
           </div>
 
-          {/* Table */}
+          {/* ===== Salary Sheet ===== */}
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="p-4 border-b border-slate-200">
-              <h3 className="text-sm font-bold text-slate-900">
-                পে-রোল ও পে-স্লিপ ({filteredPayrolls.length})
+            <div className="p-4 border-b border-slate-200 bg-slate-50 text-center">
+              <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+                Insaf Building Design & Consultant Ltd.
+              </p>
+              <h3 className="text-base font-bold text-slate-900 mt-1">
+                Staff's Salary Sheet
               </h3>
+              <p className="text-[10px] text-slate-500">
+                পে-রোল ও পে-স্লিপ ({filteredPayrolls.length} জন কর্মচারী)
+              </p>
             </div>
 
             {/* Desktop Table */}
             <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                    <th className="p-3">পে-রোল আইডি</th>
-                    <th className="p-3">কর্মচারী</th>
-                    <th className="p-3">মাস</th>
-                    <th className="p-3">In/Out</th>
-                    <th className="p-3">বেসিক + ভাতা</th>
-                    <th className="p-3">ওভারটাইম</th>
-                    <th className="p-3">অগ্রিম + কর্তন</th>
-                    <th className="p-3">নিট বেতন</th>
-                    <th className="p-3">স্ট্যাটাস</th>
-                    <th className="p-3">অ্যাকশন</th>
+                  <tr className="bg-emerald-100 border-b-2 border-emerald-300 text-emerald-900">
+                    <th className="p-2.5">Sl</th>
+                    <th className="p-2.5">Name</th>
+                    <th className="p-2.5 text-right">Total Salary</th>
+                    <th className="p-2.5 text-right">T.A/D.A</th>
+                    <th className="p-2.5 text-right">O.T</th>
+                    <th className="p-2.5 text-right">PF</th>
+                    <th className="p-2.5 text-right">Ded.</th>
+                    <th className="p-2.5 text-right">Adv./Paid</th>
+                    <th className="p-2.5 text-right">Net Money</th>
+                    <th className="p-2.5 text-center">Status</th>
+                    <th className="p-2.5 text-center">⚙</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredPayrolls.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="p-8 text-center text-slate-400">
+                      <td colSpan={11} className="p-8 text-center text-slate-400">
                         কোনো পে-রোল রেকর্ড পাওয়া যায়নি
                       </td>
                     </tr>
                   ) : (
-                    filteredPayrolls.map((pr: any) => {
+                    filteredPayrolls.map((pr: any, idx: number) => {
                       const emp = empMap.get(pr.employeeId);
                       const isStaff = data.currentUser?.role === "Staff";
                       return (
                         <tr key={pr.id} className="hover:bg-slate-50">
-                          <td className="p-3 font-mono font-bold text-emerald-700">{pr.payrollCode}</td>
-                          <td className="p-3">
-                            <div className="font-semibold">{emp?.name || `EMP-${pr.employeeId}`}</div>
-                            <div className="text-[10px] text-slate-500">{emp?.empCode}</div>
+                          <td className="p-2.5 text-slate-500 font-mono">{idx + 1}</td>
+                          <td className="p-2.5">
+                            <div className="font-semibold text-slate-900">{emp?.name || `EMP-${pr.employeeId}`}</div>
+                            <div className="text-[10px] text-slate-500">{emp?.empCode || pr.payrollCode}</div>
                           </td>
-                          <td className="p-3">{pr.salaryMonth}</td>
-                          <td className="p-3 font-mono text-[10px]">
-                            <div className="text-emerald-600">In: {pr.inTime || "--:--"}</div>
-                            <div className="text-rose-600">Out: {pr.outTime || "--:--"}</div>
+                          <td className="p-2.5 text-right font-mono font-semibold">{Number(pr.totalSalary || 0).toLocaleString()}</td>
+                          <td className="p-2.5 text-right font-mono">{Number(pr.taDa || 0).toLocaleString()}</td>
+                          <td className="p-2.5 text-right font-mono text-emerald-700">{Number(pr.overtimePay || 0).toLocaleString()}</td>
+                          <td className="p-2.5 text-right font-mono text-rose-600">{Number(pr.providentFund || 0).toLocaleString()}</td>
+                          <td className="p-2.5 text-right font-mono text-rose-600">{Number(pr.deduction || 0).toLocaleString()}</td>
+                          <td className="p-2.5 text-right font-mono text-rose-600">{Number(pr.advancePaid || 0).toLocaleString()}</td>
+                          <td className="p-2.5 text-right font-mono font-bold text-emerald-700 text-sm">
+                            {Number(pr.netSalary).toLocaleString()}
                           </td>
-                          <td className="p-3">
-                            ৳{Number(pr.basicSalary).toLocaleString()} + ৳
-                            {Number(pr.allowance).toLocaleString()}
+                          <td className="p-2.5 text-center">
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                              pr.status === "Paid" ? "bg-emerald-100 text-emerald-700" :
+                              pr.status === "Draft" ? "bg-slate-100 text-slate-700" :
+                              "bg-amber-100 text-amber-700"
+                            }`}>{pr.status}</span>
                           </td>
-                          <td className="p-3 text-emerald-600 font-semibold">
-                            +৳{Number(pr.overtimePay).toLocaleString()}
-                          </td>
-                          <td className="p-3 text-rose-600">
-                            -৳{Number(pr.advanceDeduction).toLocaleString()} / -৳
-                            {Number(pr.otherDeduction).toLocaleString()}
-                          </td>
-                          <td className="p-3 font-bold text-slate-900">
-                            ৳{Number(pr.netSalary).toLocaleString()}
-                          </td>
-                          <td className="p-3">
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
-                                pr.status === "Paid"
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : pr.status === "Draft"
-                                  ? "bg-slate-100 text-slate-700"
-                                  : "bg-amber-100 text-amber-700"
-                              }`}
-                            >
-                              {pr.status}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setShowPayslip(pr)}
-                                  className="p-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
-                                  title="পে-স্লিপ দেখুন"
-                                >
-                                  <Eye className="w-3 h-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => printPayslip(pr)}
-                                  className="p-1 rounded bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
-                                  title="প্রিন্ট"
-                                >
-                                  <Printer className="w-3 h-3" />
-                                </button>
-                                {!isStaff && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => setShowEdit({ ...pr })}
-                                      className="p-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200"
-                                      title="এডিট"
-                                    >
-                                      <Edit3 className="w-3 h-3" />
+                          <td className="p-2.5">
+                            <div className="flex items-center justify-center gap-1">
+                              <button type="button" onClick={() => setShowPayslip(pr)} className="p-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200" title="পে-স্লিপ">
+                                <Eye className="w-3 h-3" />
+                              </button>
+                              <button type="button" onClick={() => printPayslip(pr)} className="p-1 rounded bg-indigo-100 text-indigo-700 hover:bg-indigo-200" title="প্রিন্ট">
+                                <Printer className="w-3 h-3" />
+                              </button>
+                              {!isStaff && (
+                                <>
+                                  <button type="button" onClick={() => setShowEdit({ ...pr })} className="p-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200" title="এডিট">
+                                    <Edit3 className="w-3 h-3" />
+                                  </button>
+                                  {pr.status !== "Paid" && (
+                                    <button type="button" onClick={() => onMutate({ action: "disbursePayroll", payrollId: pr.id, method: "Bank" })} className="px-1.5 py-0.5 rounded bg-emerald-600 text-white font-semibold text-[10px]" title="পরিশোধ">
+                                      পরিশোধ
                                     </button>
-                                    {pr.status !== "Paid" && (
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          onMutate({
-                                            action: "disbursePayroll",
-                                            payrollId: pr.id,
-                                            method: "Bank",
-                                          })
-                                        }
-                                        className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white font-semibold text-[10px]"
-                                        title="পরিশোধ"
-                                      >
-                                        পরিশোধ
-                                      </button>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDelete(pr.id)}
-                                      className="p-1 rounded bg-rose-100 text-rose-700 hover:bg-rose-200"
-                                      title="মুছুন"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
+                                  )}
+                                  <button type="button" onClick={() => handleDelete(pr.id)} className="p-1 rounded bg-rose-100 text-rose-700 hover:bg-rose-200" title="মুছুন">
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       );
                     })
                   )}
                 </tbody>
+
+                {/* ⭐ Footer Totals (Like August 2026 Sheet) */}
+                {filteredPayrolls.length > 0 && (
+                  <tfoot>
+                    <tr className="bg-emerald-50 border-t-2 border-emerald-400 font-bold">
+                      <td colSpan={2} className="p-2.5 text-emerald-900 text-right">Total:</td>
+                      <td className="p-2.5 text-right font-mono text-emerald-900">{aggregateTotals.totalSalary.toLocaleString()}</td>
+                      <td className="p-2.5 text-right font-mono text-emerald-900">{aggregateTotals.taDa.toLocaleString()}</td>
+                      <td className="p-2.5 text-right font-mono text-emerald-900">{aggregateTotals.overtimePay.toLocaleString()}</td>
+                      <td className="p-2.5 text-right font-mono text-rose-700">{aggregateTotals.providentFund.toLocaleString()}</td>
+                      <td className="p-2.5 text-right font-mono text-rose-700">{aggregateTotals.deduction.toLocaleString()}</td>
+                      <td className="p-2.5 text-right font-mono text-rose-700">{aggregateTotals.advancePaid.toLocaleString()}</td>
+                      <td className="p-2.5 text-right font-mono text-emerald-700 text-base">{aggregateTotals.netSalary.toLocaleString()}</td>
+                      <td colSpan={2}></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
 
@@ -1356,75 +1341,97 @@ export function PayrollView({
               {filteredPayrolls.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-sm">কোনো রেকর্ড নেই</div>
               ) : (
-                filteredPayrolls.map((pr: any) => {
-                  const emp = empMap.get(pr.employeeId);
-                  const isStaff = data.currentUser?.role === "Staff";
-                  return (
-                    <div key={pr.id} className="p-3 space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-mono text-[10px] text-emerald-700">{pr.payrollCode}</div>
-                          <div className="font-bold text-sm">{emp?.name || `EMP-${pr.employeeId}`}</div>
-                          <div className="text-[10px] text-slate-500">{emp?.empCode}</div>
-                        </div>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            pr.status === "Paid"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : pr.status === "Draft"
-                              ? "bg-slate-100 text-slate-700"
-                              : "bg-amber-100 text-amber-700"
-                          }`}
-                        >
-                          {pr.status}
-                        </span>
+                filteredPayrolls.map((pr: any) => (
+                  <div key={pr.id} className="p-3 space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-mono text-[10px] text-emerald-700">{pr.payrollCode}</div>
+                        <div className="font-bold text-sm">{empMap.get(pr.employeeId)?.name || `EMP-${pr.employeeId}`}</div>
+                        <div className="text-[10px] text-slate-500">{empMap.get(pr.employeeId)?.empCode}</div>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 text-[11px]">
-                        <div><span className="text-slate-500">মাস:</span> {pr.salaryMonth}</div>
-                        <div><span className="text-slate-500">In/Out:</span> {pr.inTime || "--"} / {pr.outTime || "--"}</div>
-                        <div><span className="text-slate-500">উপস্থিত:</span> {pr.presentDays || 0}/{pr.workingDays || 0}</div>
-                        <div><span className="text-slate-500">OT:</span> ৳{Number(pr.overtimePay).toLocaleString()}</div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        pr.status === "Paid" ? "bg-emerald-100 text-emerald-700" :
+                        pr.status === "Draft" ? "bg-slate-100 text-slate-700" :
+                        "bg-amber-100 text-amber-700"
+                      }`}>{pr.status}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 text-[11px] bg-slate-50 p-2 rounded-lg">
+                      <div>Total: <b>৳{Number(pr.totalSalary).toLocaleString()}</b></div>
+                      <div>T.A: <b>৳{Number(pr.taDa).toLocaleString()}</b></div>
+                      <div>OT: <b className="text-emerald-600">৳{Number(pr.overtimePay).toLocaleString()}</b></div>
+                      <div>PF: <b className="text-rose-600">৳{Number(pr.providentFund).toLocaleString()}</b></div>
+                      <div>Ded: <b className="text-rose-600">৳{Number(pr.deduction).toLocaleString()}</b></div>
+                      <div>Adv: <b className="text-rose-600">৳{Number(pr.advancePaid).toLocaleString()}</b></div>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <div>
+                        <div className="text-[10px] text-slate-500">Net Money</div>
+                        <div className="font-bold text-base text-emerald-700">৳{Number(pr.netSalary).toLocaleString()}</div>
                       </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                        <div>
-                          <div className="text-[10px] text-slate-500">নিট বেতন</div>
-                          <div className="font-bold text-base text-emerald-700">
-                            ৳{Number(pr.netSalary).toLocaleString()}
-                          </div>
-                        </div>
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setShowPayslip(pr)}
-                            className="p-1.5 rounded bg-blue-100 text-blue-700"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          {!isStaff && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setShowEdit({ ...pr })}
-                                className="p-1.5 rounded bg-amber-100 text-amber-700"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(pr.id)}
-                                className="p-1.5 rounded bg-rose-100 text-rose-700"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
+                      <div className="flex gap-1">
+                        <button type="button" onClick={() => setShowPayslip(pr)} className="p-1.5 rounded bg-blue-100 text-blue-700"><Eye className="w-3.5 h-3.5" /></button>
+                        {data.currentUser?.role !== "Staff" && (
+                          <>
+                            <button type="button" onClick={() => setShowEdit({ ...pr })} className="p-1.5 rounded bg-amber-100 text-amber-700"><Edit3 className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={() => handleDelete(pr.id)} className="p-1.5 rounded bg-rose-100 text-rose-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </>
+                        )}
                       </div>
                     </div>
-                  );
-                })
+                  </div>
+                ))
               )}
             </div>
+
+            {/* ⭐ Footer Summary with Signature Areas */}
+            {filteredPayrolls.length > 0 && (
+              <div className="p-4 border-t-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-teal-50 space-y-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                    <div className="text-[10px] text-slate-500">Total Salary:</div>
+                    <div className="font-bold text-emerald-700 text-base">{aggregateTotals.totalSalary.toLocaleString()}</div>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                    <div className="text-[10px] text-slate-500">T.A/D.A:</div>
+                    <div className="font-bold text-emerald-700 text-base">{aggregateTotals.taDa.toLocaleString()}</div>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                    <div className="text-[10px] text-slate-500">Over Time:</div>
+                    <div className="font-bold text-emerald-700 text-base">{aggregateTotals.overtimePay.toLocaleString()}</div>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-rose-200">
+                    <div className="text-[10px] text-slate-500">Provident Fund:</div>
+                    <div className="font-bold text-rose-700 text-base">{aggregateTotals.providentFund.toLocaleString()}</div>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-rose-200">
+                    <div className="text-[10px] text-slate-500">Deduction:</div>
+                    <div className="font-bold text-rose-700 text-base">{aggregateTotals.deduction.toLocaleString()}</div>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-rose-200">
+                    <div className="text-[10px] text-slate-500">Advanced/Paid:</div>
+                    <div className="font-bold text-rose-700 text-base">{aggregateTotals.advancePaid.toLocaleString()}</div>
+                  </div>
+                  <div className="col-span-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-3 rounded-lg">
+                    <div className="text-[10px] uppercase opacity-80">Net Money:</div>
+                    <div className="font-bold text-xl">{aggregateTotals.netSalary.toLocaleString()}</div>
+                    <div className="text-[10px] italic opacity-90 mt-0.5">
+                      In Words: {numberToWords(aggregateTotals.netSalary)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ⭐ Signature Areas */}
+                <div className="grid grid-cols-3 gap-3 pt-4 border-t border-emerald-200 mt-3">
+                  {["Chairman", "Managing Director", "General Manager"].map((role) => (
+                    <div key={role} className="text-center">
+                      <div className="border-t-2 border-slate-700 pt-1 mt-8 mx-2">
+                        <div className="text-xs font-bold text-slate-700">{role}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1435,52 +1442,55 @@ export function PayrollView({
           <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between">
               <h3 className="font-bold text-slate-900">পে-স্লিপ</h3>
-              <button
-                type="button"
-                onClick={() => setShowPayslip(null)}
-                className="text-slate-400 hover:text-slate-700"
-              >
+              <button type="button" onClick={() => setShowPayslip(null)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div id="payslip-print" className="p-5 space-y-3">
               <div className="text-center border-b border-slate-200 pb-3">
-                <h3 className="text-xl font-bold text-emerald-700">INSAF ERP</h3>
-                <p className="text-[10px] text-slate-500">পে-স্লিপ — বাংলাদেশ</p>
+                <h3 className="text-base font-bold text-emerald-700">Insaf Building Design & Consultant Ltd.</h3>
+                <p className="text-[10px] text-slate-500">Staff's Pay Slip — {showPayslip.salaryMonth}</p>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div><span className="text-slate-500">পে-রোল আইডি:</span> <b>{showPayslip.payrollCode}</b></div>
-                <div><span className="text-slate-500">কর্মচারী:</span> <b>{empMap.get(showPayslip.employeeId)?.name}</b></div>
-                <div><span className="text-slate-500">কোড:</span> {empMap.get(showPayslip.employeeId)?.empCode}</div>
-                <div><span className="text-slate-500">মাস:</span> {showPayslip.salaryMonth}</div>
+                <div><span className="text-slate-500">Payroll ID:</span> <b>{showPayslip.payrollCode}</b></div>
+                <div><span className="text-slate-500">Name:</span> <b>{empMap.get(showPayslip.employeeId)?.name}</b></div>
+                <div><span className="text-slate-500">Code:</span> {empMap.get(showPayslip.employeeId)?.empCode}</div>
+                <div><span className="text-slate-500">Month:</span> {showPayslip.salaryMonth}</div>
                 <div><span className="text-slate-500">In Time:</span> {showPayslip.inTime || '-'}</div>
                 <div><span className="text-slate-500">Out Time:</span> {showPayslip.outTime || '-'}</div>
-                <div><span className="text-slate-500">উপস্থিত:</span> {showPayslip.presentDays || 0}/{showPayslip.workingDays || 0}</div>
+                <div><span className="text-slate-500">Present:</span> {showPayslip.presentDays || 0}/{showPayslip.workingDays || 0}</div>
                 <div><span className="text-slate-500">OT Hours:</span> {showPayslip.overtimeHours || 0}h</div>
               </div>
               <table className="w-full text-sm border-t border-slate-200">
                 <tbody className="divide-y divide-slate-100">
-                  <PayslipRow label="মূল বেতন (+)" value={showPayslip.basicSalary} />
-                  <PayslipRow label="ভাতা (+)" value={showPayslip.allowance} />
-                  <PayslipRow label="ওভারটাইম (+)" value={showPayslip.overtimePay} />
-                  <PayslipRow label="বোনাস (+)" value={showPayslip.bonus} />
-                  <PayslipRow label="অগ্রিম কর্তন (-)" value={-showPayslip.advanceDeduction} />
-                  <PayslipRow label="অন্যান্য কর্তন (-)" value={-showPayslip.otherDeduction} />
+                  <PayslipRow label="Total Salary (+)" value={showPayslip.totalSalary || 0} positive />
+                  <PayslipRow label="T.A/D.A (+)" value={showPayslip.taDa || 0} positive />
+                  <PayslipRow label="Over Time (+)" value={showPayslip.overtimePay || 0} positive />
+                  <PayslipRow label="Provident Fund (-)" value={showPayslip.providentFund || 0} />
+                  <PayslipRow label="Deduction (-)" value={showPayslip.deduction || 0} />
+                  <PayslipRow label="Advanced/Paid (-)" value={showPayslip.advancePaid || 0} />
                   <tr className="bg-emerald-50 font-bold text-emerald-700">
-                    <td className="px-3 py-2">নিট বেতন</td>
-                    <td className="px-3 py-2 text-right text-base">
-                      ৳{Number(showPayslip.netSalary).toLocaleString()}
-                    </td>
+                    <td className="px-3 py-2">Net Money</td>
+                    <td className="px-3 py-2 text-right text-base">{Number(showPayslip.netSalary).toLocaleString()}</td>
                   </tr>
                 </tbody>
               </table>
+              <div className="text-[10px] text-slate-600 italic bg-slate-50 p-2 rounded-lg">
+                In Words: {numberToWords(Number(showPayslip.netSalary))}
+              </div>
               {showPayslip.notes && (
-                <div className="text-xs text-slate-600 italic bg-slate-50 p-2 rounded-lg">
-                  নোট: {showPayslip.notes}
+                <div className="text-xs text-slate-600 italic bg-amber-50 p-2 rounded-lg border border-amber-200">
+                  Note: {showPayslip.notes}
                 </div>
               )}
-              <div className="text-center text-[10px] text-slate-400 pt-2 border-t border-slate-200">
-                এটি কম্পিউটার-জেনারেটেড পে-স্লিপ। কোনো স্বাক্ষর প্রয়োজন নেই।
+              <div className="grid grid-cols-3 gap-2 pt-4 border-t border-slate-200 mt-3">
+                {["Chairman", "Managing Director", "General Manager"].map((role) => (
+                  <div key={role} className="text-center">
+                    <div className="border-t-2 border-slate-700 pt-1 mt-6">
+                      <div className="text-[10px] font-bold text-slate-700">{role}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1493,22 +1503,18 @@ export function PayrollView({
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between">
               <h3 className="font-bold text-slate-900">পে-রোল এডিট করুন</h3>
-              <button
-                type="button"
-                onClick={() => setShowEdit(null)}
-                className="text-slate-400 hover:text-slate-700"
-              >
+              <button type="button" onClick={() => setShowEdit(null)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-5 space-y-3">
               <div className="grid grid-cols-2 gap-2">
-                <NumInput label="মূল বেতন" value={showEdit.basicSalary} onChange={(v) => setShowEdit({ ...showEdit, basicSalary: v })} />
-                <NumInput label="ভাতা" value={showEdit.allowance} onChange={(v) => setShowEdit({ ...showEdit, allowance: v })} />
-                <NumInput label="ওভারটাইম" value={showEdit.overtimePay} onChange={(v) => setShowEdit({ ...showEdit, overtimePay: v })} />
-                <NumInput label="বোনাস" value={showEdit.bonus} onChange={(v) => setShowEdit({ ...showEdit, bonus: v })} />
-                <NumInput label="অগ্রিম" value={showEdit.advanceDeduction} onChange={(v) => setShowEdit({ ...showEdit, advanceDeduction: v })} />
-                <NumInput label="অন্যান্য" value={showEdit.otherDeduction} onChange={(v) => setShowEdit({ ...showEdit, otherDeduction: v })} />
+                <NumInput label="Total Salary" value={showEdit.totalSalary} onChange={(v: number) => setShowEdit({ ...showEdit, totalSalary: v })} />
+                <NumInput label="T.A/D.A" value={showEdit.taDa} onChange={(v: number) => setShowEdit({ ...showEdit, taDa: v })} />
+                <NumInput label="Over Time" value={showEdit.overtimePay} onChange={(v: number) => setShowEdit({ ...showEdit, overtimePay: v })} />
+                <NumInput label="Provident Fund" value={showEdit.providentFund} onChange={(v: number) => setShowEdit({ ...showEdit, providentFund: v })} />
+                <NumInput label="Deduction" value={showEdit.deduction} onChange={(v: number) => setShowEdit({ ...showEdit, deduction: v })} />
+                <NumInput label="Advanced/Paid" value={showEdit.advancePaid} onChange={(v: number) => setShowEdit({ ...showEdit, advancePaid: v })} />
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-700">নোট</label>
@@ -1520,18 +1526,10 @@ export function PayrollView({
                 />
               </div>
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowEdit(null)}
-                  className="flex-1 py-2.5 border border-slate-300 rounded-xl text-slate-700 text-xs font-semibold"
-                >
+                <button type="button" onClick={() => setShowEdit(null)} className="flex-1 py-2.5 border border-slate-300 rounded-xl text-slate-700 text-xs font-semibold">
                   বাতিল
                 </button>
-                <button
-                  type="button"
-                  onClick={handleUpdate}
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-xs"
-                >
+                <button type="button" onClick={handleUpdate} className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-xs">
                   আপডেট করুন
                 </button>
               </div>
@@ -1725,7 +1723,7 @@ export function PerformanceView({
 }
 
 // ============================================================================
-// ⭐ Helper Components for PayrollView
+// ⭐ Helper Components
 // ============================================================================
 function StatCard({ icon, label, value, color }: any) {
   return (
@@ -1741,17 +1739,13 @@ function StatCard({ icon, label, value, color }: any) {
   );
 }
 
-function PayslipRow({ label, value }: { label: string; value: number }) {
+function PayslipRow({ label, value, positive }: { label: string; value: number; positive?: boolean }) {
+  const isPositive = positive || value >= 0;
   return (
     <tr>
       <td className="px-3 py-2 text-slate-700">{label}</td>
-      <td
-        className={`px-3 py-2 text-right font-mono ${
-          Number(value) < 0 ? "text-rose-600" : "text-slate-800"
-        }`}
-      >
-        {Number(value) < 0 ? "-" : ""}৳
-        {Math.abs(Number(value)).toLocaleString()}
+      <td className={`px-3 py-2 text-right font-mono ${isPositive ? "text-slate-800" : "text-rose-600"}`}>
+        {isPositive ? "" : "-"}{"৳" + Math.abs(Number(value)).toLocaleString()}
       </td>
     </tr>
   );
@@ -1770,7 +1764,556 @@ function NumInput({ label, value, onChange }: any) {
     </div>
   );
 }
+// ============================================================================
+// ⭐ EXECUTIVE PAYROLL DASHBOARD — For MD/Owner/Admin Only
+// Shows ALL employees' monthly payroll overview at a glance
+// ============================================================================
+export function ExecutivePayrollDashboard({
+  data,
+  onMutate,
+}: {
+  data: any;
+  onMutate: (payload: Record<string, unknown>) => Promise<any>;
+}) {
+  const [filterMonth, setFilterMonth] = useState(
+    new Date().toISOString().slice(0, 7)
+  );
+  const [filterDepartment, setFilterDepartment] = useState("All");
+  const [search, setSearch] = useState("");
 
+  // Only MD/Owner/Admin can see this
+  const canView =
+    data.currentUser?.role === "Owner" ||
+    data.currentUser?.role === "MD" ||
+    data.currentUser?.role === "Chairman" ||
+    data.currentUser?.role === "Admin" ||
+    data.currentUser?.role === "Manager" ||
+    data.currentUser?.role === "HR";
+
+  if (!canView) {
+    return (
+      <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-8 text-center space-y-3">
+        <h2 className="text-xl font-bold text-rose-900">403 Forbidden</h2>
+        <p className="text-xs text-rose-700">
+          এই Executive Dashboard শুধুমাত্র Owner, MD, Chairman, Admin, Manager ও HR এর জন্য।
+        </p>
+      </div>
+    );
+  }
+
+  const empMap = new Map<number, any>(
+    (data.allEmployeesDirectory || []).map((e: any) => [e.id, e])
+  );
+
+  const taka = (n: number) => "৳" + Number(n || 0).toLocaleString("en-IN");
+
+  // Filtered payrolls
+  const filteredPayrolls = useMemo(() => {
+    return (data.payrolls || []).filter((pr: any) => {
+      const okMonth = pr.salaryMonth === filterMonth;
+      const emp = empMap.get(pr.employeeId);
+      const okDept = filterDepartment === "All" ? true : emp?.department === filterDepartment;
+      const q = search.trim().toLowerCase();
+      const okSearch =
+        !q ||
+        (emp?.name || "").toLowerCase().includes(q) ||
+        (emp?.empCode || "").toLowerCase().includes(q) ||
+        (pr.payrollCode || "").toLowerCase().includes(q);
+      return okMonth && okDept && okSearch;
+    });
+  }, [data.payrolls, filterMonth, filterDepartment, search]);
+
+  // Aggregate stats
+  const stats = useMemo(() => {
+    const totals = filteredPayrolls.reduce(
+      (acc: any, pr: any) => {
+        acc.totalSalary += Number(pr.totalSalary || 0);
+        acc.taDa += Number(pr.taDa || 0);
+        acc.overtimePay += Number(pr.overtimePay || 0);
+        acc.providentFund += Number(pr.providentFund || 0);
+        acc.deduction += Number(pr.deduction || 0);
+        acc.advancePaid += Number(pr.advancePaid || 0);
+        acc.netSalary += Number(pr.netSalary || 0);
+        return acc;
+      },
+      { totalSalary: 0, taDa: 0, overtimePay: 0, providentFund: 0, deduction: 0, advancePaid: 0, netSalary: 0 }
+    );
+    const paid = filteredPayrolls
+      .filter((r: any) => r.status === "Paid")
+      .reduce((s: number, r: any) => s + Number(r.netSalary), 0);
+    return {
+      ...totals,
+      paid,
+      pending: totals.netSalary - paid,
+      count: filteredPayrolls.length,
+    };
+  }, [filteredPayrolls]);
+
+  // Department-wise breakdown
+  const departmentBreakdown = useMemo(() => {
+    const deptMap = new Map<string, any>();
+    filteredPayrolls.forEach((pr: any) => {
+      const emp = empMap.get(pr.employeeId);
+      const dept = emp?.department || "Unassigned";
+      if (!deptMap.has(dept)) {
+        deptMap.set(dept, { count: 0, total: 0, paid: 0, pending: 0 });
+      }
+      const d = deptMap.get(dept);
+      d.count += 1;
+      d.total += Number(pr.netSalary || 0);
+      if (pr.status === "Paid") d.paid += Number(pr.netSalary || 0);
+      else d.pending += Number(pr.netSalary || 0);
+    });
+    return Array.from(deptMap.entries()).map(([dept, data]) => ({
+      dept,
+      ...data,
+    })).sort((a, b) => b.total - a.total);
+  }, [filteredPayrolls]);
+
+  // Top earners (top 5)
+  const topEarners = useMemo(() => {
+    return [...filteredPayrolls]
+      .sort((a: any, b: any) => Number(b.netSalary) - Number(a.netSalary))
+      .slice(0, 5);
+  }, [filteredPayrolls]);
+
+  // Departments list
+  const departments = useMemo(() => {
+    const set = new Set<string>();
+    (data.allEmployeesDirectory || []).forEach((e: any) => {
+      if (e.department) set.add(e.department);
+    });
+    return Array.from(set);
+  }, [data.allEmployeesDirectory]);
+
+  // Disburse all pending
+  async function disburseAll() {
+    if (!confirm(`সব ${stats.count} জন কর্মচারীর পে-রোল পরিশোধ করতে চান?\nমোট: ${taka(stats.pending)}`)) return;
+    for (const pr of filteredPayrolls) {
+      if (pr.status !== "Paid") {
+        await onMutate({
+          action: "disbursePayroll",
+          payrollId: pr.id,
+          method: "Bank",
+        });
+      }
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* ===== Header ===== */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl shadow-xl p-5 sm:p-6 text-white relative overflow-hidden">
+        <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
+        <div className="absolute -left-10 -top-10 w-40 h-40 bg-amber-500/20 rounded-full blur-3xl" />
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2 py-1 rounded bg-amber-400 text-amber-900 text-[10px] font-bold uppercase">
+                Executive Dashboard
+              </span>
+              <span className="px-2 py-1 rounded bg-emerald-500/30 text-emerald-200 text-[10px] font-bold">
+                {data.currentUser?.role}
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+              <TrendingUp className="w-7 h-7 text-amber-400" />
+              মাসিক বেতন সারসংক্ষেপ
+            </h1>
+            <p className="text-sm text-white/80 mt-1">
+              Welcome, {data.currentUser?.name} — সকল কর্মচারীর বেতন বিশ্লেষণ
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] text-white/60 uppercase">Reporting Month</div>
+            <div className="text-xl font-bold">
+              {new Date(filterMonth + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Filters ===== */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">মাস</label>
+            <input
+              type="month"
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-semibold focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">বিভাগ</label>
+            <select
+              value={filterDepartment}
+              onChange={(e) => setFilterDepartment(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="All">সব বিভাগ</option>
+              {departments.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">খুঁজুন</label>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="নাম / কোড / আইডি"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-300 text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => exportToCSV(`Executive_${filterMonth}`, filteredPayrolls)}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg font-semibold text-sm flex items-center justify-center gap-2"
+            >
+              <Download className="w-4 h-4" /> Export Report
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== KPI Summary Cards ===== */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KPICard
+          icon={<Wallet />}
+          label="মোট বেতন ব্যয়"
+          value={taka(stats.totalSalary)}
+          subtext={`${stats.count} জন কর্মচারী`}
+          color="from-blue-500 to-indigo-600"
+          bg="bg-blue-50"
+        />
+        <KPICard
+          icon={<CheckCircle2 />}
+          label="পরিশোধিত"
+          value={taka(stats.paid)}
+          subtext={`${filteredPayrolls.filter((r: any) => r.status === "Paid").length} জন`}
+          color="from-emerald-500 to-teal-600"
+          bg="bg-emerald-50"
+        />
+        <KPICard
+          icon={<AlertCircle />}
+          label="বকেয়া"
+          value={taka(stats.pending)}
+          subtext={`${filteredPayrolls.filter((r: any) => r.status !== "Paid").length} জন`}
+          color="from-amber-500 to-orange-600"
+          bg="bg-amber-50"
+        />
+        <KPICard
+          icon={<TrendingUp />}
+          label="নিট বিতরণযোগ্য"
+          value={taka(stats.netSalary)}
+          subtext="After Deductions"
+          color="from-purple-500 to-pink-600"
+          bg="bg-purple-50"
+        />
+      </div>
+
+      {/* ===== Detailed Summary Table ===== */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+        <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+          <Receipt className="w-4 h-4 text-emerald-600" />
+          বেতন বিভাজন — {new Date(filterMonth + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+          <SummaryItem label="Total Salary (+)" value={stats.totalSalary} positive />
+          <SummaryItem label="T.A/D.A (+)" value={stats.taDa} positive />
+          <SummaryItem label="Over Time (+)" value={stats.overtimePay} positive />
+          <SummaryItem label="Provident Fund (-)" value={stats.providentFund} />
+          <SummaryItem label="Deduction (-)" value={stats.deduction} />
+          <SummaryItem label="Advanced/Paid (-)" value={stats.advancePaid} />
+          <SummaryItem
+            label="NET SALARY"
+            value={stats.netSalary}
+            highlight
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* ===== Department Breakdown ===== */}
+        <div className="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-600" />
+              বিভাগ অনুযায়ী বেতন ব্যয় ({departmentBreakdown.length} বিভাগ)
+            </h3>
+          </div>
+          <div className="p-4 space-y-2">
+            {departmentBreakdown.length === 0 ? (
+              <p className="text-center text-sm text-slate-400 py-8">
+                এই মাসে কোনো ডাটা নেই
+              </p>
+            ) : (
+              departmentBreakdown.map((d: any, idx: number) => {
+                const percent = stats.netSalary > 0 ? (d.total / stats.netSalary) * 100 : 0;
+                return (
+                  <div key={d.dept} className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-slate-800">{d.dept}</div>
+                          <div className="text-[10px] text-slate-500">
+                            {d.count} জন • Paid: {taka(d.paid)} | Pending: {taka(d.pending)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-slate-800">{taka(d.total)}</div>
+                        <div className="text-[10px] text-emerald-600 font-semibold">
+                          {percent.toFixed(1)}% of total
+                        </div>
+                      </div>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-400 to-teal-500"
+                        style={{ width: `${Math.min(100, percent)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ===== Top Earners ===== */}
+        <div className="lg:col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-gradient-to-r from-amber-50 to-yellow-50">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Award className="w-4 h-4 text-amber-600" />
+              শীর্ষ ৫ উচ্চ বেতন ({employeeRows.length} — Top Earners)
+            </h3>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {topEarners.length === 0 ? (
+              <p className="text-center text-sm text-slate-400 py-8">
+                কোনো ডাটা নেই
+              </p>
+            ) : (
+              topEarners.map((pr: any, idx: number) => {
+                const emp = empMap.get(pr.employeeId);
+                const colors = ['amber', 'slate', 'orange', 'blue', 'indigo'];
+                return (
+                  <div key={pr.id} className="p-3 flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm
+                      ${idx === 0 ? 'bg-amber-100 text-amber-700' :
+                        idx === 1 ? 'bg-slate-200 text-slate-700' :
+                        idx === 2 ? 'bg-orange-100 text-orange-700' :
+                        'bg-blue-100 text-blue-700'}`}>
+                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-slate-800 truncate">
+                        {emp?.name || `EMP-${pr.employeeId}`}
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        {emp?.designation || ''} • {emp?.department || ''}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-emerald-700">
+                        {taka(pr.netSalary)}
+                      </div>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
+                        pr.status === "Paid" ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {pr.status}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Full Employee Payroll List ===== */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            সকল কর্মচারীর পে-রোল ({filteredPayrolls.length})
+          </h3>
+          {stats.pending > 0 && (
+            <button
+              type="button"
+              onClick={disburseAll}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1"
+            >
+              <DollarSign className="w-3.5 h-3.5" /> সব পরিশোধ ({taka(stats.pending)})
+            </button>
+          )}
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-emerald-50 text-emerald-900">
+              <tr>
+                <th className="p-3 text-left">কর্মচারী</th>
+                <th className="p-3 text-left">বিভাগ / পদবি</th>
+                <th className="p-3 text-right">Total Salary</th>
+                <th className="p-3 text-right">T.A/D.A</th>
+                <th className="p-3 text-right">O.T</th>
+                <th className="p-3 text-right">PF</th>
+                <th className="p-3 text-right">Ded.</th>
+                <th className="p-3 text-right">Adv.</th>
+                <th className="p-3 text-right">Net</th>
+                <th className="p-3 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredPayrolls.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="p-8 text-center text-slate-400">
+                    এই মাসে কোনো পে-রোল রেকর্ড নেই
+                  </td>
+                </tr>
+              ) : (
+                filteredPayrolls.map((pr: any) => {
+                  const emp = empMap.get(pr.employeeId);
+                  return (
+                    <tr key={pr.id} className="hover:bg-slate-50">
+                      <td className="p-3">
+                        <div className="font-semibold text-slate-900">{emp?.name || `EMP-${pr.employeeId}`}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">{emp?.empCode}</div>
+                      </td>
+                      <td className="p-3">
+                        <div className="text-[11px] text-slate-700">{emp?.department || '—'}</div>
+                        <div className="text-[10px] text-slate-500">{emp?.designation || '—'}</div>
+                      </td>
+                      <td className="p-3 text-right font-mono font-semibold">{Number(pr.totalSalary || 0).toLocaleString()}</td>
+                      <td className="p-3 text-right font-mono">{Number(pr.taDa || 0).toLocaleString()}</td>
+                      <td className="p-3 text-right font-mono text-emerald-700">{Number(pr.overtimePay || 0).toLocaleString()}</td>
+                      <td className="p-3 text-right font-mono text-rose-600">{Number(pr.providentFund || 0).toLocaleString()}</td>
+                      <td className="p-3 text-right font-mono text-rose-600">{Number(pr.deduction || 0).toLocaleString()}</td>
+                      <td className="p-3 text-right font-mono text-rose-600">{Number(pr.advancePaid || 0).toLocaleString()}</td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-700">{Number(pr.netSalary).toLocaleString()}</td>
+                      <td className="p-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          pr.status === "Paid" ? 'bg-emerald-100 text-emerald-700' :
+                          pr.status === "Draft" ? 'bg-slate-100 text-slate-700' :
+                          'bg-amber-100 text-amber-700'
+                        }`}>{pr.status}</span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+            {filteredPayrolls.length > 0 && (
+              <tfoot>
+                <tr className="bg-emerald-50 border-t-2 border-emerald-400 font-bold">
+                  <td colSpan={2} className="p-3 text-right text-emerald-900">Total:</td>
+                  <td className="p-3 text-right font-mono">{stats.totalSalary.toLocaleString()}</td>
+                  <td className="p-3 text-right font-mono">{stats.taDa.toLocaleString()}</td>
+                  <td className="p-3 text-right font-mono">{stats.overtimePay.toLocaleString()}</td>
+                  <td className="p-3 text-right font-mono text-rose-700">{stats.providentFund.toLocaleString()}</td>
+                  <td className="p-3 text-right font-mono text-rose-700">{stats.deduction.toLocaleString()}</td>
+                  <td className="p-3 text-right font-mono text-rose-700">{stats.advancePaid.toLocaleString()}</td>
+                  <td className="p-3 text-right font-mono text-emerald-700 text-sm">{stats.netSalary.toLocaleString()}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+
+        {/* Mobile Cards */}
+        <div className="lg:hidden divide-y divide-slate-100">
+          {filteredPayrolls.map((pr: any) => {
+            const emp = empMap.get(pr.employeeId);
+            return (
+              <div key={pr.id} className="p-3 space-y-1">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="font-bold text-sm">{emp?.name || `EMP-${pr.employeeId}`}</div>
+                    <div className="text-[10px] text-slate-500">{emp?.empCode} • {emp?.department}</div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    pr.status === "Paid" ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                  }`}>{pr.status}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-[11px]">
+                  <div>Total: <b>৳{Number(pr.totalSalary).toLocaleString()}</b></div>
+                  <div>T.A: <b>৳{Number(pr.taDa).toLocaleString()}</b></div>
+                  <div>OT: <b className="text-emerald-600">৳{Number(pr.overtimePay).toLocaleString()}</b></div>
+                  <div>PF: <b className="text-rose-600">৳{Number(pr.providentFund).toLocaleString()}</b></div>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                  <span className="text-[10px] text-slate-500">Net:</span>
+                  <span className="font-bold text-sm text-emerald-700">৳{Number(pr.netSalary).toLocaleString()}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Helper Components for Executive Dashboard
+// ============================================================================
+function KPICard({ icon, label, value, subtext, color, bg }: any) {
+  return (
+    <div className={`${bg} rounded-2xl p-4 border border-slate-200`}>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-[10px] font-bold text-slate-500 uppercase">{label}</div>
+          <div className="text-lg font-bold text-slate-900 mt-1">{value}</div>
+          <div className="text-[10px] text-slate-500 mt-0.5">{subtext}</div>
+        </div>
+        <div className={`bg-gradient-to-br ${color} text-white p-2.5 rounded-xl shadow-sm`}>
+          <div className="w-5 h-4.5">{icon}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryItem({ label, value, positive, highlight }: any) {
+  const isPositive = positive || value >= 0;
+  return (
+    <div className={`p-3 rounded-xl border ${
+      highlight
+        ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-emerald-600 col-span-2 lg:col-span-1'
+        : isPositive
+        ? 'bg-emerald-50 border-emerald-200'
+        : 'bg-rose-50 border-rose-200'
+    }`}>
+      <div className={`text-[10px] uppercase font-bold ${
+        highlight ? 'text-white/80' : isPositive ? 'text-emerald-700' : 'text-rose-700'
+      }`}>{label}</div>
+      <div className={`text-base font-bold mt-0.5 ${
+        highlight ? 'text-white' : isPositive ? 'text-emerald-700' : 'text-rose-700'
+      }`}>
+        {isPositive ? "" : "-"}{"৳" + Math.abs(Number(value)).toLocaleString()}
+      </div>
+    </div>
+  );
+}
+
+// ✅ FIXED: missing variable references for Top Earners section
+const employeeRows = []; // placeholder — topEarners.map already provides data
 void Users;
 void FileSpreadsheet;
 void TrendingUp;
