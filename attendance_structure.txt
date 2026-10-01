@@ -1,0 +1,207 @@
+===== ATTENDANCE PAGE =====
+E:\insaferp\src\app\attendance\page.tsx
+
+===== PAYROLL PAGE =====
+E:\insaferp\src\app\payroll\page.tsx
+
+===== ATTENDANCE ENGINE SEARCH =====
+src\app\api\erp\route.ts:61:  calculateAttendanceMetrics,
+src\app\api\erp\route.ts:672:      lateCheckInAfter: "09:30",
+src\app\api\erp\route.ts:969:    if (action === "checkIn") {
+src\app\api\erp\route.ts:986:      const checkInTime =
+src\app\api\erp\route.ts:987:        body.checkIn ||
+src\app\api\erp\route.ts:991:      const metrics = calculateAttendanceMetrics(checkInTime, null);
+src\app\api\erp\route.ts:998:          checkIn: checkInTime,
+src\app\api\erp\route.ts:999:          checkOut: null,
+src\app\api\erp\route.ts:1001:          lateMinutes: metrics.lateMinutes,
+src\app\api\erp\route.ts:1002:          earlyLeaveMinutes: 0,
+src\app\api\erp\route.ts:1006:          overtimeHours: "0.00",
+src\app\api\erp\route.ts:1012:      if (metrics.lateMinutes > 0) {
+src\app\api\erp\route.ts:1016:          title: `Late IN TIME (${metrics.lateMinutes}m after 9:30 AM)`,
+src\app\api\erp\route.ts:1017:          message: `${currentUser.name} checked in at ${checkInTime} on ${date}.`,
+src\app\api\erp\route.ts:1027:    if (action === "checkOut") {
+src\app\api\erp\route.ts:1029:      const checkOutTime =
+src\app\api\erp\route.ts:1030:        body.checkOut ||
+src\app\api\erp\route.ts:1052:      const metrics = calculateAttendanceMetrics(existing.checkIn, checkOutTime);
+src\app\api\erp\route.ts:1057:          checkOut: checkOutTime,
+src\app\api\erp\route.ts:1059:          lateMinutes: metrics.lateMinutes,
+src\app\api\erp\route.ts:1060:          earlyLeaveMinutes: metrics.earlyLeaveMinutes,
+src\app\api\erp\route.ts:1064:          overtimeHours: metrics.overtimeHours,
+src\app\api\erp\route.ts:1089:      const { attendanceId, checkIn, checkOut, status } = body;
+src\app\api\erp\route.ts:1090:      const metrics = calculateAttendanceMetrics(checkIn, checkOut, status);
+src\app\api\erp\route.ts:1094:          checkIn,
+src\app\api\erp\route.ts:1095:          checkOut,
+src\app\api\erp\route.ts:1097:          lateMinutes: metrics.lateMinutes,
+src\app\api\erp\route.ts:1098:          earlyLeaveMinutes: metrics.earlyLeaveMinutes,
+src\app\api\erp\route.ts:1100:          overtimeHours: metrics.overtimeHours,
+src\app\api\erp\route.ts:1119:      const { attendanceId, date, requestedCheckIn, requestedCheckOut, reason } = body;
+src\app\api\erp\route.ts:1120:      if (!date || !requestedCheckIn || !requestedCheckOut || !reason) {
+src\app\api\erp\route.ts:1130:          requestedCheckIn,
+src\app\api\erp\route.ts:1131:          requestedCheckOut,
+src\app\api\erp\route.ts:1141:        message: `Date: ${date} (${requestedCheckIn} - ${requestedCheckOut}). Reason: ${reason}`,
+src\app\api\erp\route.ts:1173:        const metrics = calculateAttendanceMetrics(
+src\app\api\erp\route.ts:1174:          corr.requestedCheckIn,
+src\app\api\erp\route.ts:1175:          corr.requestedCheckOut
+src\app\api\erp\route.ts:1182:              checkIn: corr.requestedCheckIn,
+src\app\api\erp\route.ts:1183:              checkOut: corr.requestedCheckOut,
+src\app\api\erp\route.ts:1185:              lateMinutes: metrics.lateMinutes,
+src\app\api\erp\route.ts:1186:              earlyLeaveMinutes: metrics.earlyLeaveMinutes,
+src\app\api\erp\route.ts:1188:              overtimeHours: metrics.overtimeHours,
+src\app\api\erp\route.ts:1196:            checkIn: corr.requestedCheckIn,
+src\app\api\erp\route.ts:1197:            checkOut: corr.requestedCheckOut,
+src\app\api\erp\route.ts:1199:            lateMinutes: metrics.lateMinutes,
+src\app\api\erp\route.ts:1200:            earlyLeaveMinutes: metrics.earlyLeaveMinutes,
+src\app\api\erp\route.ts:1202:            overtimeHours: metrics.overtimeHours,
+src\app\api\erp\route.ts:1216:        afterData: { decision, date: corr.date, checkIn: corr.requestedCheckIn, checkOut: corr.requestedCheckOut },
+src\app\api\erp\route.ts:3988:        (s, a) => s + Number(a.overtimeHours || 0),
+src\app\api\erp\route.ts:4005:          overtimeHours: totalOtHours.toFixed(2),
+src\app\api\erp\route.ts:4164:          checkIn: null,
+src\app\api\erp\route.ts:4165:          checkOut: null,
+src\app\api\erp\route.ts:4167:          lateMinutes: 0,
+src\app\api\erp\route.ts:4168:          earlyLeaveMinutes: 0,
+src\app\api\erp\route.ts:4172:          overtimeHours: "0.00",
+src\app\api\erp\route.ts:4326:        lateCheckInAfter,
+src\app\api\erp\route.ts:4338:            lateCheckInAfter: lateCheckInAfter || "09:30",
+src\app\api\erp\route.ts:4353:            lateCheckInAfter: lateCheckInAfter || "09:30",
+src\app\api\erp\route.ts:4383:      const missingCheckInNames = allEmps
+src\app\api\erp\route.ts:4429:      if (missingCheckInNames.length > 0) {
+src\app\api\erp\route.ts:4433:          title: `IN TIME Reminder (After ${settings?.lateCheckInAfter || "09:30"} AM)`,
+src\app\api\erp\route.ts:4434:          message: `${missingCheckInNames.join(", ")} à¦à¦–à¦¨à¦“ à¦†à¦œà¦•à§‡à¦° IN TIME à¦¦à§‡à¦¨à¦¨à¦¿à¥¤`,
+src\app\api\erp\route.ts:4468:          missingCheckIn: missingCheckInNames.length,
+src\components\modules\EmployeeDirectory.tsx:223:      .filter((a: any) => a.date === todayIso && a.checkIn)
+src\components\modules\EmployeeDirectory.tsx:579:                      {empAttendance.find((a: any) => a.date === todayIso)?.checkIn
+src\components\modules\EmployeeDirectory.tsx:1088:                        <td className="p-2.5 font-mono text-emerald-700">{a.checkIn || "—"}</td>
+src\components\modules\EmployeeDirectory.tsx:1089:                        <td className="p-2.5 font-mono">{a.checkOut || "—"}</td>
+src\components\modules\EmployeeDirectory.tsx:1094:                        <td className="p-2.5 text-indigo-600 font-bold">{a.overtimeHours} ঘণ্টা</td>
+src\components\modules\EmployeeDirectory.tsx:1284:                  if (a.checkIn) events.push({ date: a.date, time: a.checkIn, actor: "স্বয়ংক্রিয়", action: "উপস্থিতি (IN)", note: "—" });
+src\components\modules\EmployeeDirectoryView.tsx:338:                  {att ? <strong className="text-emerald-700">{att.status} {att.checkIn ? `(${att.checkIn}${att.checkOut ? `–${att.checkOut}` : ""})` : ""}</strong> : <strong className="text-rose-600">রেকর্ড নেই</strong>}
+src\components\modules\EmployeeDirectoryView.tsx:494:                    <td className="p-2">{a.date}</td><td className="p-2">{a.checkIn || "—"}</td><td className="p-2">{a.checkOut || "—"}</td>
+src\components\modules\EmployeeDirectoryView.tsx:495:                    <td className="p-2">{a.workingHours}</td><td className="p-2">{a.lateMinutes}</td><td className="p-2">{a.overtimeHours}</td>
+src\components\modules\EmployeeDirectoryView.tsx:1069:    if (a.checkIn) events.push({ at: `${a.date}T${a.checkIn}:00`, kind: "হাজিরা", text: `ইন ${a.checkIn}${a.checkOut ? ` • আউট ${a.checkOut}` : ""} • ${a.status}` });
+src\components\modules\FinanceAdminViews.tsx:759:  if (t.includes("Attendance") || t.includes("Checkout") || t.includes("Late")) return "Attendance";
+src\components\modules\FinanceAdminViews.tsx:1089:  const [lateCheckInAfter, setLateCheckInAfter] = useState(
+src\components\modules\FinanceAdminViews.tsx:1090:    data.reminderSettings?.lateCheckInAfter || "09:30"
+src\components\modules\FinanceAdminViews.tsx:1109:      lateCheckInAfter,
+src\components\modules\FinanceAdminViews.tsx:1275:                    value={lateCheckInAfter}
+src\components\modules\FinanceAdminViews.tsx:1276:                    onChange={(e) => setLateCheckInAfter(e.target.value)}
+src\components\modules\HrPayrollViews.tsx:421:                        {a.date}: IN {a.checkIn || "—"} / OUT {a.checkOut || "Active"} ({a.workingHours}h)
+src\components\modules\OperationsViews.tsx:147:                  action: "checkIn",
+src\components\modules\OperationsViews.tsx:149:                  checkIn: new Date().toTimeString().slice(0, 5),
+src\components\modules\OperationsViews.tsx:183:                  action: "checkOut",
+src\components\modules\OperationsViews.tsx:185:                  checkOut: new Date().toTimeString().slice(0, 5),
+src\components\modules\OperationsViews.tsx:232:              {myTodayAtt?.checkIn || "উপস্থিতি বাকি"}
+src\components\modules\OperationsViews.tsx:239:              {myTodayAtt?.checkOut || "কার্যরত আছেন"}
+src\components\modules\OperationsViews.tsx:489:                    {myTodayAtt.checkIn}{" "}
+src\components\modules\OperationsViews.tsx:490:                    {myTodayAtt.checkOut ? `• আউট টাইম: ${myTodayAtt.checkOut}` : ""}
+src\components\modules\OperationsViews.tsx:521:  const checkedInToday = todayAtt.filter((a: any) => Boolean(a.checkIn)).length;
+src\components\modules\OperationsViews.tsx:522:  const checkedOutToday = todayAtt.filter((a: any) => Boolean(a.checkOut)).length;
+src\components\modules\OperationsViews.tsx:528:      a.status === "Missing Checkout"
+src\components\modules\OperationsViews.tsx:540:      a.status === "Missing Checkout"
+src\components\modules\OperationsViews.tsx:957:                    : status === "Missing Checkout"
+src\components\modules\OperationsViews.tsx:968:                    <td className="p-3 font-mono text-emerald-700">{att?.checkIn || "—"}</td>
+src\components\modules\OperationsViews.tsx:969:                    <td className="p-3 font-mono text-slate-600">{att?.checkOut || "—"}</td>
+src\components\modules\OperationsViews.tsx:972:                      {att ? `${Number(att.lateMinutes || 0)}m / ${Number(att.earlyLeaveMinutes || 0)}m` : "—"}
+src\components\modules\OperationsViews.tsx:974:                    <td className="p-3 font-mono text-indigo-700">{att?.overtimeHours ?? "0"}</td>
+src\components\modules\OperationsViews.tsx:981:                         status === "Missing Checkout" ? "OUT বাকি" :
+src\components\modules\OperationsViews.tsx:1048:                              ইন: {att.checkIn || "—"}
+src\components\modules\OperationsViews.tsx:1051:                              আউট: {att.checkOut || "কার্যরত"}
+src\components\modules\OperationsViews.tsx:1159:                          ?.checkIn
+src\components\modules\OperationsViews.tsx:1162:                          ?.checkOut || "কার্যরত আছেন"
+src\components\modules\OperationsViews.tsx:1292:  const [checkInTime, setCheckInTime] = useState("09:30");
+src\components\modules\OperationsViews.tsx:1305:  async function handleCheckIn(e: React.FormEvent) {
+src\components\modules\OperationsViews.tsx:1308:      action: "checkIn",
+src\components\modules\OperationsViews.tsx:1311:      checkIn: checkInTime,
+src\components\modules\OperationsViews.tsx:1316:  async function handleCheckOut(attendanceId: number) {
+src\components\modules\OperationsViews.tsx:1320:      action: "checkOut",
+src\components\modules\OperationsViews.tsx:1322:      checkOut: outTime,
+src\components\modules\OperationsViews.tsx:1332:      requestedCheckIn: reqIn,
+src\components\modules\OperationsViews.tsx:1333:      requestedCheckOut: reqOut,
+src\components\modules\OperationsViews.tsx:1386:          onSubmit={handleCheckIn}
+src\components\modules\OperationsViews.tsx:1415:                value={checkInTime}
+src\components\modules\OperationsViews.tsx:1416:                onChange={(e) => setCheckInTime(e.target.value)}
+src\components\modules\OperationsViews.tsx:1525:                      • {c.date} ({c.requestedCheckIn} → {c.requestedCheckOut}) —{" "}
+src\components\modules\OperationsViews.tsx:1616:                      {a.checkIn || "—"}
+src\components\modules\OperationsViews.tsx:1619:                      {a.checkOut || "—"}
+src\components\modules\OperationsViews.tsx:1626:                      <span className="text-amber-600 font-semibold">{a.lateMinutes} মি.</span> /{" "}
+src\components\modules\OperationsViews.tsx:1627:                      <span className="text-rose-600">{a.earlyLeaveMinutes || 0} মি.</span>
+src\components\modules\OperationsViews.tsx:1629:                    <td className="p-3 text-indigo-600 font-semibold">{a.overtimeHours} ঘণ্টা</td>
+src\components\modules\OperationsViews.tsx:1637:                            : a.status === "Missing Checkout"
+src\components\modules\OperationsViews.tsx:1642:                        {a.status === "Present" ? "উপস্থিত" : a.status === "Late" ? "দেরি" : a.status === "Missing Checkout" ? "আউট বাকি" : "ছুটিতে"}
+src\components\modules\OperationsViews.tsx:1646:                      {!a.checkOut && a.status !== "Leave" && (
+src\components\modules\OperationsViews.tsx:1649:                          onClick={() => handleCheckOut(a.id)}
+src\db\schema.ts:119:    checkIn: text("check_in"), // HH:mm
+src\db\schema.ts:120:    checkOut: text("check_out"), // HH:mm
+src\db\schema.ts:121:    status: text("status").notNull().default("Present"), // Present, Late, Early Leave, Missing Checkout, Absent, Leave, Holiday
+src\db\schema.ts:122:    lateMinutes: integer("late_minutes").notNull().default(0),
+src\db\schema.ts:123:    earlyLeaveMinutes: integer("early_leave_minutes").notNull().default(0),
+src\db\schema.ts:127:    overtimeHours: numeric("overtime_hours", { precision: 6, scale: 2 }).notNull().default("0"),
+src\db\schema.ts:145:  requestedCheckIn: text("requested_check_in").notNull(),
+src\db\schema.ts:146:  requestedCheckOut: text("requested_check_out").notNull(),
+src\db\schema.ts:943:    overtimeHours: numeric("overtime_hours", { precision: 8, scale: 2 }).notNull().default("0"),
+src\db\schema.ts:1065:  lateCheckInAfter: text("late_check_in_after").notNull().default("09:30"),
+src\lib\erp-engine.ts:79:export function calculateAttendanceMetrics(
+src\lib\erp-engine.ts:80:  checkIn: string | null | undefined,
+src\lib\erp-engine.ts:81:  checkOut: string | null | undefined,
+src\lib\erp-engine.ts:87:      lateMinutes: 0,
+src\lib\erp-engine.ts:88:      earlyLeaveMinutes: 0,
+src\lib\erp-engine.ts:92:      overtimeHours: "0.00",
+src\lib\erp-engine.ts:96:  if (!checkIn) {
+src\lib\erp-engine.ts:99:      lateMinutes: 0,
+src\lib\erp-engine.ts:100:      earlyLeaveMinutes: 0,
+src\lib\erp-engine.ts:104:      overtimeHours: "0.00",
+src\lib\erp-engine.ts:108:  const [inH, inM] = checkIn.split(":").map(Number);
+src\lib\erp-engine.ts:116:  const lateMinutes =
+src\lib\erp-engine.ts:119:  if (!checkOut) {
+src\lib\erp-engine.ts:121:      status: lateMinutes > 0 ? "Late" : "Present",
+src\lib\erp-engine.ts:122:      lateMinutes,
+src\lib\erp-engine.ts:123:      earlyLeaveMinutes: 0,
+src\lib\erp-engine.ts:127:      overtimeHours: "0.00",
+src\lib\erp-engine.ts:131:  const [outH, outM] = checkOut.split(":").map(Number);
+src\lib\erp-engine.ts:134:  const earlyLeaveMinutes =
+src\lib\erp-engine.ts:155:  const overtimeHoursNum = Math.max(postShiftMins / 60, Math.max(0, workingHoursNum - 8.75));
+src\lib\erp-engine.ts:158:  if (lateMinutes > 0) {
+src\lib\erp-engine.ts:160:  } else if (earlyLeaveMinutes > 15) {
+src\lib\erp-engine.ts:166:    lateMinutes,
+src\lib\erp-engine.ts:167:    earlyLeaveMinutes,
+src\lib\erp-engine.ts:171:    overtimeHours: overtimeHoursNum.toFixed(2),
+src\lib\seed.ts:64:      lateCheckInAfter: "09:30",
+src\lib\seed.ts:619:        checkIn: "08:55",
+src\lib\seed.ts:620:        checkOut: "18:30",
+src\lib\seed.ts:622:        lateMinutes: 0,
+src\lib\seed.ts:623:        earlyLeaveMinutes: 0,
+src\lib\seed.ts:625:        overtimeHours: "0.58",
+src\lib\seed.ts:632:        checkIn: "09:05",
+src\lib\seed.ts:633:        checkOut: "18:15",
+src\lib\seed.ts:635:        lateMinutes: 0,
+src\lib\seed.ts:636:        earlyLeaveMinutes: 0,
+src\lib\seed.ts:638:        overtimeHours: "0.17",
+src\lib\seed.ts:645:        checkIn: "09:35",
+src\lib\seed.ts:646:        checkOut: "20:35",
+src\lib\seed.ts:648:        lateMinutes: 35,
+src\lib\seed.ts:649:        earlyLeaveMinutes: 0,
+src\lib\seed.ts:651:        overtimeHours: "2.00",
+src\lib\seed.ts:658:        checkIn: "08:50",
+src\lib\seed.ts:659:        checkOut: null,
+src\lib\seed.ts:660:        status: "Missing Checkout",
+src\lib\seed.ts:661:        lateMinutes: 0,
+src\lib\seed.ts:662:        earlyLeaveMinutes: 0,
+src\lib\seed.ts:664:        overtimeHours: "0.00",
+src\lib\seed.ts:671:        checkIn: "09:00",
+src\lib\seed.ts:672:        checkOut: "18:00",
+src\lib\seed.ts:674:        lateMinutes: 0,
+src\lib\seed.ts:675:        earlyLeaveMinutes: 0,
+src\lib\seed.ts:677:        overtimeHours: "0.00",
+src\lib\seed.ts:684:        checkIn: null,
+src\lib\seed.ts:685:        checkOut: null,
+src\lib\seed.ts:687:        lateMinutes: 0,
+src\lib\seed.ts:688:        earlyLeaveMinutes: 0,
+src\lib\seed.ts:690:        overtimeHours: "0.00",
+src\lib\seed.ts:700:        requestedCheckIn: "08:50",
+src\lib\seed.ts:701:        requestedCheckOut: "18:40",
+src\lib\seed.ts:1602:          overtimeHours: "10.00",
+src\lib\seed.ts:1911:        type: "Missing Checkout",
+src\lib\seed.ts:1912:        title: "Missing Checkout Alert: Mehedi Hasan",
+src\lib\work-tracking.ts:130:    a.status === "Present" ? 1 : a.status === "Late" ? 0.7 : a.status === "Early Leave" ? 0.8 : a.status === "Missing Checkout" ? 0.5 : 0;
+src\lib\work-tracking.ts:209:  if (todayAtt?.checkIn) stamps.push({ at: `${todayAtt.date}T${todayAtt.checkIn}`, text: `ইন টাইম ${todayAtt.checkIn}` });
+src\lib\work-tracking.ts:210:  if (todayAtt?.checkOut) stamps.push({ at: `${todayAtt.date}T${todayAtt.checkOut}`, text: `আউট টাইম ${todayAtt.checkOut}` });
+src\lib\work-tracking.ts:219:        ? { status: todayAtt.status, checkIn: todayAtt.checkIn, checkOut: todayAtt.checkOut }

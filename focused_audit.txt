@@ -1,0 +1,591 @@
+===== ATTENDANCE ENGINE =====
+  });
+}
+
+// 3. AUTOMATIC ATTENDANCE CALCULATION ENGINE
+// Schedule:
+// Morning: 9:30 AM ƒ?" 1:15 PM (570m to 795m = 3.75h)
+// Break:   1:15 PM ƒ?" 2:30 PM (795m to 870m = 1.25h break)
+// Afternoon: 2:30 PM ƒ?" 7:30 PM (870m to 1170m = 5.00h)
+export function calculateAttendanceMetrics(
+  checkIn: string | null | undefined,
+  checkOut: string | null | undefined,
+  overrideStatus?: string
+) {
+  if (overrideStatus === "Leave" || overrideStatus === "Holiday" || overrideStatus === "Absent") {
+    return {
+      status: overrideStatus,
+      lateMinutes: 0,
+      earlyLeaveMinutes: 0,
+      morningHours: "0.00",
+      afternoonHours: "0.00",
+      workingHours: "0.00",
+      overtimeHours: "0.00",
+    };
+  }
+
+  if (!checkIn) {
+    return {
+      status: "Absent",
+      lateMinutes: 0,
+      earlyLeaveMinutes: 0,
+      morningHours: "0.00",
+      afternoonHours: "0.00",
+      workingHours: "0.00",
+      overtimeHours: "0.00",
+    };
+  }
+
+  const [inH, inM] = checkIn.split(":").map(Number);
+  const inTotalMinutes = inH * 60 + (inM || 0);
+
+  const morningStartMinutes = 9 * 60 + 30; // 09:30 AM
+  const breakStartMinutes = 13 * 60 + 15; // 01:15 PM
+  const afternoonStartMinutes = 14 * 60 + 30; // 02:30 PM
+  const officialEndMinutes = 19 * 60 + 30; // 07:30 PM (19:30)
+
+  const lateMinutes =
+    inTotalMinutes > morningStartMinutes ? inTotalMinutes - morningStartMinutes : 0;
+
+  if (!checkOut) {
+    return {
+      status: lateMinutes > 0 ? "Late" : "Present",
+      lateMinutes,
+      earlyLeaveMinutes: 0,
+      morningHours: "0.00",
+      afternoonHours: "0.00",
+      workingHours: "0.00",
+      overtimeHours: "0.00",
+    };
+  }
+
+  const [outH, outM] = checkOut.split(":").map(Number);
+  const outTotalMinutes = outH * 60 + (outM || 0);
+
+  const earlyLeaveMinutes =
+    outTotalMinutes < officialEndMinutes ? officialEndMinutes - outTotalMinutes : 0;
+
+  // Morning duration: overlap between [inTotalMinutes, outTotalMinutes] and [0, breakStartMinutes]
+  const morningEnd = Math.min(outTotalMinutes, breakStartMinutes);
+  const morningMins = Math.max(0, morningEnd - inTotalMinutes);
+  const morningHoursNum = morningMins / 60;
+
+  // Afternoon duration: overlap between [inTotalMinutes, outTotalMinutes] and [afternoonStartMinutes, Infinity]
+  const afternoonBegin = Math.max(inTotalMinutes, afternoonStartMinutes);
+  const afternoonMins = Math.max(0, outTotalMinutes - afternoonBegin);
+  const afternoonHoursNum = afternoonMins / 60;
+
+  // Total net working hours (excluding the 1:15 PM - 2:30 PM break)
+  let workingHoursNum = morningHoursNum + afternoonHoursNum;
+  if (workingHoursNum <= 0 && outTotalMinutes > inTotalMinutes) {
+    workingHoursNum = (outTotalMinutes - inTotalMinutes) / 60;
+  }
+
+  // Overtime: time worked after 7:30 PM (19:30) or net hours above 8.75h
+  const postShiftMins = Math.max(0, outTotalMinutes - officialEndMinutes);
+  const overtimeHoursNum = Math.max(postShiftMins / 60, Math.max(0, workingHoursNum - 8.75));
+
+  let status = "Present";
+  if (lateMinutes > 0) {
+    status = "Late";
+  } else if (earlyLeaveMinutes > 15) {
+    status = "Early Leave";
+  }
+
+  return {
+    status,
+    lateMinutes,
+    earlyLeaveMinutes,
+    morningHours: morningHoursNum.toFixed(2),
+    afternoonHours: afternoonHoursNum.toFixed(2),
+    workingHours: workingHoursNum.toFixed(2),
+    overtimeHours: overtimeHoursNum.toFixed(2),
+  };
+}
+
+// 3b. AUTOMATIC WORK PLAN PROGRESS ENGINE
+// 5 planned tasks: 5 completed = 100%, 4 completed = 80%, 3 completed = 60%
+export function calculateWorkPlanProgress(
+  items: Array<{ status: string; completionPercent?: number }>
+): number {
+  if (!items || items.length === 0) return 0;
+
+===== CHECK IN OUT API =====
+        .returning();
+
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "CREATE",
+        entity: "Employee",
+        recordId: emp.empCode,
+        afterData: emp,
+      });
+
+      return NextResponse.json({ success: true, employee: emp });
+    }
+
+    // =========================================================================
+    // 3. ATTENDANCE & CORRECTION WORKFLOW (Auto-Approved on IN/OUT)
+    // =========================================================================
+    if (action === "checkIn") {
+      const canManageOthers = canViewAllEmployeeProfiles(currentUser.role);
+      if (
+        !canManageOthers &&
+        body.employeeId &&
+        Number(body.employeeId) !== currentUser.employeeId
+      ) {
+        return NextResponse.json(
+          { error: "Forbidden: Staff can only record their own IN TIME." },
+          { status: 403 }
+        );
+      }
+
+      const employeeId = Number(body.employeeId || currentUser.employeeId);
+      if (!employeeId) {
+        return NextResponse.json({ error: "Employee ID required" }, { status: 400 });
+      }
+      const checkInTime =
+        body.checkIn ||
+        new Date().toTimeString().slice(0, 5);
+      const date = body.date || today;
+
+      const metrics = calculateAttendanceMetrics(checkInTime, null);
+
+      const [att] = await db
+        .insert(attendances)
+        .values({
+          employeeId,
+          date,
+          checkIn: checkInTime,
+          checkOut: null,
+          status: metrics.status,
+          lateMinutes: metrics.lateMinutes,
+          earlyLeaveMinutes: 0,
+          morningHours: "0.00",
+          afternoonHours: "0.00",
+          workingHours: "0.00",
+          overtimeHours: "0.00",
+          isApproved: true, // Auto-approved immediately!
+          notes: body.notes || "Auto-approved Check-In",
+        })
+        .returning();
+
+      if (metrics.lateMinutes > 0) {
+        await createNotification({
+          targetRole: "Manager",
+          type: "Attendance Correction",
+          title: `Late IN TIME (${metrics.lateMinutes}m after 9:30 AM)`,
+          message: `${currentUser.name} checked in at ${checkInTime} on ${date}.`,
+          createdBy: currentUser.name,
+          relatedUrl: "/attendance",
+          relatedEntityCode: `EMP-${String(employeeId).padStart(4, "0")}`,
+        });
+      }
+
+      return NextResponse.json({ success: true, attendance: att });
+    }
+
+    if (action === "checkOut") {
+      const attendanceId = Number(body.attendanceId);
+      const checkOutTime =
+        body.checkOut ||
+        new Date().toTimeString().slice(0, 5);
+
+      const [existing] = await db
+        .select()
+        .from(attendances)
+        .where(eq(attendances.id, attendanceId));
+
+      if (!existing) {
+        return NextResponse.json({ error: "Attendance record not found" }, { status: 404 });
+      }
+
+      if (
+        !canViewAllEmployeeProfiles(currentUser.role) &&
+        existing.employeeId !== currentUser.employeeId
+      ) {
+        return NextResponse.json(
+          { error: "Forbidden: Staff can only record their own OUT TIME." },
+          { status: 403 }
+        );
+      }
+
+      const metrics = calculateAttendanceMetrics(existing.checkIn, checkOutTime);
+
+      const [updated] = await db
+        .update(attendances)
+        .set({
+          checkOut: checkOutTime,
+          status: metrics.status,
+          lateMinutes: metrics.lateMinutes,
+          earlyLeaveMinutes: metrics.earlyLeaveMinutes,
+          morningHours: metrics.morningHours,
+          afternoonHours: metrics.afternoonHours,
+          workingHours: metrics.workingHours,
+          overtimeHours: metrics.overtimeHours,
+          isApproved: true, // Auto-approved
+        })
+        .where(eq(attendances.id, attendanceId))
+        .returning();
+
+      return NextResponse.json({ success: true, attendance: updated });
+    }
+
+    if (action === "editApprovedAttendance") {
+      // Staff CANNOT directly edit approved attendance!
+      if (
+        currentUser.role !== "Owner" &&
+        currentUser.role !== "Admin" &&
+        currentUser.role !== "HR" &&
+        currentUser.role !== "Manager"
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Forbidden: Staff cannot directly edit approved attendance. Please submit an Attendance Correction Request.",
+          },
+          { status: 403 }
+        );
+      }
+      const { attendanceId, checkIn, checkOut, status } = body;
+      const metrics = calculateAttendanceMetrics(checkIn, checkOut, status);
+      const [updated] = await db
+        .update(attendances)
+        .set({
+          checkIn,
+          checkOut,
+          status: metrics.status,
+          lateMinutes: metrics.lateMinutes,
+          earlyLeaveMinutes: metrics.earlyLeaveMinutes,
+          workingHours: metrics.workingHours,
+          overtimeHours: metrics.overtimeHours,
+        })
+        .where(eq(attendances.id, Number(attendanceId)))
+        .returning();
+
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "UPDATE",
+        entity: "Attendance",
+        recordId: String(attendanceId),
+        afterData: updated,
+      });
+      return NextResponse.json({ success: true, attendance: updated });
+    }
+
+    if (action === "requestAttendanceCorrection") {
+      const employeeId = Number(body.employeeId || currentUser.employeeId);
+      const { attendanceId, date, requestedCheckIn, requestedCheckOut, reason } = body;
+      if (!date || !requestedCheckIn || !requestedCheckOut || !reason) {
+        return NextResponse.json({ error: "All correction fields are required" }, { status: 400 });
+      }
+
+      const [corr] = await db
+        .insert(attendanceCorrections)
+        .values({
+          attendanceId: attendanceId ? Number(attendanceId) : null,
+          employeeId,
+          date,
+          requestedCheckIn,
+          requestedCheckOut,
+          reason,
+          status: "Pending",
+        })
+        .returning();
+
+      await createNotification({
+        targetRole: "HR",
+        type: "Attendance Correction",
+        title: `Attendance Correction Request from ${currentUser.name}`,
+        message: `Date: ${date} (${requestedCheckIn} - ${requestedCheckOut}). Reason: ${reason}`,
+        relatedUrl: "/attendance",
+        relatedEntityCode: `CORR-${corr.id}`,
+      });
+
+      return NextResponse.json({ success: true, correction: corr });
+    }
+
+    if (action === "approveAttendanceCorrection") {
+      if (!hasPermission(currentUser, "attendance.approve")) {
+        return NextResponse.json({ error: "Forbidden: Manager/HR approval required" }, { status: 403 });
+      }
+      const { correctionId, decision } = body; // Approved or Rejected
+      const [corr] = await db
+        .select()
+        .from(attendanceCorrections)
+        .where(eq(attendanceCorrections.id, Number(correctionId)));
+
+      if (!corr) {
+        return NextResponse.json({ error: "Correction request not found" }, { status: 404 });
+      }
+
+      await db
+        .update(attendanceCorrections)
+        .set({
+          status: decision,
+          approvedBy: currentUser.name,
+          approvedAt: new Date(),
+        })
+        .where(eq(attendanceCorrections.id, corr.id));
+
+      if (decision === "Approved") {
+        const metrics = calculateAttendanceMetrics(
+          corr.requestedCheckIn,
+          corr.requestedCheckOut
+        );
+
+        if (corr.attendanceId) {
+          await db
+            .update(attendances)
+            .set({
+              checkIn: corr.requestedCheckIn,
+              checkOut: corr.requestedCheckOut,
+              status: metrics.status,
+              lateMinutes: metrics.lateMinutes,
+              earlyLeaveMinutes: metrics.earlyLeaveMinutes,
+              workingHours: metrics.workingHours,
+              overtimeHours: metrics.overtimeHours,
+              notes: `Corrected via request #${corr.id}`,
+            })
+            .where(eq(attendances.id, corr.attendanceId));
+        } else {
+          await db.insert(attendances).values({
+            employeeId: corr.employeeId,
+            date: corr.date,
+            checkIn: corr.requestedCheckIn,
+            checkOut: corr.requestedCheckOut,
+            status: metrics.status,
+            lateMinutes: metrics.lateMinutes,
+            earlyLeaveMinutes: metrics.earlyLeaveMinutes,
+            workingHours: metrics.workingHours,
+            overtimeHours: metrics.overtimeHours,
+            isApproved: true,
+            notes: `Approved Correction #${corr.id}`,
+          });
+        }
+      }
+
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: decision === "Approved" ? "APPROVE" : "REJECT",
+        entity: "AttendanceCorrection",
+        recordId: String(corr.id),
+        afterData: { decision, date: corr.date, checkIn: corr.requestedCheckIn, checkOut: corr.requestedCheckOut },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
+    // =========================================================================
+    // 4. DAILY OPERATIONS / MY DAY & WORK PLAN (Bangla/English + Multiple Attachments)
+    // =========================================================================
+    if (action === "submitDailyWork") {
+      if (
+        !canViewAllEmployeeProfiles(currentUser.role) &&
+        body.employeeId &&
+        Number(body.employeeId) !== currentUser.employeeId
+      ) {
+        return NextResponse.json(
+          { error: "Forbidden: Staff can only submit their own daily work summary." },
+          { status: 403 }
+        );
+      }
+
+      const employeeId = Number(body.employeeId || currentUser.employeeId || 1);
+      const {
+        date,
+        arrivalTime,
+
+===== PAYROLL API =====
+        allowance,
+        overtimePay,
+        bonus,
+        advanceDeduction,
+        otherDeduction,
+        taxDeduction,
+      } = body;
+
+      const [emp] = await db
+        .select()
+        .from(employees)
+        .where(eq(employees.id, Number(employeeId)));
+      if (!emp) {
+        return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+      }
+
+      const basic = Number(basicSalary !== undefined ? basicSalary : emp.basicSalary);
+      const allow = Number(allowance !== undefined ? allowance : emp.allowance);
+      const ot = Number(overtimePay || 0);
+      const bon = Number(bonus || 0);
+      const adv = Number(advanceDeduction !== undefined ? advanceDeduction : emp.advanceBalance);
+      const ded = Number(otherDeduction !== undefined ? otherDeduction : emp.deductionDefault);
+      const tax = Number(taxDeduction || 0);
+
+      // Exact Net Salary Formula
+      const netSalary = basic + allow + ot + bon - adv - ded - tax;
+
+      const empAttendances = await db
+        .select()
+        .from(attendances)
+        .where(eq(attendances.employeeId, emp.id));
+      const presentDays = empAttendances.filter(
+        (a) => a.status === "Present" || a.status === "Late"
+      ).length || 25;
+      const lateDays = empAttendances.filter((a) => a.status === "Late").length;
+      const leaveDays = empAttendances.filter((a) => a.status === "Leave").length;
+      const totalOtHours = empAttendances.reduce(
+        (s, a) => s + Number(a.overtimeHours || 0),
+        0
+      );
+
+      const existingPr = await db.select().from(payrolls);
+      const payrollCode = `PAYR-${String(existingPr.length + 1).padStart(4, "0")}`;
+
+      const [pr] = await db
+        .insert(payrolls)
+        .values({
+          payrollCode,
+          employeeId: emp.id,
+          salaryMonth: salaryMonth || "2026-04",
+          workingDays: 26,
+          presentDays,
+          lateDays,
+          leaveDays,
+          overtimeHours: totalOtHours.toFixed(2),
+          basicSalary: basic.toFixed(2),
+          allowance: allow.toFixed(2),
+          overtimePay: ot.toFixed(2),
+          bonus: bon.toFixed(2),
+          advanceDeduction: adv.toFixed(2),
+          otherDeduction: ded.toFixed(2),
+          taxDeduction: tax.toFixed(2),
+          netSalary: netSalary.toFixed(2),
+          status: "Approved",
+          approvedBy: currentUser.name,
+        })
+        .returning();
+
+      return NextResponse.json({ success: true, payroll: pr });
+    }
+
+    if (action === "disbursePayroll") {
+      if (!hasPermission(currentUser, "payroll.manage")) {
+        return NextResponse.json({ error: "Forbidden: Accounts/HR permission required" }, { status: 403 });
+      }
+      const { payrollId, method = "Bank" } = body;
+
+      const updatedPr = await db.transaction(async (tx) => {
+        const [pr] = await tx
+          .select()
+          .from(payrolls)
+          .where(eq(payrolls.id, Number(payrollId)));
+        if (!pr) throw new Error("Payroll record not found");
+        if (pr.status === "Paid") throw new Error("Payroll already disbursed");
+
+        const net = Number(pr.netSalary);
+        const accCode = method === "Cash" ? "1010" : "1020";
+
+        const existingPay = await tx.select().from(payments);
+        const paymentCode = `PAY-${String(existingPay.length + 1).padStart(4, "0")}`;
+
+        const [pay] = await tx
+          .insert(payments)
+          .values({
+            paymentCode,
+            paymentType: "Salary Payment",
+            amount: net.toFixed(2),
+            date: today,
+            method,
+            referenceCode: pr.payrollCode,
+            employeeId: pr.employeeId,
+            payrollId: pr.id,
+            createdBy: currentUser.name,
+            notes: `Salary payment for ${pr.salaryMonth} (${pr.payrollCode})`,
+          })
+          .returning();
+
+        // Double-Entry Journal: Debit Salary Expense (5020) / Credit Cash/Bank (1010/1020)
+        await postDoubleEntryJournalTx(tx, {
+          date: today,
+          referenceType: "Payroll",
+          referenceCode: pr.payrollCode,
+          description: `Salary Disbursement ${pr.payrollCode} (${pr.salaryMonth})`,
+          createdBy: currentUser.name,
+          lines: [
+            { accountCode: "5020", debit: net, credit: 0 },
+            { accountCode: accCode, debit: 0, credit: net },
+          ],
+        });
+
+        const [updated] = await tx
+          .update(payrolls)
+          .set({
+            status: "Paid",
+            paidAt: new Date(),
+            paymentId: pay.id,
+          })
+          .where(eq(payrolls.id, pr.id))
+          .returning();
+
+        return updated;
+      });
+
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "PAYROLL_DISBURSE",
+        entity: "Payroll",
+        recordId: updatedPr.payrollCode,
+        afterData: updatedPr,
+      });
+
+      return NextResponse.json({ success: true, payroll: updatedPr });
+    }
+
+    // =========================================================================
+    // 14. LEAVE MANAGEMENT (Auto-reflects in Attendance when Approved)
+    // =========================================================================
+    if (action === "applyLeave") {
+      const employeeId = Number(body.employeeId || currentUser.employeeId || 1);
+      const { leaveType, startDate, endDate, totalDays, reason } = body;
+      if (!leaveType || !startDate || !endDate || !reason) {
+        return NextResponse.json({ error: "All leave application fields required" }, { status: 400 });
+      }
+
+      const existingL = await db.select().from(leaveRequests);
+      const leaveCode = `LV-${String(existingL.length + 1).padStart(4, "0")}`;
+
+      const [lv] = await db
+        .insert(leaveRequests)
+        .values({
+          leaveCode,
+          employeeId,
+          leaveType,
+          startDate,
+          endDate,
+          totalDays: Number(totalDays || 1),
+          reason,
+          status: "Pending",
+        })
+        .returning();
+
+      await createNotification({
+        targetRole: "HR",
+        type: "Leave Request",
+        title: `Leave Application: ${leaveCode}`,
+        message: `${currentUser.name} requested ${totalDays || 1} day(s) ${leaveType} leave (${startDate} to ${endDate}).`,
+        relatedUrl: "/leave",
+        relatedEntityCode: leaveCode,
+
+===== PAYROLL PAGE =====
+import ErpAppShell from "@/components/ErpAppShell";
+export default function Page() {
+  return <ErpAppShell routeKey="/payroll" />;
+}

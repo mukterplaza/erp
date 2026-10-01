@@ -1,0 +1,1512 @@
+===== PAYROLL COMPONENT =====
+"use client";
+
+import React, { useState } from "react";
+import Link from "next/link";
+import {
+  Users,
+  Plus,
+  Calendar,
+  DollarSign,
+  Award,
+  Printer,
+  CheckCircle2,
+  XCircle,
+  FileSpreadsheet,
+} from "lucide-react";
+import { exportToCSV, exportToPDFPrint } from "@/lib/export-utils";
+
+ 
+
+export function EmployeesView({
+  data,
+  onMutate,
+  focusedEmployeeId,
+}: {
+  data: any;
+  onMutate: (payload: Record<string, unknown>) => Promise<any>;
+  focusedEmployeeId?: number;
+}) {
+  const [name, setName] = useState("");
+  const [department, set…έª…έ¨…έ-…έ_…έ-] = useState("Engineering");
+  const [designation, setDesignation] = useState("Site Engineer");
+  const [basicSalary, setBasicSalary] = useState("35000");
+  const [allowance, setAllowance] = useState("5000");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [bankName, setBankName] = useState("City Bank PLC");
+  const [bankAccountNo, setBankAccountNo] = useState("");
+  const [role, setRole] = useState("Engineer");
+  const [selectedEmpId, setSelectedEmpId] = useState<number>(
+    focusedEmployeeId || data.employees?.[0]?.id || 1
+  );
+
+  async function handleCreateEmployee(e: React.FormEvent) {
+    e.preventDefault();
+    await onMutate({
+      action: "createEmployee",
+      name,
+      department,
+      designation,
+      basicSalary: Number(basicSalary),
+      allowance: Number(allowance),
+      phone,
+      email,
+      bankName,
+      bankAccountNo,
+      role,
+    });
+    setName("");
+    setPhone("");
+    setEmail("");
+  }
+
+  const canViewAll =
+    data.currentUser?.role === "Owner" ||
+    data.currentUser?.role === "MD" ||
+    data.currentUser?.role === "Admin" ||
+    data.currentUser?.role === "Manager" ||
+    data.currentUser?.role === "HR";
+
+  if (
+    focusedEmployeeId &&
+    !canViewAll &&
+    focusedEmployeeId !== data.currentUser?.employeeId
+  ) {
+    return (
+      <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-8 text-center space-y-3">
+        <h2 className="text-xl font-bold text-rose-900">
+          403 Forbidden ƒ?" Staff Privacy & Access Control Enforced
+        </h2>
+        <p className="text-xs text-rose-700 max-w-xl mx-auto">
+          Staff members can only view their own profile, attendance, salary, leave, performance, daily work history, documents, and activity timeline. Only Manager, MD, HR, and Owner/Super Admin can view other employees&apos; records.
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold"
+        >
+          Return to My Self-Service Dashboard
+        </Link>
+      </div>
+    );
+  }
+
+  const activeEmp =
+    (data.employees || []).find((e: any) => e.id === selectedEmpId) ||
+    data.employees?.[0];
+
+  const empAtt = (data.attendances || []).filter(
+    (a: any) => a.employeeId === activeEmp?.id
+  );
+  const empPlans = (data.dailyWorkPlans || []).filter(
+    (p: any) => p.employeeId === activeEmp?.id
+  );
+  const empDaily = (data.dailyWorks || []).filter(
+    (d: any) => d.employeeId === activeEmp?.id
+  );
+  const empTasks = (data.tasks || []).filter(
+    (t: any) => t.assignedTo === activeEmp?.id
+  );
+  const empFollowups = (data.leadFollowups || []).filter(
+    (f: any) => f.staffId === activeEmp?.id
+  );
+  const empLeaves = (data.leaveRequests || []).filter(
+    (l: any) => l.employeeId === activeEmp?.id
+  );
+  const empPayrolls = (data.payrolls || []).filter(
+    (p: any) => p.employeeId === activeEmp?.id
+  );
+  const empPerf = (data.performanceReviews || []).filter(
+    (p: any) => p.employeeId === activeEmp?.id
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">
+            …έ…έψ…?…έr…έs…έ_…έψ…? …έ" …έ?…έΨ…έs…έ+…έψ …έª…?…έ_…έª…έ,…?…έ…έ_…έ¦…έ"…έ_
+          </h1>
+          <p className="text-xs text-slate-500">
+            360Aψ Employee Profile: Attendance, Daily Work, Tasks, Leave, Performance, Salary, Advance & Assigned Projects
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => exportToCSV("INSAF_Employees", data.employees || [])}
+          className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700"
+        >
+          …έ…έψ…?…έr…έs…έ_…έψ…? CSV …έ?…έ…?…έ,…έ¦…<…έψ…?…έY
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Create Employee Form */}
+        {data.currentUser?.role !== "Staff" && !focusedEmployeeId && (
+          <form
+            onSubmit={handleCreateEmployee}
+            className="lg:col-span-4 bg-white p-5 rounded-2xl border border-slate-200 space-y-3 h-fit"
+          >
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Plus className="w-4 h-4 text-emerald-600" /> …έ"…έ…?…έ" …έ…έψ…?…έr…έs…έ_…έψ…? …έ_…<…έ- …έ…έψ…?…έ"
+            </h2>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                …έ¦…,…έψ…?…έ …έ"…έ_…έr *
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Engr. Ashraful Islam"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έª…έ¨…έ-…έ_…έ-
+                </label>
+                <select
+                  value={department}
+                  onChange={(e) => set…έª…έ¨…έ-…έ_…έ-(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                >
+                  <option>Engineering</option>
+                  <option>Construction</option>
+                  <option>CRM & Sales</option>
+                  <option>HR & Admin</option>
+                  <option>Accounts & Finance</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έ,…έ¨…έ,…?…έY…Ψ…έr …έψ…<…έύ
+                </label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                >
+                  <option>Engineer</option>
+                  <option>Project Manager</option>
+                  <option>Sales</option>
+                  <option>Accounts</option>
+                  <option>HR</option>
+                  <option>Staff</option>
+                  <option>Site Staff</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                …έ¦…έέ…έª…έ¨ *
+              </label>
+              <input
+                type="text"
+                required
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έr…,…έύ …έª…Ψ…έ…έ" (…3)
+                </label>
+                <input
+                  type="number"
+                  required
+                  value={basicSalary}
+                  onChange={(e) => setBasicSalary(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έ-…έ_…έ…έ_ (…3)
+                </label>
+                <input
+                  type="number"
+                  value={allowance}
+                  onChange={(e) => setAllowance(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έ®…<…έ" *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="01711-XXXXXX"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έΨ…έr…Ψ…έΨ…έύ *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ashraf@insaferp.com"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έª…?…έ_…έ_…έ,…έ…Ψ…έψ …έ"…έ_…έr
+                </label>
+                <input
+                  type="text"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έª…?…έ_…έ_…έ,…έ …έ1…έ¨…έ,…έ_…έª …έ"…έ,
+                </label>
+                <input
+                  type="text"
+                  value={bankAccountNo}
+                  onChange={(e) => setBankAccountNo(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition"
+            >
+              …έ…έψ…?…έr…έs…έ_…έψ…? …έ…^…έψ…έ¨ …έ" …έΨ…έ%…έo…έ_…έψ …έ.…?…έ_…έ_…έ…έ_…έ%…έ"…?…έY …έ_…?…έ…?…έ …έ…έψ…?…έ"
+            </button>
+          </form>
+        )}
+
+        {/* Employee Directory & 360 Profile */}
+        <div
+          className={
+            data.currentUser?.role !== "Staff" && !focusedEmployeeId
+              ? "lg:col-span-8 space-y-4"
+              : "lg:col-span-12 space-y-4"
+          }
+        >
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-wrap gap-2">
+            {(data.employees || []).map((emp: any) => (
+              <button
+                key={emp.id}
+                type="button"
+                onClick={() => setSelectedEmpId(emp.id)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold border transition ${
+                  activeEmp?.id === emp.id
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                {emp.empCode} ƒ?› {emp.name}
+              </button>
+            ))}
+          </div>
+
+          {activeEmp && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-5">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <span className="px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono text-xs font-bold">
+                    {activeEmp.empCode}
+                  </span>
+                  <h2 className="text-xl font-bold text-slate-900 mt-1">
+                    {activeEmp.name}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    {activeEmp.designation} ƒ?" {activeEmp.department} ƒ?› Joined:{" "}
+                    {activeEmp.joiningDate}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Phone: {activeEmp.phone} | Email: {activeEmp.email} | Bank:{" "}
+                    {activeEmp.bankName} ({activeEmp.bankAccountNo})
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-slate-500">…έr…έ_…έ,…έ¨…έ …έª…Ψ…έ,…έ¨…έ + …έ-…έ_…έ…έ_</p>
+                  <p className="text-lg font-bold text-emerald-600">
+                    …3
+                    {(
+                      Number(activeEmp.basicSalary) + Number(activeEmp.allowance)
+                    ).toLocaleString()}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Advance: …3{Number(activeEmp.advanceBalance).toLocaleString()} |
+                    Deduction: …3{Number(activeEmp.deductionDefault).toLocaleString()}
+                  </p>
+                  <Link
+                    href={`/employees/${activeEmp.id}/daily`}
+                    className="inline-block mt-2 px-3 py-1 rounded-lg bg-slate-900 text-white text-xs font-semibold"
+                  >
+                    …έέ…^…έ"…έ¨…έ …έύ…έ- …έ-…?…έύ…?…έ" ƒ+'
+                  </Link>
+                </div>
+              </div>
+
+              {/* 360Aψ Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-500 block">…έ1…έ_…έo…έ¨…έψ…έ_ …έύ…έ-</span>
+                  <span className="text-base font-bold text-slate-900">
+                    {empAtt.length} days
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-500 block">…έέ…^…έ"…έ¨…έ …έ…έ_…έo…Ψ…έψ …έύ…έ-</span>
+                  <span className="text-base font-bold text-emerald-600">
+                    {empDaily.length} updates
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-500 block">…έ.…?…έ_…έ_…έ,…έ_…έΨ…έ"…έ……έ …έY…έ_…έ,…?…έ</span>
+                  <span className="text-base font-bold text-indigo-600">
+                    {empTasks.length} tasks
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-500 block">…έ"…Ψ…έ"…έ_…έ¬…έ_ …έ>…?…έY…έ¨</span>
+                  <span className="text-base font-bold text-amber-600">
+                    {empLeaves.length} requests
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-500 block">…έ¦…έ_…έψ…έ®…έψ…έr…?…έ_…έ_…έ"…?…έ, …έ,…?…έ…<…έψ</span>
+                  <span className="text-base font-bold text-purple-600">
+                    {empPerf[0]?.totalPoints || 88} / 100
+                  </span>
+                </div>
+              </div>
+
+              {/* 8. …έ…έψ…?…έr…έs…έ_…έψ…?…έψ …έª…?…έ_…έ…?…έ…έ¨…έ-…έ …έ…έ_…έψ…?…έ_…έ…?…έψ…έr …έY…έ_…έΨ…έr…έύ…έ_…έΨ…έ" */}
+              <div className="border-2 border-emerald-500/30 bg-emerald-50/20 rounded-2xl p-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                      …έ…έψ…?…έr…έs…έ_…έψ…?…έψ …έª…?…έ_…έ…?…έ…έ¨…έ-…έ …έ…έ_…έψ…?…έ_…έ…?…έψ…έr …έY…έ_…έΨ…έr…έύ…έ_…έΨ…έ"
+                    </span>
+                    <h3 className="text-sm font-bold text-slate-900 mt-1">
+                      Attendance ƒ+' Work Plan ƒ+' Daily Work ƒ+' Tasks ƒ+' Follow-up ƒ+' Leave ƒ+' Performance
+                    </h3>
+                  </div>
+                  <span className="text-xs text-slate-500">
+                    Visible only to {activeEmp.name} & Management (Manager/MD/Owner)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-1">
+                    <span className="font-bold text-emerald-700 block">
+                      1. Attendance ({empAtt.length})
+                    </span>
+                    {empAtt.slice(0, 2).map((a: any) => (
+                      <div key={a.id} className="text-slate-600">
+                        {a.date}: IN {a.checkIn || "ƒ?""} / OUT {a.checkOut || "Active"} ({a.workingHours}h)
+                      </div>
+                    ))}
+                  </div>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-1">
+                    <span className="font-bold text-indigo-700 block">
+                      2. Work Plan ({empPlans.length})
+                    </span>
+                    {empPlans.slice(0, 1).map((pl: any) => (
+                      <div key={pl.id} className="text-slate-600">
+                        {pl.date}: {(pl.items || []).length} planned items ƒ?› Auto:{" "}
+                        <strong>{pl.autoProgressPercent}%</strong>
+                      </div>
+                    ))}
+                    {empPlans.length === 0 && (
+                      <span className="text-slate-400">…έ+…έo…έ…Ψ…έψ …έ…έ_…έo…Ψ…έψ …έ¦…έψ…έ¨…έ…έύ…?…έ¦…έ"…έ_ …έ"…Ψ…έΨ</span>
+                    )}
+                  </div>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-1">
+                    <span className="font-bold text-amber-700 block">
+                      3. Tasks & CRM ({empTasks.length} / {empFollowups.length})
+                    </span>
+                    {empTasks.slice(0, 2).map((t: any) => (
+                      <div key={t.id} className="text-slate-600 truncate">
+                        {t.taskCode}: {t.title} ({t.status})
+                      </div>
+                    ))}
+                  </div>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-1">
+                    <span className="font-bold text-purple-700 block">
+                      4. Leave & Performance
+                    </span>
+                    <div className="text-slate-600">
+                      Leaves: {empLeaves.length} ƒ?› Score:{" "}
+                      <strong>{empPerf[0]?.totalPoints || 90}/100</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Employee Daily Work & Task History */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="border border-slate-200 rounded-xl p-4">
+                  <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">
+                    …έ,…έ_…έr…?…έ¦…?…έψ…έ…έ¨…έ …έέ…^…έ"…έ¨…έ …έ+…έ¦…έ­…Ψ…έY ({empDaily.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {empDaily.map((d: any) => (
+                      <div key={d.id} className="p-2.5 rounded-lg bg-slate-50 text-xs">
+                        <div className="flex justify-between font-semibold text-slate-800">
+                          <span>{d.date} (In: {d.arrivalTime})</span>
+                          <span className="text-emerald-600">{d.progressPercent}%</span>
+                        </div>
+                        <p className="text-slate-600 mt-1">{d.workSummary}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Tomorrow: {d.tomorrowPlan}
+                        </p>
+                      </div>
+                    ))}
+                    {empDaily.length === 0 && (
+                      <p className="text-xs text-slate-400">…έ?…έ-…έ"…< …έέ…^…έ"…έ¨…έ …έ+…έ¦…έ­…Ψ…έY …έ"…Ψ…έΨ…</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border border-slate-200 rounded-xl p-4">
+                  <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">
+                    …έª…Ψ…έ…έ" …έ" …έ¦…Ψ-…έψ…<…έύ …έΨ…έ…έ¨…έ1…έ_…έ, ({empPayrolls.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {empPayrolls.map((pr: any) => (
+                      <div key={pr.id} className="p-2.5 rounded-lg bg-slate-50 text-xs">
+                        <div className="flex justify-between font-bold text-slate-800">
+                          <span>
+                            {pr.payrollCode} ({pr.salaryMonth})
+                          </span>
+                          <span className="text-emerald-600">
+                            Net: …3{Number(pr.netSalary).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Basic: …3{Number(pr.basicSalary).toLocaleString()} + Allow: …3
+                          {Number(pr.allowance).toLocaleString()} + OT: …3
+                          {Number(pr.overtimePay).toLocaleString()} - Adv: …3
+                          {Number(pr.advanceDeduction).toLocaleString()} - Ded: …3
+                          {Number(pr.otherDeduction).toLocaleString()}
+                        </p>
+                      </div>
+                    ))}
+                    {empPayrolls.length === 0 && (
+                      <p className="text-xs text-slate-400">…έ?…έ-…έ"…< …έ¦…Ψ-…έψ…<…έύ …έ…^…έψ…έ¨ …έ1…έ_…έ¬…έ"…έ¨…</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// LEAVE MANAGEMENT VIEW (/leave)
+// ============================================================================
+export function LeaveView({
+  data,
+  onMutate,
+}: {
+  data: any;
+  onMutate: (payload: Record<string, unknown>) => Promise<any>;
+}) {
+  const today = new Date().toISOString().split("T")[0];
+  const [leaveType, setLeaveType] = useState("Casual");
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+  const [totalDays, setTotalDays] = useState("1");
+  const [reason, setReason] = useState("");
+
+  const empMap = new Map<number, any>(
+    (data.allEmployeesDirectory || []).map((e: any) => [e.id, e])
+  );
+
+  async function handleApply(e: React.FormEvent) {
+    e.preventDefault();
+    await onMutate({
+      action: "applyLeave",
+      leaveType,
+      startDate,
+      endDate,
+      totalDays: Number(totalDays),
+      reason,
+    });
+    setReason("");
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">
+            …έ>…?…έY…έ¨ …έª…?…έ_…έª…έ,…?…έ…έ_…έ¦…έ"…έ_ …έ" …έ1…έ_…έo…έ¨…έψ…έ_ …έ,…έ¨…έT…?…έ
+          </h1>
+          <p className="text-xs text-slate-500">
+            Casual, Sick, Annual Leave Quotas ƒ?› Manager & HR Approval ƒ?› Approved Leave Automatically Reflects in Attendance
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <form
+          onSubmit={handleApply}
+          className="lg:col-span-4 bg-white p-5 rounded-2xl border border-slate-200 space-y-3.5 h-fit"
+        >
+          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-emerald-600" /> …έ>…?…έY…έ¨…έψ …έ+…έª…Ψ…έέ…έ"
+          </h2>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">
+              …έ>…?…έY…έ¨…έψ …έ…έψ…έ"
+            </label>
+            <select
+              value={leaveType}
+              onChange={(e) => setLeaveType(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            >
+              <option>Casual</option>
+              <option>Sick</option>
+              <option>Annual</option>
+              <option>Unpaid</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                …έ…?…έψ…?…έψ …έ…έ_…έψ…έ¨…έ-
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                …έ…Ψ…έϊ …έ…έ_…έψ…έ¨…έ-
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">
+              …έr…<…έY …έέ…έ¨…έ"
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={totalDays}
+              onChange={(e) => setTotalDays(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">
+              Reason *
+            </label>
+            <textarea
+              required
+              rows={2}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition"
+          >
+            …έ>…?…έY…έ¨…έψ …έ+…έª…Ψ…έέ…έ" …έo…έr…έ_ …έέ…έ¨…έ"
+          </button>
+        </form>
+
+        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="p-4 border-b border-slate-200">
+            <h3 className="text-sm font-bold text-slate-900">
+              …έ>…?…έY…έ¨…έψ …έ+…έª…Ψ…έέ…έ" …έ" …έ.…έ"…?…έr…<…έέ…έ" …έΨ…έ…έ¨…έ1…έ_…έ, ({(data.leaveRequests || []).length})
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                  <th className="p-3">…έ…<…έ­</th>
+                  <th className="p-3">…έ…έψ…?…έr…έs…έ_…έψ…?</th>
+                  <th className="p-3">…έ…έψ…έ"</th>
+                  <th className="p-3">…έ,…έr…έ_…έ¬…έ…έ_…έύ</th>
+                  <th className="p-3">…έέ…έ¨…έ"</th>
+                  <th className="p-3">…έ…έ_…έψ…έ</th>
+                  <th className="p-3">…έ,…?…έY…?…έ_…έ_…έY…έ_…έ,</th>
+                  <th className="p-3">…έ.…?…έ_…έ_…έ…έ…έ"</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(data.leaveRequests || []).map((lv: any) => {
+                  const emp = empMap.get(lv.employeeId);
+                  return (
+                    <tr key={lv.id}>
+                      <td className="p-3 font-mono font-bold">{lv.leaveCode}</td>
+                      <td className="p-3 font-semibold">
+                        {emp?.name || `EMP-${lv.employeeId}`}
+                      </td>
+                      <td className="p-3">{lv.leaveType}</td>
+                      <td className="p-3">
+                        {lv.startDate} ƒ+' {lv.endDate}
+                      </td>
+                      <td className="p-3 font-bold">{lv.totalDays}d</td>
+                      <td className="p-3 text-slate-600">{lv.reason}</td>
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-semibold ${
+                            lv.status === "Approved"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : lv.status === "Rejected"
+                              ? "bg-rose-100 text-rose-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {lv.status}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        {lv.status === "Pending" &&
+                          data.currentUser?.role !== "Staff" && (
+                            <div className="flex gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onMutate({
+                                    action: "approveLeave",
+                                    leaveId: lv.id,
+                                    decision: "Approved",
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-emerald-600 text-white font-semibold flex items-center gap-1"
+                              >
+                                <CheckCircle2 className="w-3 h-3" /> Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onMutate({
+                                    action: "approveLeave",
+                                    leaveId: lv.id,
+                                    decision: "Rejected",
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-rose-600 text-white font-semibold flex items-center gap-1"
+                              >
+                                <XCircle className="w-3 h-3" /> Reject
+                              </button>
+                            </div>
+                          )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// PAYROLL MODULE VIEW (/payroll)
+// ============================================================================
+export function PayrollView({
+  data,
+  onMutate,
+}: {
+  data: any;
+  onMutate: (payload: Record<string, unknown>) => Promise<any>;
+}) {
+  const [employeeId, setEmployeeId] = useState(
+    String(data.allEmployeesDirectory?.[4]?.id || 1)
+  );
+  const [salaryMonth, setSalaryMonth] = useState("2026-04");
+  const [basicSalary, setBasicSalary] = useState("30000");
+  const [allowance, setAllowance] = useState("5000");
+  const [overtimePay, setOvertimePay] = useState("2000");
+  const [bonus, setBonus] = useState("0");
+  const [advanceDeduction, setAdvanceDeduction] = useState("3000");
+  const [otherDeduction, setOtherDeduction] = useState("1000");
+
+  const empMap = new Map<number, any>(
+    (data.allEmployeesDirectory || []).map((e: any) => [e.id, e])
+  );
+
+  const previewNet =
+    Number(basicSalary || 0) +
+    Number(allowance || 0) +
+    Number(overtimePay || 0) +
+    Number(bonus || 0) -
+    Number(advanceDeduction || 0) -
+    Number(otherDeduction || 0);
+
+  async function handleGenerate(e: React.FormEvent) {
+    e.preventDefault();
+    await onMutate({
+      action: "generatePayroll",
+      employeeId: Number(employeeId),
+      salaryMonth,
+      basicSalary: Number(basicSalary),
+      allowance: Number(allowance),
+      overtimePay: Number(overtimePay),
+      bonus: Number(bonus),
+      advanceDeduction: Number(advanceDeduction),
+      otherDeduction: Number(otherDeduction),
+    });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">
+            …έ¦…Ψ-…έψ…<…έύ, …έª…Ψ…έ…έ" …έ…έ¨…έY …έ" …έ1…έ¨…έ,…έ_…έª …έª…έ¨…έ…έψ…έ
+          </h1>
+          <p className="text-xs text-slate-500">
+            Formula: Basic + Allowance + Overtime + Bonus - Advance - Deduction = …έ"…έ¨…έY …έª…Ψ…έ…έ" ƒ?› Auto-posts Journal Entry on Disbursement
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => exportToCSV("INSAF_Payroll", data.payrolls || [])}
+            className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700"
+          >
+            CSV …έ?…έ…?…έ,…έ¦…<…έψ…?…έY
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              exportToPDFPrint(
+                "Payroll Register & Payslips",
+                "Verified Salary Sheet",
+                data.payrolls || []
+              )
+            }
+            className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold flex items-center gap-1"
+          >
+            <Printer className="w-3.5 h-3.5" /> …έ¦…Ψ-…έ,…?…έύ…έ¨…έ¦ PDF
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {data.currentUser?.role !== "Staff" && (
+          <form
+            onSubmit={handleGenerate}
+            className="lg:col-span-4 bg-white p-5 rounded-2xl border border-slate-200 space-y-3 h-fit"
+          >
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-emerald-600" /> …έr…έ_…έ,…έ¨…έ …έ¦…Ψ-…έψ…<…έύ …έ…^…έψ…έ¨
+            </h2>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Employee
+              </label>
+              <select
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              >
+                {(data.allEmployeesDirectory || []).map((e: any) => (
+                  <option key={e.id} value={e.id}>
+                    {e.empCode} ƒ?" {e.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                …έª…Ψ…έ…έ"…Ψ…έψ …έr…έ_…έ,
+              </label>
+              <input
+                type="month"
+                value={salaryMonth}
+                onChange={(e) => setSalaryMonth(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έr…,…έύ …έª…Ψ…έ…έ" (+)
+                </label>
+                <input
+                  type="number"
+                  value={basicSalary}
+                  onChange={(e) => setBasicSalary(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έ-…έ_…έ…έ_ (+)
+                </label>
+                <input
+                  type="number"
+                  value={allowance}
+                  onChange={(e) => setAllowance(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έ"…έ-…έ_…έψ…έY…έ_…έΨ…έr (+)
+                </label>
+                <input
+                  type="number"
+                  value={overtimePay}
+                  onChange={(e) => setOvertimePay(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έª…<…έ"…έ_…έ, (+)
+                </label>
+                <input
+                  type="number"
+                  value={bonus}
+                  onChange={(e) => setBonus(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έ.…έ-…?…έψ…έ¨…έr …έ…έψ…?…έ…έ" (-)
+                </label>
+                <input
+                  type="number"
+                  value={advanceDeduction}
+                  onChange={(e) => setAdvanceDeduction(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έ.…έ"…?…έ_…έ_…έ"…?…έ_ …έ…έψ…?…έ…έ" (-)
+                </label>
+                <input
+                  type="number"
+                  value={otherDeduction}
+                  onChange={(e) => setOtherDeduction(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+              <span className="text-xs font-semibold text-emerald-900">
+                …έ"…έ¨…έY …έª…Ψ…έ…έ":
+              </span>
+              <span className="text-base font-bold text-emerald-700">
+                …3{previewNet.toLocaleString()}
+              </span>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition"
+            >
+              …έ.…έ"…?…έr…<…έέ…έ" …έ" …έ¦…Ψ-…έψ…<…έύ …έ…^…έψ…έ¨
+            </button>
+          </form>
+        )}
+
+        <div
+          className={
+            data.currentUser?.role !== "Staff"
+              ? "lg:col-span-8 bg-white rounded-2xl border border-slate-200 overflow-hidden"
+              : "lg:col-span-12 bg-white rounded-2xl border border-slate-200 overflow-hidden"
+          }
+        >
+          <div className="p-4 border-b border-slate-200">
+            <h3 className="text-sm font-bold text-slate-900">
+              …έ¦…Ψ-…έψ…<…έύ …έ" …έ¦…Ψ-…έ,…?…έύ…έ¨…έ¦ ({(data.payrolls || []).length})
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                  <th className="p-3">…έ¦…Ψ-…έψ…<…έύ …έ+…έΨ…έ­…έ¨</th>
+                  <th className="p-3">…έ…έψ…?…έr…έs…έ_…έψ…?</th>
+                  <th className="p-3">…έr…έ_…έ,</th>
+                  <th className="p-3">…έª…Ψ…έ,…έ¨…έ + …έ-…έ_…έ…έ_</th>
+                  <th className="p-3">…έ"…έ-…έ_…έψ…έY…έ_…έΨ…έr</th>
+                  <th className="p-3">…έ.…έ-…?…έψ…έ¨…έr + …έ…έψ…?…έ…έ"</th>
+                  <th className="p-3">…έ"…έ¨…έY …έª…Ψ…έ…έ"</th>
+                  <th className="p-3">…έ,…?…έY…?…έ_…έ_…έY…έ_…έ,</th>
+                  <th className="p-3">…έ.…?…έ_…έ_…έ…έ…έ"</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(data.payrolls || []).map((pr: any) => {
+                  const emp = empMap.get(pr.employeeId);
+                  return (
+                    <tr key={pr.id}>
+                      <td className="p-3 font-mono font-bold">{pr.payrollCode}</td>
+                      <td className="p-3 font-semibold">
+                        {emp?.name || `EMP-${pr.employeeId}`}
+                      </td>
+                      <td className="p-3">{pr.salaryMonth}</td>
+                      <td className="p-3">
+                        …3{Number(pr.basicSalary).toLocaleString()} + …3
+                        {Number(pr.allowance).toLocaleString()}
+                      </td>
+                      <td className="p-3 text-emerald-600 font-semibold">
+                        +…3{Number(pr.overtimePay).toLocaleString()}
+                      </td>
+                      <td className="p-3 text-rose-600">
+                        -…3{Number(pr.advanceDeduction).toLocaleString()} / -…3
+                        {Number(pr.otherDeduction).toLocaleString()}
+                      </td>
+                      <td className="p-3 font-bold text-slate-900 text-sm">
+                        …3{Number(pr.netSalary).toLocaleString()}
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full font-bold ${
+                            pr.status === "Paid"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {pr.status}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        {pr.status !== "Paid" &&
+                          data.currentUser?.role !== "Staff" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onMutate({
+                                  action: "disbursePayroll",
+                                  payrollId: pr.id,
+                                  method: "Bank",
+                                })
+                              }
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold"
+                            >
+                              …έ¦…έψ…έ¨…έ…<…έ …έ" …έo…έ_…έψ…?…έ"…έ_…έύ
+                            </button>
+                          )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// PERFORMANCE MANAGEMENT VIEW (/performance)
+// ============================================================================
+export function PerformanceView({
+  data,
+  onMutate,
+}: {
+  data: any;
+  onMutate: (payload: Record<string, unknown>) => Promise<any>;
+}) {
+  const [employeeId, setEmployeeId] = useState(
+    String(data.allEmployeesDirectory?.[4]?.id || 1)
+  );
+  const [period, setPeriod] = useState("2026-04");
+  const [managerReviewPoints, setManagerReviewPoints] = useState("9");
+  const [managerComments, setManagerComments] = useState("");
+
+  const empMap = new Map<number, any>(
+    (data.allEmployeesDirectory || []).map((e: any) => [e.id, e])
+  );
+
+  async function handleEvaluate(e: React.FormEvent) {
+    e.preventDefault();
+    await onMutate({
+      action: "generatePerformanceReview",
+      employeeId: Number(employeeId),
+      period,
+      managerReviewPoints: Number(managerReviewPoints),
+      managerComments,
+    });
+    setManagerComments("");
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">
+            …έ…έψ…?…έr…έs…έ_…έψ…? …έ¦…έ_…έψ…έ®…έψ…έr…?…έ_…έ_…έ"…?…έ, (…έª…έ_…έ,…?…έ…έª …έ…έ_…έψ…?…έ_…έ…?…έψ…έr …έ-…έ¨…έ…?…έ…έ¨…έ)
+          </h1>
+          <p className="text-xs text-slate-500">
+            Calculated from Real Attendance, Daily Work Updates, Task Completion, Follow-ups & Manager Review
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {data.currentUser?.role !== "Staff" && (
+          <form
+            onSubmit={handleEvaluate}
+            className="lg:col-span-4 bg-white p-5 rounded-2xl border border-slate-200 space-y-3.5 h-fit"
+          >
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Award className="w-4 h-4 text-emerald-600" /> …έr…έ_…έ,…έ¨…έ …έ¦…έ_…έψ…έ®…έψ…έr…?…έ_…έ_…έ"…?…έ, …έ1…έ¨…έ,…έ_…έª
+            </h2>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Employee
+              </label>
+              <select
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              >
+                {(data.allEmployeesDirectory || []).map((e: any) => (
+                  <option key={e.id} value={e.id}>
+                    {e.empCode} ƒ?" {e.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έr…,…έύ…?…έ_…έ_…έ_…έ¬…έ" …έ,…έr…έ_…έ¬…έ…έ_…έύ
+                </label>
+                <input
+                  type="month"
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  …έr…?…έ_…έ_…έ"…Ψ…έo…έ_…έψ …έ¦…έ_…έ¬…Ψ…έ"…?…έY (…έ-……έ)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={managerReviewPoints}
+                  onChange={(e) => setManagerReviewPoints(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                …έr…?…έ_…έ_…έ"…Ψ…έo…έ_…έψ …έr…έ"…?…έ…έª…?…έ_
+              </label>
+              <textarea
+                rows={2}
+                value={managerComments}
+                onChange={(e) => setManagerComments(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition"
+            >
+              …έª…έ_…έ,…?…έ…έª …έ,…?…έ…<…έψ …έ1…έ¨…έ,…έ_…έª …έ…έψ…?…έ"
+            </button>
+          </form>
+        )}
+
+        <div className="lg:col-span-8 space-y-3">
+          {(data.performanceReviews || []).map((rev: any) => {
+            const emp = empMap.get(rev.employeeId);
+            return (
+              <div
+                key={rev.id}
+                className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      {emp?.name || `EMP-${rev.employeeId}`} ({emp?.empCode})
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Period: {rev.period} ƒ?› Reviewed by {rev.reviewedBy}
+                    </p>
+                  </div>
+                  <div className="px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-right">
+                    <span className="text-[10px] uppercase font-bold text-emerald-700 block">
+                      …έr…<…έY …έ,…?…έ…<…έψ
+                    </span>
+                    <span className="text-xl font-bold text-emerald-700">
+                      {rev.totalPoints} / 100
+                    </span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs">
+                  <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                    <span className="text-slate-400 block">Attendance</span>
+                    <span className="font-bold">{rev.attendanceScore}/25</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                    <span className="text-slate-400 block">…έY…έ_…έ,…?…έ …έ,…?…έ…<…έψ</span>
+                    <span className="font-bold">{rev.taskScore}/25</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                    <span className="text-slate-400 block">…έέ…^…έ"…έ¨…έ …έύ…έ-</span>
+                    <span className="font-bold">{rev.dailyUpdateScore}/20</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                    <span className="text-slate-400 block">Follow-ups</span>
+                    <span className="font-bold">{rev.followUpScore}/15</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                    <span className="text-slate-400 block">Projects</span>
+                    <span className="font-bold">{rev.projectContributionScore}/15</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                    <span className="text-slate-400 block">…έr…?…έ_…έ_…έ"…Ψ…έo…έ_…έψ …έψ…έ¨…έ-…έ¨…έ%</span>
+                    <span className="font-bold">{rev.managerReviewPoints}/10</span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 italic">
+                  &ldquo;{rev.managerComments}&rdquo;
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+void Users;
+void FileSpreadsheet;
+
+===== PAYROLL SCHEMA =====
+    status: text("status").notNull().default("Todo"), // Todo, Accepted, In Progress, Blocked, Review, Reopened, Completed, Cancelled
+    progressPercent: integer("progress_percent").notNull().default(0),
+    requiresReview: boolean("requires_review").notNull().default(false),
+    createdBy: text("created_by").notNull().default("Manager"),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at"),
+    completedBy: text("completed_by"),
+    completedAt: timestamp("completed_at"),
+    completionNote: text("completion_note").default(""),
+    attachmentUrl: text("attachment_url"),
+    evidenceAttachments: jsonb("evidence_attachments").$type<AttachmentMeta[]>().notNull().default([]),
+    isCompanyWide: boolean("is_company_wide").notNull().default(false),
+    visibility: text("visibility").notNull().default("Assigned"), // Everyone, Assigned, Management
+    // Assignment tracking (who gave ƒ+' whom, when)
+    assignedByUserId: integer("assigned_by_user_id"),
+    assignedByEmployeeId: integer("assigned_by_employee_id"),
+    assignedByName: text("assigned_by_name"),
+    assignedByDesignation: text("assigned_by_designation"),
+    assignedToName: text("assigned_to_name"),
+    assignedToDesignation: text("assigned_to_designation"),
+    dueTime: text("due_time"), // HH:mm (optional)
+    viewedAt: timestamp("viewed_at"),
+    deadlineReminderSentAt: timestamp("deadline_reminder_sent_at"),
+    overdueNotifiedAt: timestamp("overdue_notified_at"),
+    // Work-tracking extensions (Option B)
+    category: text("category").notNull().default("General"),
+    startDate: text("start_date"),
+    nextAction: text("next_action").notNull().default(""),
+    delayReason: text("delay_reason").notNull().default(""),
+    reviewStatus: text("review_status").notNull().default("None"), // None, Pending Review, Approved, Correction Required
+    reviewNote: text("review_note").notNull().default(""),
+    correctionCount: integer("correction_count").notNull().default(0),
+    lastUpdateAt: timestamp("last_update_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("tasks_code_idx").on(table.taskCode),
+    index("tasks_assigned_idx").on(table.assignedTo),
+  ]
+);
+
+// Secure task/daily-work evidence files (bytes stored server-side, served only via authorised API)
+export const workFiles = pgTable(
+  "work_files",
+  {
+    id: serial("id").primaryKey(),
+    taskId: integer("task_id").references(() => tasks.id, { onDelete: "set null" }),
+    dailyWorkId: integer("daily_work_id"),
+    employeeId: integer("employee_id").references(() => employees.id, { onDelete: "set null" }),
+    uploadedByUserId: integer("uploaded_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    uploadedByName: text("uploaded_by_name").notNull(),
+    fileName: text("file_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    dataBase64: text("data_base64").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("work_files_task_idx").on(table.taskId),
+    index("work_files_emp_idx").on(table.employeeId),
+  ]
+);
+
+export const taskComments = pgTable("task_comments", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  authorName: text("author_name").notNull(),
+  comment: text("comment").notNull(),
+  actionType: text("action_type").notNull().default("Comment"), // Assigned, Accepted, Started, ProgressUpdate, ProofSubmitted, SubmittedForReview, ReviewApproved, CorrectionRequired, StatusChange, Reassigned, DeadlineChanged, Comment
+  progressPercent: integer("progress_percent"),
+  fileIds: jsonb("file_ids").$type<number[]>().notNull().default([]),
+  // Canonical lifecycle event (TASK_ASSIGNED, TASK_ACCEPTED, TASK_STARTED, TASK_PROGRESS_UPDATED, DAILY_WORK_SUBMITTED,
+  // TASK_PROBLEM_REPORTED, TASK_ATTACHMENT_ADDED, TASK_COMPLETED, TASK_CORRECTION_REQUIRED, TASK_RESUBMITTED, TASK_APPROVED, ...)
+  eventType: text("event_type"),
+  oldStatus: text("old_status"),
+  newStatus: text("new_status"),
+  actorEmployeeId: integer("actor_employee_id"),
+  actorDesignation: text("actor_designation"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const dailyWorks = pgTable(
+  "daily_works",
+  {
+    id: serial("id").primaryKey(),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "cascade" }),
+    date: text("date").notNull(), // YYYY-MM-DD
+    arrivalTime: text("arrival_time").notNull().default("09:30"),
+    startTime: text("start_time").notNull().default("09:30"),
+    endTime: text("end_time").notNull().default("19:30"),
+    status: text("status").notNull().default("Completed"), // Completed, In Progress, Pending, Blocked
+    workSummary: text("work_summary").notNull(),
+    taskId: integer("task_id").references(() => tasks.id, { onDelete: "set null" }),
+    clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
+    projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
+    siteId: integer("site_id").references(() => sites.id, { onDelete: "set null" }),
+    progressPercent: integer("progress_percent").notNull().default(0),
+    problems: text("problems").default(""),
+    pendingWork: text("pending_work").default(""),
+    tomorrowPlan: text("tomorrow_plan").notNull().default(""),
+    notes: text("notes").default(""),
+    attachments: jsonb("attachments").$type<AttachmentMeta[]>().notNull().default([]),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("daily_works_emp_date_idx").on(table.employeeId, table.date)]
+);
+
+export const dailyWorkPlans = pgTable(
+  "daily_work_plans",
+  {
+    id: serial("id").primaryKey(),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "cascade" }),
+    date: text("date").notNull(), // YYYY-MM-DD
+    items: jsonb("items").$type<WorkPlanItem[]>().notNull().default([]),
+    autoProgressPercent: integer("auto_progress_percent").notNull().default(0),
+    manualOverridePercent: integer("manual_override_percent"),
+    overrideReason: text("override_reason").default(""),
+    overriddenBy: text("overridden_by"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("daily_work_plans_emp_date_idx").on(table.employeeId, table.date)]
+);
+
+// 8. MATERIAL & INVENTORY
+export const materials = pgTable(
+  "materials",
+  {
+    id: serial("id").primaryKey(),
+    materialCode: text("material_code").notNull(), // MAT-0001
+    name: text("name").notNull(),
+    category: text("category").notNull(), // Cement, Steel/Rod, Brick/Sand, Electrical, Plumbing, Finishing, Hardware
+    unit: text("unit").notNull(), // Bag, Ton, CFT, Pcs, Kg, Liter
+    warehouse: text("warehouse").notNull().default("Central Warehouse"),
+    openingStock: numeric("opening_stock", { precision: 14, scale: 2 }).notNull().default("0"),
+    purchaseReceived: numeric("purchase_received", { precision: 14, scale: 2 }).notNull().default("0"),
+    transferIn: numeric("transfer_in", { precision: 14, scale: 2 }).notNull().default("0"),
+    returnQty: numeric("return_qty", { precision: 14, scale: 2 }).notNull().default("0"),
+    issueQty: numeric("issue_qty", { precision: 14, scale: 2 }).notNull().default("0"),
+    transferOut: numeric("transfer_out", { precision: 14, scale: 2 }).notNull().default("0"),
+    consumptionQty: numeric("consumption_qty", { precision: 14, scale: 2 }).notNull().default("0"),
+    adjustmentQty: numeric("adjustment_qty", { precision: 14, scale: 2 }).notNull().default("0"),
+    currentStock: numeric("current_stock", { precision: 14, scale: 2 }).notNull().default("0"),
+    unitCost: numeric("unit_cost", { precision: 14, scale: 2 }).notNull().default("0"),
+    reorderLevel: numeric("reorder_level", { precision: 14, scale: 2 }).notNull().default("20"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("materials_code_idx").on(table.materialCode)]
+);
+
+export const stockMovements = pgTable("stock_movements", {
+  id: serial("id").primaryKey(),
+  materialId: integer("material_id")
+    .notNull()
+    .references(() => materials.id, { onDelete: "cascade" }),
+  movementType: text("movement_type").notNull(), // Opening, Purchase, Issue, Consumption, Transfer In, Transfer Out, Return, Adjustment
+  quantity: numeric("quantity", { precision: 14, scale: 2 }).notNull(),
+  unitCost: numeric("unit_cost", { precision: 14, scale: 2 }).notNull().default("0"),
+  totalValue: numeric("total_value", { precision: 14, scale: 2 }).notNull().default("0"),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
+  siteId: integer("site_id").references(() => sites.id, { onDelete: "set null" }),
+  warehouseFrom: text("warehouse_from").default("Central Warehouse"),
+  warehouseTo: text("warehouse_to").default(""),
+  referenceCode: text("reference_code").default(""),
+  notes: text("notes").default(""),
+  createdBy: text("created_by").notNull().default("System"),
+  date: text("date").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// 9. SUPPLIER & PROCUREMENT
+export const suppliers = pgTable(
+  "suppliers",
+  {
+
+===== ATTENDANCE SCHEMA =====
+
+export interface WorkPlanItem {
+  id: string;
+  title: string;
+  status: "Completed" | "In Progress" | "Pending" | "Blocked";
+  completionPercent: number;
+  notes?: string;
+}
+
+// 3. ATTENDANCE & CORRECTIONS
+export const attendances = pgTable(
+  "attendances",
+  {
+    id: serial("id").primaryKey(),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "cascade" }),
+    date: text("date").notNull(), // YYYY-MM-DD
+    checkIn: text("check_in"), // HH:mm
+    checkOut: text("check_out"), // HH:mm
+    status: text("status").notNull().default("Present"), // Present, Late, Early Leave, Missing Checkout, Absent, Leave, Holiday
+    lateMinutes: integer("late_minutes").notNull().default(0),
+    earlyLeaveMinutes: integer("early_leave_minutes").notNull().default(0),
+    morningHours: numeric("morning_hours", { precision: 6, scale: 2 }).notNull().default("0"),
+    afternoonHours: numeric("afternoon_hours", { precision: 6, scale: 2 }).notNull().default("0"),
+    workingHours: numeric("working_hours", { precision: 6, scale: 2 }).notNull().default("0"),
+    overtimeHours: numeric("overtime_hours", { precision: 6, scale: 2 }).notNull().default("0"),
+    isApproved: boolean("is_approved").notNull().default(true),
+    notes: text("notes").default(""),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("attendances_emp_date_idx").on(table.employeeId, table.date),
+    index("attendances_date_idx").on(table.date),
+  ]
+);
+
+export const attendanceCorrections = pgTable("attendance_corrections", {
+  id: serial("id").primaryKey(),
+  attendanceId: integer("attendance_id").references(() => attendances.id, { onDelete: "set null" }),
+  employeeId: integer("employee_id")
+    .notNull()
+    .references(() => employees.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  requestedCheckIn: text("requested_check_in").notNull(),
+  requestedCheckOut: text("requested_check_out").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("Pending"), // Pending, Approved, Rejected
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// 4. LEADS & CLIENTS (CRM)
+// COMPANY / BUSINESS-UNIT SEPARATION:
+//   IBDC = INSAF BUILDING DESIGN & CONSULTANT LTD.  (building design, approval, engineering & construction services)
+//   IREL = INSAF REAL ESTATE LTD.                   (real-estate / property enquiries)
+export const COMPANY_OPTIONS = [
+  {
+    id: "IBDC",
+    label: "INSAF BUILDING DESIGN & CONSULTANT LTD.",
+    shortLabel: "Insaf Building Design",
+    categoryLabel: "Service Type",
+    categoryField: "service",
+    categories: [
+      "Architectural Design",
+      "Structural Design",
+      "Electrical Design",
+      "Plumbing Design",
+      "Costing & Estimating",
+      "RAJUK Plan Approval",
+      "Plan Design + RAJUK Approval",
+      "Interior Design",
+      "3D Visualization & VR",
+      "3D View",
+      "Construction Management",
+      "Package Building Work",
+      "Documents",
+      "Other",
+    ],
+  },
+  {
+    id: "IREL",
+    label: "INSAF REAL ESTATE LTD.",
+    shortLabel: "Insaf Real Estate",
+    categoryLabel: "Property Interest / Property Type",
+    categoryField: "propertyType",
+    categories: [
+      "Flat",
+      "Shop",
+      "Office Space",
+      "Commercial Space",
+      "Apartment",
+      "Land/Plot",
+      "Investment",
+      "Project",
+      "Other",
+    ],
+  },
+] as const;

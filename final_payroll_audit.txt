@@ -1,0 +1,109 @@
+===== ERP DATA LOADING =====
+
+Path                                                       LineNumber Line                                             
+----                                                       ---------- ----                                             
+E:\insaferp\src\app\api\erp\route.ts                              170     db.select().from(attendances).orderBy(desc(at
+                                                                      tendances.date), desc(attendances.id)),          
+E:\insaferp\src\app\api\erp\route.ts                              196     db.select().from(payrolls).orderBy(desc(payro
+                                                                      lls.id)),                                        
+E:\insaferp\src\app\api\erp\route.ts                              549       attendances: allAttendances,               
+E:\insaferp\src\app\api\erp\route.ts                              607     allEmployeesDirectory: scopedDirectory,      
+E:\insaferp\src\app\api\erp\route.ts                              608     attendances: scopedAttendances,              
+E:\insaferp\src\app\api\erp\route.ts                              660     payrolls: scopedPayrolls,                    
+E:\insaferp\src\app\api\erp\route.ts                             1035         .from(attendances)                       
+E:\insaferp\src\app\api\erp\route.ts                             3980         .from(attendances)                       
+E:\insaferp\src\app\api\erp\route.ts                             3992       const existingPr = await                   
+                                                                      db.select().from(payrolls);                      
+E:\insaferp\src\app\api\erp\route.ts                             4031           .from(payrolls)                        
+E:\insaferp\src\app\api\erp\route.ts                             4202       const empAtt = await db.select().from(atten
+                                                                      dances).where(eq(attendances.employeeId, empId));
+E:\insaferp\src\app\api\erp\route.ts                             4368       const todayAtt = (await                    
+                                                                      db.select().from(attendances)).filter(           
+E:\insaferp\src\components\modules\FinanceAdminViews.tsx          913                 {(data.allEmployeesDirectory ||  
+                                                                      []).map((e: any) => (                            
+E:\insaferp\src\components\modules\HrPayrollViews.tsx             542     (data.allEmployeesDirectory || []).map((e:   
+                                                                      any) => [e.id, e])                               
+E:\insaferp\src\components\modules\HrPayrollViews.tsx             754     String(data.allEmployeesDirectory?.[4]?.id   
+                                                                      || 1)                                            
+E:\insaferp\src\components\modules\HrPayrollViews.tsx             765     (data.allEmployeesDirectory || []).map((e:   
+                                                                      any) => [e.id, e])                               
+E:\insaferp\src\components\modules\HrPayrollViews.tsx             844                 {(data.allEmployeesDirectory ||  
+                                                                      []).map((e: any) => (                            
+E:\insaferp\src\components\modules\HrPayrollViews.tsx            1056     String(data.allEmployeesDirectory?.[4]?.id   
+                                                                      || 1)                                            
+E:\insaferp\src\components\modules\HrPayrollViews.tsx            1063     (data.allEmployeesDirectory || []).map((e:   
+                                                                      any) => [e.id, e])                               
+E:\insaferp\src\components\modules\HrPayrollViews.tsx            1109                 {(data.allEmployeesDirectory ||  
+                                                                      []).map((e: any) => (                            
+E:\insaferp\src\components\modules\LeadsCrmView.tsx               740             {(data.allEmployeesDirectory ||      
+                                                                      []).map((e: any) => <option key={e.id}           
+                                                                      value={e.id}>{e.name}</option>)}                 
+E:\insaferp\src\components\modules\OperationsViews.tsx            518   const allEmps = data.allEmployeesDirectory ||  
+                                                                      [];                                              
+E:\insaferp\src\components\modules\OperationsViews.tsx           1290     String(data.currentUser?.employeeId ||       
+                                                                      data.allEmployeesDirectory?.[0]?.id || 1)        
+E:\insaferp\src\components\modules\OperationsViews.tsx           1302     (data.allEmployeesDirectory || []).map((e:   
+                                                                      any) => [e.id, e])                               
+E:\insaferp\src\components\modules\OperationsViews.tsx           1401               {(data.allEmployeesDirectory ||    
+                                                                      []).map((e: any) => (                            
+E:\insaferp\src\components\modules\OperationsViews.tsx           1713     (data.allEmployeesDirectory || []).map((e:   
+                                                                      any) => [e.id, e])                               
+E:\insaferp\src\components\modules\OperationsViews.tsx           2167     String(data.allEmployeesDirectory?.[0]?.id   
+                                                                      || 1)                                            
+E:\insaferp\src\components\modules\OperationsViews.tsx           2195     (data.allEmployeesDirectory || []).map((e:   
+                                                                      any) => [e.id, e])                               
+E:\insaferp\src\components\modules\OperationsViews.tsx           2352               {(data.allEmployeesDirectory ||    
+                                                                      []).map((e: any) => (                            
+E:\insaferp\src\components\modules\OperationsViews.tsx           2531                 {(data.allEmployeesDirectory ||  
+                                                                      []).map((e: any) => (                            
+E:\insaferp\src\components\modules\TeamTaskMonitorView.tsx         36   const directory: any[] =                       
+                                                                      data.allEmployeesDirectory || [];                
+E:\insaferp\src\lib\work-tracking.ts                               64   attendances: Att[];                            
+
+
+
+===== PAYROLL DUPLICATE CHECK =====
+
+  src\db\schema.ts:928:
+  src\db\schema.ts:929:// 15. PAYROLL
+> src\db\schema.ts:930:export const payrolls = pgTable(
+  src\db\schema.ts:931:  "payrolls",
+  src\db\schema.ts:932:  {
+  src\db\schema.ts:933:    id: serial("id").primaryKey(),
+> src\db\schema.ts:934:    payrollCode: text("payroll_code").notNull(), // PAYR-0001
+  src\db\schema.ts:935:    employeeId: integer("employee_id")
+  src\db\schema.ts:936:      .notNull()
+  src\db\schema.ts:937:      .references(() => employees.id, { onDelete: "restrict" }),
+> src\db\schema.ts:938:    salaryMonth: text("salary_month").notNull(), // YYYY-MM
+  src\db\schema.ts:939:    workingDays: integer("working_days").notNull().default(26),
+  src\db\schema.ts:940:    presentDays: integer("present_days").notNull().default(26),
+  src\db\schema.ts:941:    lateDays: integer("late_days").notNull().default(0),
+  src\db\schema.ts:956:    createdAt: timestamp("created_at").defaultNow().notNull(),
+  src\db\schema.ts:957:  },
+> src\db\schema.ts:958:  (table) => [uniqueIndex("payrolls_code_idx").on(table.payrollCode)]
+  src\db\schema.ts:959:);
+  src\db\schema.ts:960:
+  src\db\schema.ts:961:// 16. LEAVE MANAGEMENT
+
+
+
+===== ATTENDANCE DATE/UNIQUE CHECK =====
+
+  src\db\schema.ts:109:
+  src\db\schema.ts:110:// 3. ATTENDANCE & CORRECTIONS
+> src\db\schema.ts:111:export const attendances = pgTable(
+  src\db\schema.ts:112:  "attendances",
+  src\db\schema.ts:113:  {
+  src\db\schema.ts:114:    id: serial("id").primaryKey(),
+  src\db\schema.ts:115:    employeeId: integer("employee_id")
+  src\db\schema.ts:116:      .notNull()
+  src\db\schema.ts:131:  },
+  src\db\schema.ts:132:  (table) => [
+> src\db\schema.ts:133:    index("attendances_emp_date_idx").on(table.employeeId, table.date),
+  src\db\schema.ts:134:    index("attendances_date_idx").on(table.date),
+  src\db\schema.ts:135:  ]
+  src\db\schema.ts:136:);
+  src\db\schema.ts:137:
+  src\db\schema.ts:138:export const attendanceCorrections = pgTable("attendance_corrections", {
+
+
