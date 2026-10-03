@@ -3937,8 +3937,163 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, journalEntry: jv });
     }
 
+        // =========================================================================
+    // 3. ATTENDANCE WORKFLOW (দিনে ৪ বার পাঞ্চ: সকাল ৯:৩০-১:১৫ এবং দুপুর ২:৩০-৭:৩০)
     // =========================================================================
-    // 13. PAYROLL MODULE (Exact Formula: Basic + Allowance + Overtime + Bonus - Advance - Deduction - Tax)
+    if (action === "checkIn") {
+      const canManageOthers = canViewAllEmployeeProfiles(currentUser.role);
+      if (
+        !canManageOthers &&
+        body.employeeId &&
+        Number(body.employeeId) !== currentUser.employeeId
+      ) {
+        return NextResponse.json(
+          { error: "Forbidden: Staff can only record their own IN TIME." },
+          { status: 403 }
+        );
+      }
+
+      const employeeId = Number(body.employeeId || currentUser.employeeId);
+      const checkInTime = body.checkIn || new Date().toTimeString().slice(0, 5);
+      const date = body.date || today;
+
+      // শিফট নির্ধারণ: দুপুর ২:০০ (14:00) এর আগের পাঞ্চ হলো সকালের শিফট, পরেরটা বিকালের শিফট
+      const isMorningShift = checkInTime < "14:00";
+      
+      // সকাল ৯:৩০ এর পর আসলে লেট মিনিট গণনা (অফিসিয়াল সময় ০৯:৩০)
+      let lateMinutes = 0;
+      if (isMorningShift && checkInTime > "09:30") {
+        const [h, m] = checkInTime.split(":").map(Number);
+        lateMinutes = Math.max(0, (h * 60 + m) - (9 * 60 + 30));
+      }
+
+      // একই দিনের আগের এন্ট্রি আছে কিনা চেক
+      const [existing] = await db
+        .select()
+        .from(attendances)
+        .where(
+          and(
+            eq(attendances.employeeId, employeeId),
+            eq(attendances.date, date)
+          )
+        );
+
+      let att;
+      if (!existing) {
+        // দিনের প্রথম পাঞ্চ (সকাল ০৯:৩০)
+        const [created] = await db
+          .insert(attendances)
+          .values({
+            employeeId,
+            date,
+            checkIn: checkInTime,
+            checkOut: null,
+            status: lateMinutes > 0 ? "Late" : "Present",
+            lateMinutes,
+            earlyLeaveMinutes: 0,
+            morningHours: "0.00",
+            afternoonHours: "0.00",
+            workingHours: "0.00",
+            overtimeHours: "0.00",
+            isApproved: true,
+            notes: isMorningShift ? "সকালের প্রবেশ (Morning IN)" : "বিকালের প্রবেশ (Afternoon IN)",
+          })
+          .returning();
+        att = created;
+      } else {
+        // দিনের ২য় প্রবেশ (দুপুর ০২:৩০ এর পাঞ্চ)
+        // নতুন রো তৈরি না করে একই রো-তে বিকালের সেশন আপডেট
+        const [updated] = await db
+          .update(attendances)
+          .set({
+            notes: `${existing.notes || ""} | বিকাল প্রবেশ: ${checkInTime}`,
+            status: existing.status === "Late" || lateMinutes > 0 ? "Late" : existing.status,
+          })
+          .where(eq(attendances.id, existing.id))
+          .returning();
+        att = updated;
+      }
+
+      return NextResponse.json({ success: true, attendance: att });
+    }
+
+    if (action === "checkOut") {
+      const employeeId = Number(body.employeeId || currentUser.employeeId);
+      const checkOutTime = body.checkOut || new Date().toTimeString().slice(0, 5);
+      const date = body.date || today;
+
+      const [existing] = await db
+        .select()
+        .from(attendances)
+        .where(
+          and(
+            eq(attendances.employeeId, employeeId),
+            eq(attendances.date, date)
+          )
+        );
+
+      if (!existing) {
+        return NextResponse.json({ error: "আজকের কোনো প্রবেশ (In-Time) রেকর্ড পাওয়া যায়নি!" }, { status: 404 });
+      }
+
+      if (
+        !canViewAllEmployeeProfiles(currentUser.role) &&
+        existing.employeeId !== currentUser.employeeId
+      ) {
+        return NextResponse.json(
+          { error: "Forbidden: Staff can only record their own OUT TIME." },
+          { status: 403 }
+        );
+      }
+
+      // বের হওয়ার সময় যাচাই:
+      // দুপুর ৩:০০ (15:00) এর আগে বের হলে ১ম শিফট আউট (০১:১৫)
+      // দুপুর ৩:০০ এর পরে বের হলে ফাইনাল আউট (০৭:৩০)
+      const isMorningOut = checkOutTime < "15:00";
+
+      let morningHours = Number(existing.morningHours || 0);
+      let afternoonHours = Number(existing.afternoonHours || 0);
+      let overtimeHours = 0;
+
+      if (isMorningOut && existing.checkIn) {
+        // সকালের কাজের সময় হিসাব (checkIn থেকে checkOut)
+        const [inH, inM] = existing.checkIn.split(":").map(Number);
+        const [outH, outM] = checkOutTime.split(":").map(Number);
+        const mins = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
+        morningHours = Number((mins / 60).toFixed(2));
+      } else {
+        // রাত ০৭:৩০ এর পর বের হলে ওভারটাইম গণনা (অফিস ছুটি ১৯:৩০)
+        if (checkOutTime > "19:30") {
+          const [outH, outM] = checkOutTime.split(":").map(Number);
+          const otMins = Math.max(0, (outH * 60 + outM) - (19 * 60 + 30));
+          overtimeHours = Number((otMins / 60).toFixed(2));
+        }
+        // বিকালের সময় হিসাব (ধরে নেওয়া হয়েছে দুপুর ২:৩০ থেকে বের হওয়ার সময় পর্যন্ত)
+        const [outH, outM] = checkOutTime.split(":").map(Number);
+        const pmMins = Math.max(0, (outH * 60 + outM) - (14 * 60 + 30));
+        afternoonHours = Number((pmMins / 60).toFixed(2));
+      }
+
+      const totalWorkHours = Number((morningHours + afternoonHours).toFixed(2));
+
+      const [updated] = await db
+        .update(attendances)
+        .set({
+          checkOut: checkOutTime, // শেষ আউট টাইম
+          morningHours: String(morningHours),
+          afternoonHours: String(afternoonHours),
+          workingHours: String(totalWorkHours),
+          overtimeHours: String(overtimeHours),
+          notes: `${existing.notes || ""} | আউট: ${checkOutTime}`,
+        })
+        .where(eq(attendances.id, existing.id))
+        .returning();
+
+      return NextResponse.json({ success: true, attendance: updated });
+    }
+
+    // =========================================================================
+    // 13. PAYROLL MODULE (সকাল ৯:৩০ - রাত ৭:৩০ এবং ৮.৭৫ ঘণ্টা কর্মসময় অনুযায়ী)
     // =========================================================================
     if (action === "generatePayroll") {
       if (!hasPermission(currentUser, "payroll.manage")) {
@@ -3956,6 +4111,8 @@ export async function POST(req: NextRequest) {
         taxDeduction,
       } = body;
 
+      const targetMonth = salaryMonth || new Date().toISOString().slice(0, 7);
+
       const [emp] = await db
         .select()
         .from(employees)
@@ -3964,29 +4121,85 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Employee not found" }, { status: 404 });
       }
 
-      const basic = Number(basicSalary !== undefined ? basicSalary : emp.basicSalary);
-      const allow = Number(allowance !== undefined ? allowance : emp.allowance);
-      const ot = Number(overtimePay || 0);
-      const bon = Number(bonus || 0);
-      const adv = Number(advanceDeduction !== undefined ? advanceDeduction : emp.advanceBalance);
-      const ded = Number(otherDeduction !== undefined ? otherDeduction : emp.deductionDefault);
-      const tax = Number(taxDeduction || 0);
+      const basic = Number(basicSalary !== undefined ? basicSalary : emp.basicSalary || 0);
+      const allow = Number(allowance !== undefined ? allowance : emp.allowance || 0);
+      const workingDays = 26; // মাসে কর্মদিবস ২৬ দিন
+      const dailyWorkHours = 8.75; // অফিসিয়াল সময়: ৩.৭৫ + ৫.০০ = ৮.৭৫ ঘণ্টা (৮ ঘণ্টা ৪৫ মিনিট)
 
-      // Exact Net Salary Formula
-      const netSalary = basic + allow + ot + bon - adv - ded - tax;
-
-      const empAttendances = await db
+      // নির্দিষ্ট মাসের হাজিরা ডাটা আনা
+      const empAllAttendances = await db
         .select()
         .from(attendances)
         .where(eq(attendances.employeeId, emp.id));
-      const presentDays = empAttendances.filter(
-        (a) => a.status === "Present" || a.status === "Late"
-      ).length || 25;
-      const lateDays = empAttendances.filter((a) => a.status === "Late").length;
-      const leaveDays = empAttendances.filter((a) => a.status === "Leave").length;
-      const totalOtHours = empAttendances.reduce(
-        (s, a) => s + Number(a.overtimeHours || 0),
-        0
+
+      const monthAttendances = empAllAttendances.filter(
+        (a) => a.date && a.date.startsWith(targetMonth)
+      );
+
+      // ডুপ্লিকেট পাঞ্চ ফিল্টার করে দিনভিত্তিক ডাটা মার্জ
+      const uniqueDaysMap = new Map<string, any>();
+      monthAttendances.forEach((a) => {
+        if (!uniqueDaysMap.has(a.date)) {
+          uniqueDaysMap.set(a.date, { ...a });
+        } else {
+          const prev = uniqueDaysMap.get(a.date);
+          uniqueDaysMap.set(a.date, {
+            ...prev,
+            workingHours: Math.max(Number(prev.workingHours || 0), Number(a.workingHours || 0)),
+            overtimeHours: Math.max(Number(prev.overtimeHours || 0), Number(a.overtimeHours || 0)),
+            lateMinutes: Math.max(Number(prev.lateMinutes || 0), Number(a.lateMinutes || 0)),
+            status: prev.status === "Late" || a.status === "Late" ? "Late" : prev.status,
+          });
+        }
+      });
+
+      const uniqueMonthRecords = Array.from(uniqueDaysMap.values());
+
+      let presentDays = 0;
+      let lateDays = 0;
+      let leaveDays = 0;
+      let totalOtHours = 0;
+
+      uniqueMonthRecords.forEach((a) => {
+        const isPres = ["Present", "Late", "Early Leave", "Missing Checkout"].includes(a.status || "");
+        if (a.status === "Late") {
+          lateDays++;
+          presentDays++;
+        } else if (a.status === "Leave") {
+          leaveDays++;
+        } else if (isPres || a.checkIn) {
+          presentDays++;
+        }
+        totalOtHours += Number(a.overtimeHours || 0);
+      });
+
+      const absentDays = Math.max(0, workingDays - presentDays - leaveDays);
+
+      // ৮.৭৫ কর্মঘণ্টা ভিত্তিক রেট
+      const perDaySalary = basic / workingDays;
+      const hourlyRate = perDaySalary / dailyWorkHours; // ৮.৭৫ ঘণ্টা দিয়ে ভাগ
+      
+      const autoCalculatedOtPay = Number((totalOtHours * hourlyRate).toFixed(2));
+      const autoAbsentDeduction = Number((absentDays * perDaySalary).toFixed(2));
+      const autoLateDeduction = Number((Math.floor(lateDays / 3) * perDaySalary).toFixed(2));
+
+      const finalOtPay = overtimePay !== undefined && overtimePay !== null && overtimePay !== ""
+        ? Number(overtimePay)
+        : autoCalculatedOtPay;
+
+      const bon = Number(bonus || 0);
+      const adv = Number(advanceDeduction !== undefined ? advanceDeduction : emp.advanceBalance || 0);
+
+      const finalOtherDeduction = otherDeduction !== undefined && otherDeduction !== null && otherDeduction !== ""
+        ? Number(otherDeduction)
+        : Number((autoAbsentDeduction + autoLateDeduction).toFixed(2));
+
+      const tax = Number(taxDeduction || 0);
+
+      // চূড়ান্ত নেট বেতন
+      const netSalary = Math.max(
+        0,
+        Number((basic + allow + finalOtPay + bon - adv - finalOtherDeduction - tax).toFixed(2))
       );
 
       const existingPr = await db.select().from(payrolls);
@@ -3997,18 +4210,18 @@ export async function POST(req: NextRequest) {
         .values({
           payrollCode,
           employeeId: emp.id,
-          salaryMonth: salaryMonth || "2026-04",
-          workingDays: 26,
+          salaryMonth: targetMonth,
+          workingDays,
           presentDays,
           lateDays,
           leaveDays,
           overtimeHours: totalOtHours.toFixed(2),
           basicSalary: basic.toFixed(2),
           allowance: allow.toFixed(2),
-          overtimePay: ot.toFixed(2),
+          overtimePay: finalOtPay.toFixed(2),
           bonus: bon.toFixed(2),
           advanceDeduction: adv.toFixed(2),
-          otherDeduction: ded.toFixed(2),
+          otherDeduction: finalOtherDeduction.toFixed(2),
           taxDeduction: tax.toFixed(2),
           netSalary: netSalary.toFixed(2),
           status: "Approved",
@@ -4018,82 +4231,6 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ success: true, payroll: pr });
     }
-
-    if (action === "disbursePayroll") {
-      if (!hasPermission(currentUser, "payroll.manage")) {
-        return NextResponse.json({ error: "Forbidden: Accounts/HR permission required" }, { status: 403 });
-      }
-      const { payrollId, method = "Bank" } = body;
-
-      const updatedPr = await db.transaction(async (tx) => {
-        const [pr] = await tx
-          .select()
-          .from(payrolls)
-          .where(eq(payrolls.id, Number(payrollId)));
-        if (!pr) throw new Error("Payroll record not found");
-        if (pr.status === "Paid") throw new Error("Payroll already disbursed");
-
-        const net = Number(pr.netSalary);
-        const accCode = method === "Cash" ? "1010" : "1020";
-
-        const existingPay = await tx.select().from(payments);
-        const paymentCode = `PAY-${String(existingPay.length + 1).padStart(4, "0")}`;
-
-        const [pay] = await tx
-          .insert(payments)
-          .values({
-            paymentCode,
-            paymentType: "Salary Payment",
-            amount: net.toFixed(2),
-            date: today,
-            method,
-            referenceCode: pr.payrollCode,
-            employeeId: pr.employeeId,
-            payrollId: pr.id,
-            createdBy: currentUser.name,
-            notes: `Salary payment for ${pr.salaryMonth} (${pr.payrollCode})`,
-          })
-          .returning();
-
-        // Double-Entry Journal: Debit Salary Expense (5020) / Credit Cash/Bank (1010/1020)
-        await postDoubleEntryJournalTx(tx, {
-          date: today,
-          referenceType: "Payroll",
-          referenceCode: pr.payrollCode,
-          description: `Salary Disbursement ${pr.payrollCode} (${pr.salaryMonth})`,
-          createdBy: currentUser.name,
-          lines: [
-            { accountCode: "5020", debit: net, credit: 0 },
-            { accountCode: accCode, debit: 0, credit: net },
-          ],
-        });
-
-        const [updated] = await tx
-          .update(payrolls)
-          .set({
-            status: "Paid",
-            paidAt: new Date(),
-            paymentId: pay.id,
-          })
-          .where(eq(payrolls.id, pr.id))
-          .returning();
-
-        return updated;
-      });
-
-      await logAudit({
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userRole: currentUser.role,
-        action: "PAYROLL_DISBURSE",
-        entity: "Payroll",
-        recordId: updatedPr.payrollCode,
-        afterData: updatedPr,
-      });
-
-      return NextResponse.json({ success: true, payroll: updatedPr });
-    }
-
     // =========================================================================
     // 14. LEAVE MANAGEMENT (Auto-reflects in Attendance when Approved)
     // =========================================================================

@@ -107,7 +107,15 @@ export interface WorkPlanItem {
   notes?: string;
 }
 
+// ============================================================================
 // 3. ATTENDANCE & CORRECTIONS
+// ⭐ DUAL-SHIFT SYSTEM:
+//   Shift-1 (সকাল): checkIn 09:30 → checkOut 13:15
+//   Break: 13:15 → 14:30
+//   Shift-2 (বিকাল): checkIn2 14:30 → checkOut2 19:30
+//   দুই শিফট মিলে = এক দিনের হাজিরা (workingHours = দুই শিফটের যোগফল)
+//   🕌 শুক্রবার = সাপ্তাহিক ছুটি
+// ============================================================================
 export const attendances = pgTable(
   "attendances",
   {
@@ -116,14 +124,18 @@ export const attendances = pgTable(
       .notNull()
       .references(() => employees.id, { onDelete: "cascade" }),
     date: text("date").notNull(), // YYYY-MM-DD
-    checkIn: text("check_in"), // HH:mm
-    checkOut: text("check_out"), // HH:mm
+    // ⭐ Shift-1 (সকাল): 09:30 – 13:15
+    checkIn: text("check_in"), // HH:mm — সকাল শিফট IN
+    checkOut: text("check_out"), // HH:mm — সকাল শিফট OUT
+    // ⭐ NEW Shift-2 (বিকাল): 14:30 – 19:30
+    checkIn2: text("check_in2"), // HH:mm — বিকাল শিফট IN
+    checkOut2: text("check_out2"), // HH:mm — বিকাল শিফট OUT
     status: text("status").notNull().default("Present"), // Present, Late, Early Leave, Missing Checkout, Absent, Leave, Holiday
     lateMinutes: integer("late_minutes").notNull().default(0),
     earlyLeaveMinutes: integer("early_leave_minutes").notNull().default(0),
-    morningHours: numeric("morning_hours", { precision: 6, scale: 2 }).notNull().default("0"),
-    afternoonHours: numeric("afternoon_hours", { precision: 6, scale: 2 }).notNull().default("0"),
-    workingHours: numeric("working_hours", { precision: 6, scale: 2 }).notNull().default("0"),
+    morningHours: numeric("morning_hours", { precision: 6, scale: 2 }).notNull().default("0"), // Shift-1 ঘণ্টা
+    afternoonHours: numeric("afternoon_hours", { precision: 6, scale: 2 }).notNull().default("0"), // Shift-2 ঘণ্টা
+    workingHours: numeric("working_hours", { precision: 6, scale: 2 }).notNull().default("0"), // দুই শিফটের মোট
     overtimeHours: numeric("overtime_hours", { precision: 6, scale: 2 }).notNull().default("0"),
     isApproved: boolean("is_approved").notNull().default(true),
     notes: text("notes").default(""),
@@ -142,8 +154,12 @@ export const attendanceCorrections = pgTable("attendance_corrections", {
     .notNull()
     .references(() => employees.id, { onDelete: "cascade" }),
   date: text("date").notNull(),
+  // Shift-1 correction
   requestedCheckIn: text("requested_check_in").notNull(),
   requestedCheckOut: text("requested_check_out").notNull(),
+  // ⭐ NEW Shift-2 correction (optional)
+  requestedCheckIn2: text("requested_check_in2"),
+  requestedCheckOut2: text("requested_check_out2"),
   reason: text("reason").notNull(),
   status: text("status").notNull().default("Pending"), // Pending, Approved, Rejected
   approvedBy: text("approved_by"),
@@ -303,7 +319,7 @@ export const FOLLOW_UP_OUTCOMES = [
   "Other",
 ] as const;
 
-// Outcomes that do NOT close a lead â€” a new follow-up must be scheduled.
+// Outcomes that do NOT close a lead — a new follow-up must be scheduled.
 export const OPEN_OUTCOMES = [
   "No Response",
   "Contacted",
@@ -326,7 +342,7 @@ export const leadFollowups = pgTable(
     leadId: integer("lead_id")
       .notNull()
       .references(() => leads.id, { onDelete: "cascade" }),
-    // Follow-up Number (1, 2, 3 ... unlimited) â€” never reused or overwritten
+    // Follow-up Number (1, 2, 3 ... unlimited) — never reused or overwritten
     followUpNumber: integer("follow_up_number").notNull().default(1),
     staffId: integer("staff_id").references(() => employees.id, { onDelete: "set null" }),
     staffName: text("staff_name").notNull(),
@@ -511,7 +527,7 @@ export const tasks = pgTable(
     evidenceAttachments: jsonb("evidence_attachments").$type<AttachmentMeta[]>().notNull().default([]),
     isCompanyWide: boolean("is_company_wide").notNull().default(false),
     visibility: text("visibility").notNull().default("Assigned"), // Everyone, Assigned, Management
-    // Assignment tracking (who gave â†’ whom, when)
+    // Assignment tracking (who gave → whom, when)
     assignedByUserId: integer("assigned_by_user_id"),
     assignedByEmployeeId: integer("assigned_by_employee_id"),
     assignedByName: text("assigned_by_name"),
@@ -1086,6 +1102,3 @@ export const auditLogs = pgTable("audit_logs", {
   userAgent: text("user_agent").default("INSAF-ERP-Client"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
-
-
-

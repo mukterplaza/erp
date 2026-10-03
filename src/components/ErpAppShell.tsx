@@ -35,7 +35,7 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
-  TrendingUp,  // ⭐ NEW: Added for Executive Dashboard
+  TrendingUp,
 } from "lucide-react";
 
 import {
@@ -43,12 +43,13 @@ import {
   AttendanceView,
   MyDayAndDailyWorksView,
   TasksView,
+  MonthlyAttendanceView,  // ⭐ NEW: মাসিক হাজিরা
 } from "./modules/OperationsViews";
 import {
   LeaveView,
   PayrollView,
   PerformanceView,
-  ExecutivePayrollDashboard,  // ⭐ NEW: Import Executive Dashboard
+  ExecutivePayrollDashboard,
 } from "./modules/HrPayrollViews";
 import {
   ClientsAndQuotationsView,
@@ -77,6 +78,7 @@ const NAV_GROUPS = [
     items: [
       { label: "ড্যাশবোর্ড", href: "/dashboard", icon: LayoutDashboard },
       { label: "হাজিরা", href: "/attendance", icon: Clock },
+      { label: "মাসিক হাজিরা", href: "/monthly-attendance", icon: Calendar },  // ⭐ NEW
       { label: "আমার দিন", href: "/my-day", icon: ClipboardCheck },
       { label: "দৈনিক কাজ", href: "/daily-works", icon: ClipboardCheck },
       { label: "টাস্ক", href: "/tasks", icon: CheckSquare },
@@ -119,7 +121,7 @@ const NAV_GROUPS = [
     items: [
       { label: "কর্মচারী", href: "/employees", icon: Users },
       { label: "পে-রোল", href: "/payroll", icon: DollarSign },
-      { label: "Executive Dashboard", href: "/executive-payroll", icon: TrendingUp, execOnly: true },  // ⭐ NEW: execOnly flag
+      { label: "Executive Dashboard", href: "/executive-payroll", icon: TrendingUp, execOnly: true },
       { label: "ছুটি", href: "/leave", icon: Calendar },
       { label: "পারফরম্যান্স", href: "/performance", icon: Award },
     ],
@@ -145,7 +147,7 @@ export default function ErpAppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-   
+
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -206,7 +208,6 @@ export default function ErpAppShell({
     router.push("/login");
   }
 
-  // ⭐ NEW: Helper to check if user can access Executive Dashboard
   const canViewExecutive = (role: string) => {
     return [
       "Owner",
@@ -246,6 +247,10 @@ export default function ErpAppShell({
   function renderMainContent() {
     if (activeRoute === "/attendance") {
       return <AttendanceView data={data} onMutate={handleMutate} />;
+    }
+    // ⭐ NEW: মাসিক হাজিরা রুট
+    if (activeRoute === "/monthly-attendance") {
+      return <MonthlyAttendanceView data={data} onMutate={handleMutate} />;
     }
     if (activeRoute === "/my-day" || activeRoute === "/daily-works") {
       return <MyDayAndDailyWorksView data={data} onMutate={handleMutate} />;
@@ -293,7 +298,6 @@ export default function ErpAppShell({
     if (activeRoute === "/payroll") {
       return <PayrollView data={data} onMutate={handleMutate} />;
     }
-    // ⭐ NEW: Executive Payroll Dashboard
     if (activeRoute === "/executive-payroll") {
       if (!canViewExecutive(data.currentUser.role)) {
         return (
@@ -395,7 +399,7 @@ export default function ErpAppShell({
         activeRoute === "/payments" ||
         activeRoute === "/users" ||
         activeRoute === "/payroll" ||
-        activeRoute === "/executive-payroll")  // ⭐ NEW: Also block executive-payroll
+        activeRoute === "/executive-payroll")
     ) {
       return (
         <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-6 sm:p-8 text-center space-y-3">
@@ -519,7 +523,6 @@ export default function ErpAppShell({
                       data.currentUser.role === "Engineer"
                     );
                   }
-                  // ⭐ NEW: Hide Executive Dashboard from non-management roles
                   if ((item as { execOnly?: boolean }).execOnly) {
                     return canViewExecutive(data.currentUser.role);
                   }
@@ -542,7 +545,6 @@ export default function ErpAppShell({
                       <span className="flex items-center gap-2.5">
                         <Icon className="w-4 h-4" />
                         {item.label}
-                        {/* ⭐ NEW: Gold badge for Executive Dashboard */}
                         {(item as { execOnly?: boolean }).execOnly && (
                           <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-400 text-amber-900">
                             MD
@@ -644,7 +646,6 @@ export default function ErpAppShell({
                       data.currentUser.role === "Engineer"
                     );
                   }
-                  // ⭐ NEW: Hide Executive Dashboard from non-managers
                   if ((item as { execOnly?: boolean }).execOnly) {
                     return canViewExecutive(data.currentUser.role);
                   }
