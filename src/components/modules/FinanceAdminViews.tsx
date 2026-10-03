@@ -263,7 +263,7 @@ export function AccountingView({
 }
 
 // ============================================================================
-// ⭐ ADVANCED DAILY, MONTHLY & YEARLY INCOME-EXPENSE WITH INVOICE/VOUCHER ATTACHMENT
+// ⭐ INVOICES, PAYMENTS & EXPENSES VIEW (ত্রুটিমুক্ত, ভাউচারসহ ও ডুপ্লিকেটবিহীন)
 // ============================================================================
 export function InvoicesPaymentsExpensesView({
   data,
@@ -274,6 +274,21 @@ export function InvoicesPaymentsExpensesView({
   onMutate: (payload: Record<string, unknown>) => Promise<any>;
   tab?: "invoices" | "payments" | "expenses";
 }) {
+  const currentUser = data?.currentUser || {};
+  const myEmpId = Number(currentUser?.employeeId);
+  const myRole = currentUser?.role || "Staff";
+
+  // ম্যানেজমেন্ট কিনা যাচাই
+  const isManagement = [
+    "Owner",
+    "Chairman",
+    "MD",
+    "Admin",
+    "Manager",
+    "HR",
+    "Accounts",
+  ].includes(myRole);
+
   const today = new Date().toISOString().split("T")[0];
   const currentMonthStr = today.slice(0, 7); // YYYY-MM
   const currentYearStr = today.slice(0, 4);  // YYYY
@@ -282,30 +297,33 @@ export function InvoicesPaymentsExpensesView({
   const [timeframe, setTimeframe] = useState<"today" | "month" | "year" | "all">("today");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [selectedCostCategory, setSelectedCostCategory] = useState<string>("all");
+  const [selectedStaffFilter, setSelectedStaffFilter] = useState<string>(
+    isManagement ? "all" : String(myEmpId)
+  );
 
   // নতুন এন্ট্রি স্টেট
   const [entryType, setEntryType] = useState<"income" | "expense">("expense");
-  const [targetCategory, setTargetCategory] = useState<"project" | "staff" | "office">("project");
+  const [targetCategory, setTargetCategory] = useState<"project" | "staff" | "office">(
+    isManagement ? "project" : "staff"
+  );
   const [formDate, setFormDate] = useState(today);
   const [formAmount, setFormAmount] = useState("");
   const [formProjectId, setFormProjectId] = useState(String(data.projects?.[0]?.id || ""));
-  const [formStaffId, setFormStaffId] = useState("");
-  const [formSubCategory, setFormSubCategory] = useState("Material");
+  const [formStaffId, setFormStaffId] = useState(String(myEmpId || ""));
+  const [formSubCategory, setFormSubCategory] = useState("Staff TA/DA (যাতায়াত)");
   const [formMethod, setFormMethod] = useState("Cash");
   const [formNotes, setFormNotes] = useState("");
   const [formVendor, setFormVendor] = useState("");
 
-  // ⭐ ইনভয়েস / ডকুমেন্ট ফাইল স্টেট
+  // ইনভয়েস / ডকুমেন্ট ফাইল স্টেট
   const [attachedFile, setAttachedFile] = useState<{
     name: string;
     size: string;
     dataUrl: string;
   } | null>(null);
 
-  // প্রিভিউ দেখার জন্য পপ-আপ স্টেট
+  // প্রিভিউ ও এডিট স্টেট
   const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string } | null>(null);
-
-  // এডিট স্টেট
   const [editingItem, setEditingItem] = useState<any | null>(null);
 
   const projects = data.projects || [];
@@ -314,6 +332,13 @@ export function InvoicesPaymentsExpensesView({
   const payments = data.payments || [];
 
   const EXPENSE_SUB_CATEGORIES: Record<string, string[]> = {
+    staff: [
+      "Staff TA/DA (যাতায়াত)",
+      "Staff Food (আপ্যায়ন)",
+      "Staff Advance (অগ্রিম লোন)",
+      "Site Allowance (সাইট ভাতা)",
+      "Staff Salary (বেতন)",
+    ],
     project: [
       "Material (মালামাল)",
       "Labour (শ্রমিক)",
@@ -321,24 +346,16 @@ export function InvoicesPaymentsExpensesView({
       "Transport (পরিবহন)",
       "Site Expense (সাইট খরচ)",
     ],
-    staff: [
-      "Staff Salary (বেতন)",
-      "Staff TA/DA (যাতায়াত)",
-      "Staff Food (আপ্যায়ন)",
-      "Staff Advance (অগ্রিম লোন)",
-      "Site Allowance (সাইট ভাতা)",
-    ],
     office: [
-      "Office Rent (অফিস ভাড়া)",
-      "Utility Bills (বিদ্যুৎ/ইন্টারনেট)",
-      "Stationery (কাগজপত্র)",
       "Office Refreshment (আপ্যায়ন)",
-      "Legal/Trade (লাইসেন্স/আইনি)",
+      "Stationery (কাগজপত্র)",
+      "Utility Bills (বিদ্যুৎ/ইন্টারনেট)",
+      "Office Rent (অফিস ভাড়া)",
       "Miscellaneous (অন্যান্য)",
     ],
   };
 
-  // ফাইল সিলেক্ট হ্যান্ডলার (ছবি বা PDF রসিদ কনভার্ট)
+  // ফাইল সিলেক্ট হ্যান্ডলার
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -354,7 +371,7 @@ export function InvoicesPaymentsExpensesView({
     reader.readAsDataURL(file);
   };
 
-    // ফিল্টার করা খরচ ও জমা (TypeScript type error fixed)
+  // ফিল্টার করা খরচ ও জমা
   const filteredRecords = useMemo(() => {
     let rawExp: any[] = [...expenses];
     let rawInc: any[] = payments.filter(
@@ -403,7 +420,7 @@ export function InvoicesPaymentsExpensesView({
     return { expenses: rawExp, incomes: rawInc };
   }, [expenses, payments, isManagement, myEmpId, selectedStaffFilter, timeframe, selectedProjectId, selectedCostCategory, today, currentMonthStr, currentYearStr]);
 
-  // সামারি হিসাব
+  // ⭐ শুধুমাত্র ১ বার সামারি হিসাব (ডুপ্লিকেট রিমুভ করা হয়েছে)
   const summary = useMemo(() => {
     const totalIncome = filteredRecords.incomes.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     const totalExpense = filteredRecords.expenses.reduce((s: number, e: any) => s + Number(e.amount || 0), 0);
@@ -428,38 +445,7 @@ export function InvoicesPaymentsExpensesView({
       totalIncome,
       totalExpense,
       balance: totalIncome - totalExpense,
-      projectExpense,
-      staffExpense,
-      officeExpense,
-    };
-  }, [filteredRecords]);
-  // ফিন্যান্সিয়াল সামারি
-  const summary = useMemo(() => {
-    const totalIncome = filteredRecords.incomes.reduce((s, p) => s + Number(p.amount || 0), 0);
-    const totalExpense = filteredRecords.expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
-
-    let projectExpense = 0;
-    let staffExpense = 0;
-    let officeExpense = 0;
-
-    filteredRecords.expenses.forEach((e) => {
-      const amt = Number(e.amount || 0);
-      const cat = (e.category || "").toLowerCase();
-      if (cat.includes("staff") || cat.includes("salary") || cat.includes("advance")) {
-        staffExpense += amt;
-      } else if (cat.includes("office") || cat.includes("rent") || cat.includes("utility")) {
-        officeExpense += amt;
-      } else {
-        projectExpense += amt;
-      }
-    });
-
-    const netProfit = totalIncome - totalExpense;
-
-    return {
-      totalIncome,
-      totalExpense,
-      netProfit,
+      netProfit: totalIncome - totalExpense,
       projectExpense,
       staffExpense,
       officeExpense,
@@ -474,18 +460,19 @@ export function InvoicesPaymentsExpensesView({
       return;
     }
 
+    const targetEmpId = isManagement ? (formStaffId ? Number(formStaffId) : myEmpId) : myEmpId;
+
     if (entryType === "expense") {
       await onMutate({
         action: "createExpense",
         date: formDate,
         category: formSubCategory.split(" ")[0],
         amount: Number(formAmount),
-        projectId: targetCategory === "project" ? Number(formProjectId) : null,
-        employeeId: targetCategory === "staff" && formStaffId ? Number(formStaffId) : null,
-        vendorName: formVendor || (targetCategory === "staff" ? "Staff Payment" : "Office Expense"),
+        projectId: targetCategory === "project" && formProjectId ? Number(formProjectId) : null,
+        employeeId: targetEmpId,
+        vendorName: formVendor || currentUser.name,
         paymentMethod: formMethod,
         description: formNotes || `${targetCategory.toUpperCase()} Expense: ${formSubCategory}`,
-        // ⭐ ইনভয়েস / ডকুমেন্ট এটাচমেন্ট পাঠানো
         attachmentName: attachedFile?.name || null,
         attachmentUrl: attachedFile?.dataUrl || null,
       });
@@ -496,8 +483,9 @@ export function InvoicesPaymentsExpensesView({
         amount: Number(formAmount),
         date: formDate,
         method: formMethod,
-        projectId: Number(formProjectId),
-        notes: formNotes || "Project Revenue / Client Payment",
+        projectId: formProjectId ? Number(formProjectId) : null,
+        employeeId: targetEmpId,
+        notes: formNotes || "Payment / Advance Received",
         attachmentName: attachedFile?.name || null,
         attachmentUrl: attachedFile?.dataUrl || null,
       });
@@ -539,13 +527,18 @@ export function InvoicesPaymentsExpensesView({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              ভাউচার ও ইনভয়েসযুক্ত ক্যাশ বুক
+              {isManagement ? "ম্যানেজমেন্ট ফিন্যান্সিয়াল ভিউ" : `ব্যক্তিগত হিসাব খাতা • ${currentUser.name}`}
             </span>
-            <span className="text-xs text-slate-400">প্রজেক্ট, স্টাফ ও অফিসের দৈনিক আয়-ব্যয়</span>
+            <span className="text-xs text-slate-400">
+              {isManagement ? "সকল স্টাফ ও প্রজেক্ট অডিট" : "শুধুমাত্র আপনার ব্যক্তিগত জমা ও খরচের রেকর্ড"}
+            </span>
           </div>
-          <h1 className="text-2xl font-bold">দৈনিক, মাসিক ও বাৎসরিক আয়-ব্যয় ব্যবস্থাপনা</h1>
+          <h1 className="text-2xl font-bold">
+            {isManagement ? "দৈনিক, মাসিক ও বাৎসরিক আয়-ব্যয় ব্যবস্থাপনা" : "আমার দৈনিক জমা-খরচ ও ভাউচার আপলোড"}
+          </h1>
         </div>
 
+        {/* টাইমলাইন ফিল্টার বাটন */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-700 text-xs">
             <button
@@ -582,7 +575,7 @@ export function InvoicesPaymentsExpensesView({
                 timeframe === "all" ? "bg-emerald-500 text-slate-950" : "text-slate-300 hover:text-white"
               }`}
             >
-              সব রেকর্ড
+              সব
             </button>
           </div>
 
@@ -591,77 +584,72 @@ export function InvoicesPaymentsExpensesView({
             onClick={() => window.print()}
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 flex items-center gap-1.5"
           >
-            <Printer className="w-3.5 h-3.5" /> প্রিন্ট শিট
+            <Printer className="w-3.5 h-3.5" /> প্রিন্ট
           </button>
         </div>
       </div>
 
-      {/* ===== ২. ফিন্যান্সিয়াল সামারি কার্ডস ===== */}
+      {/* ===== ২. সামারি কার্ড ===== */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4 shadow-xs">
-          <p className="text-[11px] font-bold text-emerald-800 uppercase">মোট জমা / আয়</p>
+        <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4">
+          <p className="text-[11px] font-bold text-emerald-800 uppercase">
+            {isManagement ? "মোট প্রাপ্তি / জমা" : "আমার মোট প্রাপ্তি / জমা"}
+          </p>
           <p className="text-xl sm:text-2xl font-extrabold text-emerald-700 mt-1">
             ৳{summary.totalIncome.toLocaleString()}
           </p>
-          <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">ক্লায়েন্ট পেমেন্ট ও অন্যান্য</p>
         </div>
 
-        <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 shadow-xs">
-          <p className="text-[11px] font-bold text-rose-800 uppercase">মোট ব্যয় / খরচ</p>
+        <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-4">
+          <p className="text-[11px] font-bold text-rose-800 uppercase">
+            {isManagement ? "মোট খরচ" : "আমার মোট খরচ"}
+          </p>
           <p className="text-xl sm:text-2xl font-extrabold text-rose-700 mt-1">
             ৳{summary.totalExpense.toLocaleString()}
           </p>
-          <p className="text-[10px] text-rose-600 font-semibold mt-0.5">সকল খাতের সর্বমোট ব্যয়</p>
         </div>
 
-        <div
-          className={`rounded-2xl p-4 border-2 shadow-xs ${
-            summary.netProfit >= 0 ? "bg-blue-50 border-blue-300" : "bg-red-50 border-red-300"
-          }`}
-        >
-          <p className="text-[11px] font-bold text-slate-700 uppercase">উদ্বৃত্ত / লাভ-ক্ষতি</p>
-          <p
-            className={`text-xl sm:text-2xl font-extrabold mt-1 ${
-              summary.netProfit >= 0 ? "text-blue-700" : "text-red-700"
-            }`}
-          >
-            ৳{summary.netProfit.toLocaleString()}
+        <div className="bg-blue-50 border-2 border-blue-300 rounded-2xl p-4">
+          <p className="text-[11px] font-bold text-blue-800 uppercase">
+            {isManagement ? "উদ্বৃত্ত / স্থিতি" : "আমার বর্তমান স্থিতি (ব্যালেন্স)"}
           </p>
-          <p className="text-[10px] text-slate-500 font-semibold mt-0.5">আয় থেকে ব্যয়ের পার্থক্য</p>
+          <p className="text-xl sm:text-2xl font-extrabold text-blue-700 mt-1">
+            ৳{summary.balance.toLocaleString()}
+          </p>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-xs">
-          <p className="text-[11px] font-bold text-amber-800 uppercase">১. প্রজেক্ট খরচ</p>
-          <p className="text-xl font-bold text-amber-700 mt-1">
-            ৳{summary.projectExpense.toLocaleString()}
-          </p>
-          <p className="text-[10px] text-amber-600 mt-0.5">মালামাল, লেবার ও ঠিকাদার</p>
-        </div>
-
-        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 shadow-xs">
-          <p className="text-[11px] font-bold text-purple-800 uppercase">২. স্টাফদের খরচ</p>
-          <p className="text-xl font-bold text-purple-700 mt-1">
-            ৳{summary.staffExpense.toLocaleString()}
-          </p>
-          <p className="text-[10px] text-purple-600 mt-0.5">বেতন, যাতায়াত, নাস্তা ও লোন</p>
-        </div>
-
-        <div className="bg-slate-50 border border-slate-300 rounded-2xl p-4 shadow-xs">
-          <p className="text-[11px] font-bold text-slate-800 uppercase">৩. অফিস খরচ</p>
-          <p className="text-xl font-bold text-slate-700 mt-1">
-            ৳{summary.officeExpense.toLocaleString()}
-          </p>
-          <p className="text-[10px] text-slate-500 mt-0.5">ভাড়া, বিদ্যুৎ ও দৈনন্দিন খরচ</p>
-        </div>
+        {isManagement ? (
+          <>
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+              <p className="text-[11px] font-bold text-amber-800 uppercase">১. প্রজেক্ট খরচ</p>
+              <p className="text-xl font-bold text-amber-700 mt-1">৳{summary.projectExpense.toLocaleString()}</p>
+            </div>
+            <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4">
+              <p className="text-[11px] font-bold text-purple-800 uppercase">২. স্টাফদের খরচ</p>
+              <p className="text-xl font-bold text-purple-700 mt-1">৳{summary.staffExpense.toLocaleString()}</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-300 rounded-2xl p-4">
+              <p className="text-[11px] font-bold text-slate-800 uppercase">৩. অফিস খরচ</p>
+              <p className="text-xl font-bold text-slate-700 mt-1">৳{summary.officeExpense.toLocaleString()}</p>
+            </div>
+          </>
+        ) : (
+          <div className="bg-purple-50 border-2 border-purple-300 rounded-2xl p-4 col-span-3">
+            <p className="text-[11px] font-bold text-purple-800 uppercase">ব্যক্তিগত হিসাবের নিরাপত্তা</p>
+            <p className="text-xs text-purple-700 mt-1">
+              আপনার খরচের ভাউচারগুলো শুধুমাত্র আপনি এবং ম্যানেজমেন্ট দেখতে পারেন। অন্য কোনো কর্মী এটি দেখতে পারবে না।
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* ===== ৩. এন্ট্রি ফর্ম ও রেজিস্টার টেবিল ===== */}
+      {/* ===== ৩. ফর্ম ও টেবিল ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* বাম পাশ: ফর্ম */}
+        {/* ফর্ম */}
         <div className="lg:col-span-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-emerald-600" /> নতুন হিসাব ও ভাউচার যুক্ত
+              <Receipt className="w-4 h-4 text-emerald-600" /> নতুন খরচ / জমা ভাউচার
             </h3>
             <div className="flex bg-slate-100 p-0.5 rounded-xl text-xs font-bold">
               <button
@@ -686,51 +674,36 @@ export function InvoicesPaymentsExpensesView({
           </div>
 
           <form onSubmit={handleSaveEntry} className="space-y-3 text-xs">
-            {entryType === "expense" && (
+            {isManagement && entryType === "expense" && (
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">খরচের মূল খাত:</label>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">খরচের খাত:</label>
                 <div className="grid grid-cols-3 gap-1">
                   <button
                     type="button"
-                    onClick={() => {
-                      setTargetCategory("project");
-                      setFormSubCategory(EXPENSE_SUB_CATEGORIES.project[0]);
-                    }}
+                    onClick={() => { setTargetCategory("project"); setFormSubCategory(EXPENSE_SUB_CATEGORIES.project[0]); }}
                     className={`py-1.5 rounded-lg border text-[11px] font-bold transition ${
-                      targetCategory === "project"
-                        ? "bg-amber-500 text-white border-amber-500"
-                        : "bg-slate-50 text-slate-700"
+                      targetCategory === "project" ? "bg-amber-500 text-white" : "bg-slate-50 text-slate-700"
                     }`}
                   >
-                    🏗️ প্রজেক্ট
+                    প্রজেক্ট
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setTargetCategory("staff");
-                      setFormSubCategory(EXPENSE_SUB_CATEGORIES.staff[0]);
-                    }}
+                    onClick={() => { setTargetCategory("staff"); setFormSubCategory(EXPENSE_SUB_CATEGORIES.staff[0]); }}
                     className={`py-1.5 rounded-lg border text-[11px] font-bold transition ${
-                      targetCategory === "staff"
-                        ? "bg-purple-600 text-white border-purple-600"
-                        : "bg-slate-50 text-slate-700"
+                      targetCategory === "staff" ? "bg-purple-600 text-white" : "bg-slate-50 text-slate-700"
                     }`}
                   >
-                    👥 স্টাফ
+                    স্টাফ
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setTargetCategory("office");
-                      setFormSubCategory(EXPENSE_SUB_CATEGORIES.office[0]);
-                    }}
+                    onClick={() => { setTargetCategory("office"); setFormSubCategory(EXPENSE_SUB_CATEGORIES.office[0]); }}
                     className={`py-1.5 rounded-lg border text-[11px] font-bold transition ${
-                      targetCategory === "office"
-                        ? "bg-slate-800 text-white border-slate-800"
-                        : "bg-slate-50 text-slate-700"
+                      targetCategory === "office" ? "bg-slate-800 text-white border-slate-800" : "bg-slate-50 text-slate-700"
                     }`}
                   >
-                    🏢 অফিস
+                    অফিস
                   </button>
                 </div>
               </div>
@@ -752,7 +725,7 @@ export function InvoicesPaymentsExpensesView({
                 <input
                   type="number"
                   required
-                  placeholder="যেমন: 5000"
+                  placeholder="যেমন: 500"
                   value={formAmount}
                   onChange={(e) => setFormAmount(e.target.value)}
                   className="w-full px-2.5 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900"
@@ -760,129 +733,62 @@ export function InvoicesPaymentsExpensesView({
               </div>
             </div>
 
-            {(entryType === "income" || targetCategory === "project") && (
-              <div>
-                <label className="block font-semibold text-slate-600 mb-1">নির্দিষ্ট প্রজেক্ট *</label>
-                <select
-                  value={formProjectId}
-                  onChange={(e) => setFormProjectId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
-                >
-                  {projects.map((p: any) => (
-                    <option key={p.id} value={p.id}>
-                      {p.projectCode} — {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {entryType === "expense" && targetCategory === "staff" && (
-              <div>
-                <label className="block font-semibold text-slate-600 mb-1">কোন স্টাফের জন্য?</label>
-                <select
-                  value={formStaffId}
-                  onChange={(e) => setFormStaffId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
-                >
-                  <option value="">-- স্টাফ নির্বাচন করুন --</option>
-                  {employees.map((emp: any) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.empCode} — {emp.name} ({emp.designation})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {entryType === "expense" && (
-              <div>
-                <label className="block font-semibold text-slate-600 mb-1">খরচের উপ-খাত</label>
-                <select
-                  value={formSubCategory}
-                  onChange={(e) => setFormSubCategory(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
-                >
-                  {EXPENSE_SUB_CATEGORIES[targetCategory].map((sub) => (
-                    <option key={sub} value={sub}>{sub}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block font-semibold text-slate-600 mb-1">পদ্ধতি</label>
-                <select
-                  value={formMethod}
-                  onChange={(e) => setFormMethod(e.target.value)}
-                  className="w-full px-2.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
-                >
-                  <option>Cash (নগদ)</option>
-                  <option>Bank (ব্যাংক ট্রান্সফার)</option>
-                  <option>bKash/Nagad</option>
-                </select>
-              </div>
-              <div>
-                <label className="block font-semibold text-slate-600 mb-1">ভেন্ডর / গ্রহীতা</label>
-                <input
-                  type="text"
-                  placeholder="কার কাছে দেওয়া হলো"
-                  value={formVendor}
-                  onChange={(e) => setFormVendor(e.target.value)}
-                  className="w-full px-2.5 py-2 rounded-xl border border-slate-300 text-xs"
-                />
-              </div>
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">প্রজেক্ট (যদি থাকে)</label>
+              <select
+                value={formProjectId}
+                onChange={(e) => setFormProjectId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
+              >
+                <option value="">-- কোনো প্রজেক্ট নয় (সাধারণ) --</option>
+                {projects.map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.projectCode} — {p.name}</option>
+                ))}
+              </select>
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-600 mb-1">বিস্তারিত নোট ও বিবরণ *</label>
+              <label className="block font-semibold text-slate-600 mb-1">খরচের ধরণ</label>
+              <select
+                value={formSubCategory}
+                onChange={(e) => setFormSubCategory(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
+              >
+                {(EXPENSE_SUB_CATEGORIES[targetCategory] || EXPENSE_SUB_CATEGORIES.staff).map((sub) => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">নোট ও বিবরণ (কী বাবদ খরচ) *</label>
               <textarea
                 required
                 rows={2}
-                placeholder="যেমন: ৩ নম্বর সাইটে ৫০ বস্তা সিমেন্ট কেনা বাবদ প্রদান..."
+                placeholder="যেমন: সাইট ভিজিটের রিকশা ভাড়া ও নাস্তা..."
                 value={formNotes}
                 onChange={(e) => setFormNotes(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs leading-relaxed"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
               />
             </div>
 
-            {/* ⭐ ইনভয়েস বা ভাউচার আপলোড সেকশন */}
             <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-1.5">
               <label className="block font-bold text-slate-700 flex items-center justify-between">
-                <span>📄 ইনভয়েস / ভাউচার রসিদ যুক্ত করুন</span>
-                {attachedFile && (
-                  <span className="text-[10px] text-emerald-600 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">
-                    যুক্ত হয়েছে ✓
-                  </span>
-                )}
+                <span>📄 ভাউচার / ক্যাশমেমোর ছবি</span>
+                {attachedFile && <span className="text-[10px] text-emerald-600 font-bold">যুক্ত হয়েছে ✓</span>}
               </label>
               <input
                 type="file"
-                accept="image/*,.pdf,.doc,.docx"
+                accept="image/*,.pdf"
                 onChange={handleFileChange}
-                className="w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white file:text-xs"
+                className="w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white"
               />
-              {attachedFile && (
-                <div className="text-[10px] text-slate-600 flex items-center justify-between pt-1">
-                  <span className="truncate max-w-[200px]">{attachedFile.name} ({attachedFile.size})</span>
-                  <button
-                    type="button"
-                    onClick={() => setAttachedFile(null)}
-                    className="text-rose-600 font-bold hover:underline"
-                  >
-                    মুছে ফেলুন
-                  </button>
-                </div>
-              )}
             </div>
 
             <button
               type="submit"
-              className={`w-full py-2.5 rounded-xl font-bold text-xs text-white transition shadow-sm ${
-                entryType === "expense"
-                  ? "bg-rose-600 hover:bg-rose-500"
-                  : "bg-emerald-600 hover:bg-emerald-500"
+              className={`w-full py-2.5 rounded-xl font-bold text-xs text-white transition ${
+                entryType === "expense" ? "bg-rose-600 hover:bg-rose-500" : "bg-emerald-600 hover:bg-emerald-500"
               }`}
             >
               {entryType === "expense" ? "✓ ভাউচারসহ খরচ সেভ করুন" : "✓ জমা সেভ করুন"}
@@ -890,288 +796,82 @@ export function InvoicesPaymentsExpensesView({
           </form>
         </div>
 
-        {/* ডান পাশ: টেবিল */}
+        {/* টেবিল */}
         <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="px-3 py-1.5 rounded-xl border border-slate-300 font-bold bg-white text-slate-800"
-              >
-                <option value="all">📂 সকল প্রজেক্ট</option>
-                {projects.map((p: any) => (
-                  <option key={p.id} value={p.id}>
-                    {p.projectCode} — {p.name}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedCostCategory}
-                onChange={(e) => setSelectedCostCategory(e.target.value)}
-                className="px-3 py-1.5 rounded-xl border border-slate-300 font-bold bg-white text-slate-800"
-              >
-                <option value="all">🔍 সকল খরচের খাত</option>
-                <option value="project">🏗️ শুধু প্রজেক্ট খরচ</option>
-                <option value="staff">👥 শুধু স্টাফদের খরচ</option>
-                <option value="office">🏢 শুধু অফিস খরচ</option>
-              </select>
-            </div>
-
-            <span className="font-semibold text-slate-500 text-[11px]">
-              মোট {filteredRecords.expenses.length + filteredRecords.incomes.length} টি ভাউচার এন্ট্রি
+            <span className="font-bold text-slate-800">
+              {isManagement ? "সকল হিসাব রেজিস্টার" : `${currentUser.name}-এর জমা-খরচের তালিকা`}
+            </span>
+            <span className="text-slate-500 text-[11px]">
+              মোট {filteredRecords.expenses.length} টি ভাউচার এন্ট্রি
             </span>
           </div>
 
           <div className="overflow-x-auto flex-1">
-            <table className="w-full text-left text-xs min-w-[780px]">
+            <table className="w-full text-left text-xs min-w-[700px]">
               <thead>
                 <tr className="bg-slate-100 text-slate-600 border-b border-slate-200 text-[11px] font-bold">
-                  <th className="p-3">তারিখ ও কোড</th>
+                  <th className="p-3">তারিখ</th>
                   <th className="p-3">খাত</th>
-                  <th className="p-3">প্রজেক্ট / স্টাফ</th>
-                  <th className="p-3">বিবরণ ও নোট</th>
-                  <th className="p-3 text-right">পরিমাণ (৳)</th>
-                  <th className="p-3 text-center">ইনভয়েস/ভাউচার</th>
-                  <th className="p-3 text-center">অ্যাকশন</th>
+                  <th className="p-3">বিবরণ / নোট</th>
+                  <th className="p-3 text-right">টাকা (৳)</th>
+                  <th className="p-3 text-center">ভাউচার রসিদ</th>
+                  <th className="p-3 text-center">স্ট্যাটাস</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {/* জমা / আয় */}
-                {filteredRecords.incomes.map((inc: any) => (
-                  <tr key={`inc-${inc.id}`} className="hover:bg-emerald-50/30 transition">
-                    <td className="p-3">
-                      <div className="font-semibold text-slate-900">{inc.date}</div>
-                      <div className="font-mono text-[10px] text-emerald-700 font-bold">{inc.paymentCode}</div>
-                    </td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                        + জমা (আয়)
-                      </span>
-                    </td>
-                    <td className="p-3 font-semibold text-slate-800">
-                      {projects.find((p: any) => p.id === inc.projectId)?.name || "সাধারণ জমা"}
-                    </td>
-                    <td className="p-3 text-slate-600 max-w-xs truncate">{inc.notes || "Client Receipt"}</td>
-                    <td className="p-3 text-right font-bold text-emerald-600 text-sm">
-                      +৳{Number(inc.amount).toLocaleString()}
-                    </td>
-                    <td className="p-3 text-center">
-                      {inc.attachmentUrl ? (
-                        <button
-                          type="button"
-                          onClick={() => setPreviewDoc({ name: inc.paymentCode, url: inc.attachmentUrl })}
-                          className="px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-[10px] font-bold flex items-center gap-1 mx-auto"
-                        >
-                          📄 রসিদ দেখুন
-                        </button>
-                      ) : (
-                        <span className="text-slate-300 text-[10px]">নেই</span>
-                      )}
-                    </td>
-                    <td className="p-3 text-center">
-                      <span className="text-slate-400 text-[11px]">—</span>
+                {filteredRecords.expenses.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                      কোনো খরচের ভাউচার পাওয়া যায়নি
                     </td>
                   </tr>
-                ))}
-
-                {/* খরচ */}
-                {filteredRecords.expenses.map((exp: any) => {
-                  const cat = (exp.category || "").toLowerCase();
-                  let badge = (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                      প্রজেক্ট খরচ
-                    </span>
-                  );
-                  if (cat.includes("staff") || cat.includes("salary") || cat.includes("advance")) {
-                    badge = <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">স্টাফ খরচ</span>;
-                  } else if (cat.includes("office") || cat.includes("rent") || cat.includes("utility")) {
-                    badge = <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-800">অফিস খরচ</span>;
-                  }
-
-                  const linkedProject = projects.find((p: any) => p.id === exp.projectId);
-                  const linkedStaff = employees.find((e: any) => e.id === exp.employeeId);
-
-                  return (
-                    <tr key={`exp-${exp.id}`} className="hover:bg-rose-50/20 transition">
-                      <td className="p-3">
-                        <div className="font-semibold text-slate-900">{exp.date}</div>
-                        <div className="font-mono text-[10px] text-slate-500">{exp.expenseCode}</div>
-                      </td>
-                      <td className="p-3">
-                        {badge}
-                        <div className="text-[10px] text-slate-500 mt-0.5 font-semibold">{exp.category}</div>
-                      </td>
-                      <td className="p-3 font-semibold text-slate-800">
-                        {linkedProject
-                          ? linkedProject.name
-                          : linkedStaff
-                          ? `${linkedStaff.name} (${linkedStaff.empCode})`
-                          : exp.vendorName || "হেড অফিস"}
-                      </td>
-                      <td className="p-3 text-slate-700 max-w-xs text-[11px] leading-relaxed">
-                        {exp.description}
-                      </td>
+                ) : (
+                  filteredRecords.expenses.map((exp: any) => (
+                    <tr key={exp.id} className="hover:bg-slate-50 transition">
+                      <td className="p-3 font-semibold text-slate-800">{exp.date}</td>
+                      <td className="p-3 font-semibold text-slate-700">{exp.category}</td>
+                      <td className="p-3 text-slate-600 max-w-xs">{exp.description}</td>
                       <td className="p-3 text-right font-bold text-rose-600 text-sm">
                         -৳{Number(exp.amount).toLocaleString()}
                       </td>
-
-                      {/* ⭐ ভাউচার দেখা ও ডাউনলোড বাটন */}
                       <td className="p-3 text-center">
                         {exp.attachmentUrl ? (
                           <button
                             type="button"
                             onClick={() => setPreviewDoc({ name: exp.expenseCode, url: exp.attachmentUrl })}
-                            className="px-2 py-1 rounded bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 text-[10px] font-bold flex items-center gap-1 mx-auto"
+                            className="px-2 py-1 rounded bg-emerald-50 text-emerald-800 border border-emerald-300 text-[10px] font-bold"
                           >
-                            📄 ভাউচার দেখুন
+                            📄 ভাউচার
                           </button>
                         ) : (
                           <span className="text-slate-300 text-[10px]">নেই</span>
                         )}
                       </td>
-
                       <td className="p-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setEditingItem({ ...exp })}
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] transition"
-                        >
-                          এডিট
-                        </button>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          {exp.approvalStatus || "Approved"}
+                        </span>
                       </td>
                     </tr>
-                  );
-                })}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
       </div>
 
-      {/* ===== ৪. ভাউচার / ইনভয়েস প্রিভিউ পপ-আপ মোডাল ===== */}
       {previewDoc && (
         <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-5 shadow-2xl space-y-3">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 space-y-3">
             <div className="flex items-center justify-between border-b pb-2">
-              <h3 className="text-sm font-bold text-slate-900">
-                ভাউচার / ইনভয়েস প্রিভিউ ({previewDoc.name})
-              </h3>
-              <div className="flex items-center gap-2">
-                <a
-                  href={previewDoc.url}
-                  download={previewDoc.name}
-                  className="px-3 py-1 rounded-lg bg-slate-900 text-white text-xs font-bold"
-                >
-                  ডাউনলোড
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setPreviewDoc(null)}
-                  className="text-slate-400 hover:text-slate-900 text-base font-bold px-2"
-                >
-                  ✕
-                </button>
-              </div>
+              <h3 className="text-sm font-bold text-slate-900">ভাউচার ({previewDoc.name})</h3>
+              <button type="button" onClick={() => setPreviewDoc(null)} className="font-bold text-slate-500">✕</button>
             </div>
-
-            <div className="max-h-[70vh] overflow-auto flex items-center justify-center p-2 bg-slate-50 rounded-2xl border">
-              {previewDoc.url.startsWith("data:image/") ? (
-                <img src={previewDoc.url} alt="Voucher Receipt" className="max-w-full h-auto rounded-lg" />
-              ) : (
-                <iframe src={previewDoc.url} className="w-full h-96 rounded-lg" title="Document Preview" />
-              )}
+            <div className="max-h-[65vh] overflow-auto flex items-center justify-center p-2 bg-slate-50 rounded-xl">
+              <img src={previewDoc.url} alt="Receipt" className="max-w-full h-auto rounded" />
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===== ৫. এডিট মোডাল ===== */}
-      {editingItem && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="text-base font-bold text-slate-900">
-                ভাউচার সংশোধন ({editingItem.expenseCode})
-              </h3>
-              <button
-                type="button"
-                onClick={() => setEditingItem(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-800"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateItem} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-600 mb-1">তারিখ</label>
-                <input
-                  type="date"
-                  value={editingItem.date}
-                  onChange={(e) => setEditingItem({ ...editingItem, date: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-600 mb-1">টাকার পরিমাণ (৳)</label>
-                <input
-                  type="number"
-                  value={editingItem.amount}
-                  onChange={(e) => setEditingItem({ ...editingItem, amount: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-600 mb-1">ক্যাটাগরি</label>
-                <input
-                  type="text"
-                  value={editingItem.category}
-                  onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-600 mb-1">বিস্তারিত নোট ও কারণ</label>
-                <textarea
-                  rows={3}
-                  value={editingItem.description}
-                  onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300"
-                />
-              </div>
-
-              {/* নতুন করে ফাইল বদলানোর সুযোগ */}
-              <div>
-                <label className="block font-semibold text-slate-600 mb-1">ভাউচার ফাইল পরিবর্তন (ঐচ্ছিক)</label>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={handleFileChange}
-                  className="w-full text-xs"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingItem(null)}
-                  className="w-1/2 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold"
-                >
-                  বাতিল
-                </button>
-                <button
-                  type="submit"
-                  className="w-1/2 py-2.5 rounded-xl bg-slate-900 text-white font-bold"
-                >
-                  আপডেট সংরক্ষণ
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
