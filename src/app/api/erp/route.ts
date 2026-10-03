@@ -3578,7 +3578,47 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ success: true });
     }
+    // =========================================================================
+    // খরচ এডিট ও নোট সংশোধনের অ্যাকশন (Update Expense & Notes)
+    // =========================================================================
+    if (action === "editExpense") {
+      const { expenseId, amount, category, date, description, paymentMethod } = body;
+      
+      const [existing] = await db
+        .select()
+        .from(expenses)
+        .where(eq(expenses.id, Number(expenseId)));
 
+      if (!existing) {
+        return NextResponse.json({ error: "খরচের ভাউচার পাওয়া যায়নি" }, { status: 404 });
+      }
+
+      const [updated] = await db
+        .update(expenses)
+        .set({
+          amount: amount ? Number(amount).toFixed(2) : existing.amount,
+          category: category || existing.category,
+          date: date || existing.date,
+          description: description !== undefined ? description : existing.description,
+          paymentMethod: paymentMethod || existing.paymentMethod,
+        })
+        .where(eq(expenses.id, Number(expenseId)))
+        .returning();
+
+      // অডিট লগ সংরক্ষণ
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "UPDATE",
+        entity: "Expense",
+        recordId: existing.expenseCode,
+        beforeData: existing,
+        afterData: updated,
+      });
+
+      return NextResponse.json({ success: true, expense: updated });
+    }
     // =========================================================================
     // 12. ACCOUNTS RECEIVABLE (INVOICES) & ALL PAYMENTS (TRANSACTIONAL)
     // =========================================================================
