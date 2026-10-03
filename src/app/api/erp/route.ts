@@ -205,7 +205,9 @@ export async function GET(req: NextRequest) {
     db.select().from(announcementReads),
   ]);
 
+    // =========================================================================
   // GRANULAR SERVER-SIDE DATA SCOPING & STAFF PRIVACY ENFORCEMENT
+  // =========================================================================
   const isFullAccess =
     currentUser.role === "Owner" ||
     currentUser.role === "Chairman" ||
@@ -222,6 +224,9 @@ export async function GET(req: NextRequest) {
     currentUser.role === "Sales";
 
   const myEmpId = currentUser.employeeId;
+
+  // ফিন্যান্সিয়াল ম্যানেজমেন্ট রোল (যারা সবার জমা-খরচ অডিট করতে পারবে)
+  const canSeeAllFinancials = isFullAccess || isAccounts || isHR;
 
   const scopedAttendances =
     isFullAccess || isHR
@@ -269,6 +274,30 @@ export async function GET(req: NextRequest) {
             s.siteManagerId === myEmpId ||
             s.engineerId === myEmpId
         );
+
+  // ⭐ খরচের কঠোর প্রাইভেসি (Scoped Expenses):
+  // সাধারণ স্টাফ শুধুমাত্র তার নিজের ভাউচার পাবে, অন্য কোনো স্টাফের খরচ সার্ভার থেকে আসবেই না
+  const scopedExpenses = canSeeAllFinancials
+    ? allExpenses
+    : isPM
+    ? allExpenses.filter(
+        (e) =>
+          e.employeeId === myEmpId ||
+          (e.projectId && scopedProjectIds.has(e.projectId))
+      )
+    : allExpenses.filter((e) => e.employeeId === myEmpId);
+
+  // ⭐ জমার কঠোর প্রাইভেসি (Scoped Payments):
+  // সাধারণ স্টাফ শুধুমাত্র তাকে দেওয়া জমা/অগ্রিম রসিদ দেখতে পাবে
+  const scopedPayments = canSeeAllFinancials
+    ? allPayments
+    : isPM
+    ? allPayments.filter(
+        (p) =>
+          p.employeeId === myEmpId ||
+          (p.projectId && scopedProjectIds.has(p.projectId))
+      )
+    : allPayments.filter((p) => p.employeeId === myEmpId);
 
   const scopedPayrolls =
     isFullAccess || isHR || isAccounts
@@ -321,7 +350,6 @@ export async function GET(req: NextRequest) {
             companyId: e.companyId,
             assignedSite: e.assignedSite,
           }));
-
   // Enrich Projects with Real Dynamic Calculations (Budget vs Actual Cost vs Revenue vs Profit/Loss)
   const enrichedProjects = scopedProjects.map((proj) => {
     const projExpenses = allExpenses.filter(
@@ -641,7 +669,7 @@ export async function GET(req: NextRequest) {
       const ids = new Set(scopedTasks.map((t) => t.id));
       return allTaskComments.filter((c) => ids.has(c.taskId));
     })(),
-    dailyWorks: scopedDailyWorks,
+        dailyWorks: scopedDailyWorks,
     dailyWorkPlans: scopedDailyWorkPlans,
     materials: enrichedMaterials,
     stockMovements: allStockMovements,
@@ -651,12 +679,18 @@ export async function GET(req: NextRequest) {
     supplierBills: isStaffOnly ? [] : allSupplierBills,
     labours: allLabours,
     contractors: isStaffOnly ? [] : allContractors,
-    expenses: isStaffOnly ? allExpenses.filter((e) => e.employeeId === myEmpId) : allExpenses,
+
+    // ⭐ খরচ: সাধারণ স্টাফ শুধু নিজের ভাউচার পাবে, ম্যানেজমেন্ট সবারটা পাবে
+    expenses: scopedExpenses,
+
     accounts: isFullAccess || isAccounts ? allAccounts : [],
     journalEntries: isFullAccess || isAccounts ? allJournals : [],
     journalLines: isFullAccess || isAccounts ? allJournalLines : [],
     invoices: isStaffOnly ? [] : allInvoices,
-    payments: isStaffOnly ? [] : allPayments,
+
+    // ⭐ জমা: স্টাফরা যেন নিজের জমা/অগ্রিম রসিদ দেখতে পায় (আগে [] পাঠানো হচ্ছিল)
+    payments: scopedPayments,
+
     payrolls: scopedPayrolls,
     leaveRequests: scopedLeaves,
     performanceReviews: scopedPerformance,

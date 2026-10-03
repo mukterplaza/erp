@@ -78,9 +78,10 @@ const NAV_GROUPS = [
     items: [
       { label: "ড্যাশবোর্ড", href: "/dashboard", icon: LayoutDashboard },
       { label: "হাজিরা", href: "/attendance", icon: Clock },
-      { label: "মাসিক হাজিরা", href: "/monthly-attendance", icon: Calendar },  // ⭐ NEW
+      { label: "মাসিক হাজিরা", href: "/monthly-attendance", icon: Calendar },
       { label: "আমার দিন", href: "/my-day", icon: ClipboardCheck },
       { label: "দৈনিক কাজ", href: "/daily-works", icon: ClipboardCheck },
+      { label: "দৈনিক জমা-খরচ", href: "/expenses", icon: CreditCard },
       { label: "টাস্ক", href: "/tasks", icon: CheckSquare },
       { label: "টিম টাস্ক মনিটরিং / আমার টাস্ক", href: "/team-tasks", icon: ClipboardCheck },
       { label: "সাইট রিপোর্ট", href: "/site-reports", icon: MapPin },

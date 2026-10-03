@@ -263,7 +263,7 @@ export function AccountingView({
 }
 
 // ============================================================================
-// ⭐ ADVANCED DAILY, MONTHLY & YEARLY INCOME-EXPENSE (আয়-ব্যয় ও প্রজেক্ট ক্যাশবুলেট)
+// ⭐ ADVANCED DAILY, MONTHLY & YEARLY INCOME-EXPENSE WITH INVOICE/VOUCHER ATTACHMENT
 // ============================================================================
 export function InvoicesPaymentsExpensesView({
   data,
@@ -278,13 +278,12 @@ export function InvoicesPaymentsExpensesView({
   const currentMonthStr = today.slice(0, 7); // YYYY-MM
   const currentYearStr = today.slice(0, 4);  // YYYY
 
-  // টাইমলাইন ফিল্টার: 'today' | 'month' | 'year' | 'all'
+  // টাইমলাইন ফিল্টার
   const [timeframe, setTimeframe] = useState<"today" | "month" | "year" | "all">("today");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [selectedCostCategory, setSelectedCostCategory] = useState<string>("all");
-  const [searchTerm, setSearchTerm] = useState("");
 
-  // নতুন এন্ট্রি মোডাল/ফর্ম স্টেট
+  // নতুন এন্ট্রি স্টেট
   const [entryType, setEntryType] = useState<"income" | "expense">("expense");
   const [targetCategory, setTargetCategory] = useState<"project" | "staff" | "office">("project");
   const [formDate, setFormDate] = useState(today);
@@ -296,6 +295,16 @@ export function InvoicesPaymentsExpensesView({
   const [formNotes, setFormNotes] = useState("");
   const [formVendor, setFormVendor] = useState("");
 
+  // ⭐ ইনভয়েস / ডকুমেন্ট ফাইল স্টেট
+  const [attachedFile, setAttachedFile] = useState<{
+    name: string;
+    size: string;
+    dataUrl: string;
+  } | null>(null);
+
+  // প্রিভিউ দেখার জন্য পপ-আপ স্টেট
+  const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string } | null>(null);
+
   // এডিট স্টেট
   const [editingItem, setEditingItem] = useState<any | null>(null);
 
@@ -304,19 +313,54 @@ export function InvoicesPaymentsExpensesView({
   const expenses = data.expenses || [];
   const payments = data.payments || [];
 
-  // ক্যাটাগরি ম্যাপিং
   const EXPENSE_SUB_CATEGORIES: Record<string, string[]> = {
-    project: ["Material (মালামাল)", "Labour (শ্রমিক)", "Contractor (ঠিকাদার বিল)", "Transport (পরিবহন)", "Site Expense (সাইট খরচ)"],
-    staff: ["Staff Salary (বেতন)", "Staff TA/DA (যাতায়াত)", "Staff Food (আপ্যায়ন)", "Staff Advance (অগ্রিম লোন)", "Site Allowance (সাইট ভাতা)"],
-    office: ["Office Rent (অফিস ভাড়া)", "Utility Bills (বিদ্যুৎ/ইন্টারনেট)", "Stationery (কাগজপত্র)", "Office Refreshment (আপ্যায়ন)", "Legal/Trade (লাইসেন্স/আইনি)", "Miscellaneous (অন্যান্য)"],
+    project: [
+      "Material (মালামাল)",
+      "Labour (শ্রমিক)",
+      "Contractor (ঠিকাদার বিল)",
+      "Transport (পরিবহন)",
+      "Site Expense (সাইট খরচ)",
+    ],
+    staff: [
+      "Staff Salary (বেতন)",
+      "Staff TA/DA (যাতায়াত)",
+      "Staff Food (আপ্যায়ন)",
+      "Staff Advance (অগ্রিম লোন)",
+      "Site Allowance (সাইট ভাতা)",
+    ],
+    office: [
+      "Office Rent (অফিস ভাড়া)",
+      "Utility Bills (বিদ্যুৎ/ইন্টারনেট)",
+      "Stationery (কাগজপত্র)",
+      "Office Refreshment (আপ্যায়ন)",
+      "Legal/Trade (লাইসেন্স/আইনি)",
+      "Miscellaneous (অন্যান্য)",
+    ],
+  };
+
+  // ফাইল সিলেক্ট হ্যান্ডলার (ছবি বা PDF রসিদ কনভার্ট)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachedFile({
+        name: file.name,
+        size: `${Math.round(file.size / 1024)} KB`,
+        dataUrl: reader.result as string,
+      });
+    };
+    reader.readAsDataURL(file);
   };
 
   // ফিল্টার করা খরচ ও জমা
   const filteredRecords = useMemo(() => {
     let rawExp = [...expenses];
-    let rawInc = payments.filter((p: any) => p.paymentType === "Client Receipt" || p.paymentType === "Other Income");
+    let rawInc = payments.filter(
+      (p: any) => p.paymentType === "Client Receipt" || p.paymentType === "Other Income"
+    );
 
-    // ১. টাইমলাইন ফিল্টার
     if (timeframe === "today") {
       rawExp = rawExp.filter((e) => e.date === today);
       rawInc = rawInc.filter((p) => p.date === today);
@@ -328,20 +372,21 @@ export function InvoicesPaymentsExpensesView({
       rawInc = rawInc.filter((p) => p.date && p.date.startsWith(currentYearStr));
     }
 
-    // ২. প্রজেক্ট ফিল্টার
     if (selectedProjectId !== "all") {
       const pid = Number(selectedProjectId);
       rawExp = rawExp.filter((e) => Number(e.projectId) === pid);
       rawInc = rawInc.filter((p) => Number(p.projectId) === pid);
     }
 
-    // ৩. কস্ট ক্যাটাগরি ফিল্টার
     if (selectedCostCategory !== "all") {
       rawExp = rawExp.filter((e) => {
         const cat = (e.category || "").toLowerCase();
-        if (selectedCostCategory === "staff") return cat.includes("staff") || cat.includes("salary") || cat.includes("advance");
-        if (selectedCostCategory === "office") return cat.includes("office") || cat.includes("rent") || cat.includes("utility");
-        if (selectedCostCategory === "project") return !cat.includes("staff") && !cat.includes("office") && !cat.includes("salary");
+        if (selectedCostCategory === "staff")
+          return cat.includes("staff") || cat.includes("salary") || cat.includes("advance");
+        if (selectedCostCategory === "office")
+          return cat.includes("office") || cat.includes("rent") || cat.includes("utility");
+        if (selectedCostCategory === "project")
+          return !cat.includes("staff") && !cat.includes("office") && !cat.includes("salary");
         return true;
       });
     }
@@ -349,7 +394,7 @@ export function InvoicesPaymentsExpensesView({
     return { expenses: rawExp, incomes: rawInc };
   }, [expenses, payments, timeframe, selectedProjectId, selectedCostCategory, today, currentMonthStr, currentYearStr]);
 
-  // ফিন্যান্সিয়াল সামারি ক্যালকুলেশন
+  // ফিন্যান্সিয়াল সামারি
   const summary = useMemo(() => {
     const totalIncome = filteredRecords.incomes.reduce((s, p) => s + Number(p.amount || 0), 0);
     const totalExpense = filteredRecords.expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
@@ -382,7 +427,7 @@ export function InvoicesPaymentsExpensesView({
     };
   }, [filteredRecords]);
 
-  // নতুন এন্ট্রি সাবমিট
+  // এন্ট্রি সেভ
   const handleSaveEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (Number(formAmount) <= 0) {
@@ -401,6 +446,9 @@ export function InvoicesPaymentsExpensesView({
         vendorName: formVendor || (targetCategory === "staff" ? "Staff Payment" : "Office Expense"),
         paymentMethod: formMethod,
         description: formNotes || `${targetCategory.toUpperCase()} Expense: ${formSubCategory}`,
+        // ⭐ ইনভয়েস / ডকুমেন্ট এটাচমেন্ট পাঠানো
+        attachmentName: attachedFile?.name || null,
+        attachmentUrl: attachedFile?.dataUrl || null,
       });
     } else {
       await onMutate({
@@ -411,16 +459,19 @@ export function InvoicesPaymentsExpensesView({
         method: formMethod,
         projectId: Number(formProjectId),
         notes: formNotes || "Project Revenue / Client Payment",
+        attachmentName: attachedFile?.name || null,
+        attachmentUrl: attachedFile?.dataUrl || null,
       });
     }
 
     setFormAmount("");
     setFormNotes("");
     setFormVendor("");
-    alert("সফলভাবে জমা/খরচ হিসাবভুক্ত হয়েছে!");
+    setAttachedFile(null);
+    alert("সফলভাবে হিসাব ও ভাউচার সংরক্ষিত হয়েছে!");
   };
 
-  // এন্ট্রি এডিট ও আপডেট
+  // এন্ট্রি এডিট
   const handleUpdateItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
@@ -433,27 +484,29 @@ export function InvoicesPaymentsExpensesView({
       date: editingItem.date,
       description: editingItem.description,
       paymentMethod: editingItem.paymentMethod,
+      attachmentUrl: attachedFile?.dataUrl || editingItem.attachmentUrl,
+      attachmentName: attachedFile?.name || editingItem.attachmentName,
     });
 
     setEditingItem(null);
-    alert("হিসাব সফলভাবে আপডেট করা হয়েছে!");
+    setAttachedFile(null);
+    alert("হিসাব আপডেট সম্পন্ন হয়েছে!");
   };
 
   return (
     <div className="space-y-6">
-      {/* ===== ১. হেডার ও টাইমলাইন ফিল্টার ===== */}
+      {/* ===== ১. হেডার ও ফিল্টার ===== */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 text-white rounded-3xl p-6 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              কমপ্লিট ক্যাশবুলেট ও হিসাব খাতা
+              ভাউচার ও ইনভয়েসযুক্ত ক্যাশ বুক
             </span>
             <span className="text-xs text-slate-400">প্রজেক্ট, স্টাফ ও অফিসের দৈনিক আয়-ব্যয়</span>
           </div>
           <h1 className="text-2xl font-bold">দৈনিক, মাসিক ও বাৎসরিক আয়-ব্যয় ব্যবস্থাপনা</h1>
         </div>
 
-        {/* টাইমলাইন সুইচ বাটন (Daily / Monthly / Yearly) */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-700 text-xs">
             <button
@@ -463,7 +516,7 @@ export function InvoicesPaymentsExpensesView({
                 timeframe === "today" ? "bg-emerald-500 text-slate-950" : "text-slate-300 hover:text-white"
               }`}
             >
-              📅 আজকের (Daily)
+              📅 আজকের
             </button>
             <button
               type="button"
@@ -472,7 +525,7 @@ export function InvoicesPaymentsExpensesView({
                 timeframe === "month" ? "bg-emerald-500 text-slate-950" : "text-slate-300 hover:text-white"
               }`}
             >
-              🗓️ চলতি মাস (Monthly)
+              🗓️ চলতি মাস
             </button>
             <button
               type="button"
@@ -481,7 +534,7 @@ export function InvoicesPaymentsExpensesView({
                 timeframe === "year" ? "bg-emerald-500 text-slate-950" : "text-slate-300 hover:text-white"
               }`}
             >
-              📊 চলতি বছর (Yearly)
+              📊 চলতি বছর
             </button>
             <button
               type="button"
@@ -504,9 +557,8 @@ export function InvoicesPaymentsExpensesView({
         </div>
       </div>
 
-      {/* ===== ২. ফিন্যান্সিয়াল সামারি কার্ড (আয়, ব্যয় ও আলাদা ক্যাটাগরি) ===== */}
+      {/* ===== ২. ফিন্যান্সিয়াল সামারি কার্ডস ===== */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {/* মোট আয় */}
         <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4 shadow-xs">
           <p className="text-[11px] font-bold text-emerald-800 uppercase">মোট জমা / আয়</p>
           <p className="text-xl sm:text-2xl font-extrabold text-emerald-700 mt-1">
@@ -515,7 +567,6 @@ export function InvoicesPaymentsExpensesView({
           <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">ক্লায়েন্ট পেমেন্ট ও অন্যান্য</p>
         </div>
 
-        {/* মোট খরচ */}
         <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 shadow-xs">
           <p className="text-[11px] font-bold text-rose-800 uppercase">মোট ব্যয় / খরচ</p>
           <p className="text-xl sm:text-2xl font-extrabold text-rose-700 mt-1">
@@ -524,20 +575,22 @@ export function InvoicesPaymentsExpensesView({
           <p className="text-[10px] text-rose-600 font-semibold mt-0.5">সকল খাতের সর্বমোট ব্যয়</p>
         </div>
 
-        {/* উদ্বৃত্ত / লাভ */}
-        <div className={`rounded-2xl p-4 border-2 shadow-xs ${
-          summary.netProfit >= 0 ? "bg-blue-50 border-blue-300" : "bg-red-50 border-red-300"
-        }`}>
+        <div
+          className={`rounded-2xl p-4 border-2 shadow-xs ${
+            summary.netProfit >= 0 ? "bg-blue-50 border-blue-300" : "bg-red-50 border-red-300"
+          }`}
+        >
           <p className="text-[11px] font-bold text-slate-700 uppercase">উদ্বৃত্ত / লাভ-ক্ষতি</p>
-          <p className={`text-xl sm:text-2xl font-extrabold mt-1 ${
-            summary.netProfit >= 0 ? "text-blue-700" : "text-red-700"
-          }`}>
+          <p
+            className={`text-xl sm:text-2xl font-extrabold mt-1 ${
+              summary.netProfit >= 0 ? "text-blue-700" : "text-red-700"
+            }`}
+          >
             ৳{summary.netProfit.toLocaleString()}
           </p>
           <p className="text-[10px] text-slate-500 font-semibold mt-0.5">আয় থেকে ব্যয়ের পার্থক্য</p>
         </div>
 
-        {/* প্রজেক্ট খরচ */}
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-xs">
           <p className="text-[11px] font-bold text-amber-800 uppercase">১. প্রজেক্ট খরচ</p>
           <p className="text-xl font-bold text-amber-700 mt-1">
@@ -546,7 +599,6 @@ export function InvoicesPaymentsExpensesView({
           <p className="text-[10px] text-amber-600 mt-0.5">মালামাল, লেবার ও ঠিকাদার</p>
         </div>
 
-        {/* স্টাফদের খরচ */}
         <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 shadow-xs">
           <p className="text-[11px] font-bold text-purple-800 uppercase">২. স্টাফদের খরচ</p>
           <p className="text-xl font-bold text-purple-700 mt-1">
@@ -555,7 +607,6 @@ export function InvoicesPaymentsExpensesView({
           <p className="text-[10px] text-purple-600 mt-0.5">বেতন, যাতায়াত, নাস্তা ও লোন</p>
         </div>
 
-        {/* অফিস পরিচালন খরচ */}
         <div className="bg-slate-50 border border-slate-300 rounded-2xl p-4 shadow-xs">
           <p className="text-[11px] font-bold text-slate-800 uppercase">৩. অফিস খরচ</p>
           <p className="text-xl font-bold text-slate-700 mt-1">
@@ -565,15 +616,14 @@ export function InvoicesPaymentsExpensesView({
         </div>
       </div>
 
-      {/* ===== ৩. ফর্ম ও টেবিল গ্রিড ===== */}
+      {/* ===== ৩. এন্ট্রি ফর্ম ও রেজিস্টার টেবিল ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* বাম পাশ: নতুন আয়/ব্যয় এন্ট্রি ফর্ম */}
+        {/* বাম পাশ: ফর্ম */}
         <div className="lg:col-span-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-emerald-600" /> নতুন হিসাব যুক্ত করুন
+              <Receipt className="w-4 h-4 text-emerald-600" /> নতুন হিসাব ও ভাউচার যুক্ত
             </h3>
-            {/* আয় বনাম ব্যয় টগল */}
             <div className="flex bg-slate-100 p-0.5 rounded-xl text-xs font-bold">
               <button
                 type="button"
@@ -591,40 +641,54 @@ export function InvoicesPaymentsExpensesView({
                   entryType === "income" ? "bg-emerald-600 text-white" : "text-slate-600"
                 }`}
               >
-                জমা / আয়
+                জমা
               </button>
             </div>
           </div>
 
           <form onSubmit={handleSaveEntry} className="space-y-3 text-xs">
-            {/* খরচের মূল ৩টি খাত নির্বাচন */}
             {entryType === "expense" && (
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 mb-1">খরচের মূল খাত:</label>
                 <div className="grid grid-cols-3 gap-1">
                   <button
                     type="button"
-                    onClick={() => { setTargetCategory("project"); setFormSubCategory(EXPENSE_SUB_CATEGORIES.project[0]); }}
+                    onClick={() => {
+                      setTargetCategory("project");
+                      setFormSubCategory(EXPENSE_SUB_CATEGORIES.project[0]);
+                    }}
                     className={`py-1.5 rounded-lg border text-[11px] font-bold transition ${
-                      targetCategory === "project" ? "bg-amber-500 text-white border-amber-500" : "bg-slate-50 text-slate-700"
+                      targetCategory === "project"
+                        ? "bg-amber-500 text-white border-amber-500"
+                        : "bg-slate-50 text-slate-700"
                     }`}
                   >
                     🏗️ প্রজেক্ট
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setTargetCategory("staff"); setFormSubCategory(EXPENSE_SUB_CATEGORIES.staff[0]); }}
+                    onClick={() => {
+                      setTargetCategory("staff");
+                      setFormSubCategory(EXPENSE_SUB_CATEGORIES.staff[0]);
+                    }}
                     className={`py-1.5 rounded-lg border text-[11px] font-bold transition ${
-                      targetCategory === "staff" ? "bg-purple-600 text-white border-purple-600" : "bg-slate-50 text-slate-700"
+                      targetCategory === "staff"
+                        ? "bg-purple-600 text-white border-purple-600"
+                        : "bg-slate-50 text-slate-700"
                     }`}
                   >
                     👥 স্টাফ
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setTargetCategory("office"); setFormSubCategory(EXPENSE_SUB_CATEGORIES.office[0]); }}
+                    onClick={() => {
+                      setTargetCategory("office");
+                      setFormSubCategory(EXPENSE_SUB_CATEGORIES.office[0]);
+                    }}
                     className={`py-1.5 rounded-lg border text-[11px] font-bold transition ${
-                      targetCategory === "office" ? "bg-slate-800 text-white border-slate-800" : "bg-slate-50 text-slate-700"
+                      targetCategory === "office"
+                        ? "bg-slate-800 text-white border-slate-800"
+                        : "bg-slate-50 text-slate-700"
                     }`}
                   >
                     🏢 অফিস
@@ -633,7 +697,6 @@ export function InvoicesPaymentsExpensesView({
               </div>
             )}
 
-            {/* তারিখ ও পরিমাণ */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block font-semibold text-slate-600 mb-1">তারিখ</label>
@@ -658,7 +721,6 @@ export function InvoicesPaymentsExpensesView({
               </div>
             </div>
 
-            {/* প্রজেক্ট নির্বাচন (যদি প্রজেক্ট খরচ বা ক্লায়েন্ট জমা হয়) */}
             {(entryType === "income" || targetCategory === "project") && (
               <div>
                 <label className="block font-semibold text-slate-600 mb-1">নির্দিষ্ট প্রজেক্ট *</label>
@@ -676,7 +738,6 @@ export function InvoicesPaymentsExpensesView({
               </div>
             )}
 
-            {/* স্টাফ নির্বাচন (যদি স্টাফ খরচ হয়) */}
             {entryType === "expense" && targetCategory === "staff" && (
               <div>
                 <label className="block font-semibold text-slate-600 mb-1">কোন স্টাফের জন্য?</label>
@@ -695,7 +756,6 @@ export function InvoicesPaymentsExpensesView({
               </div>
             )}
 
-            {/* উপ-খাত (Sub Category) */}
             {entryType === "expense" && (
               <div>
                 <label className="block font-semibold text-slate-600 mb-1">খরচের উপ-খাত</label>
@@ -711,7 +771,6 @@ export function InvoicesPaymentsExpensesView({
               </div>
             )}
 
-            {/* পেমেন্ট মাধ্যম */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block font-semibold text-slate-600 mb-1">পদ্ধতি</label>
@@ -720,9 +779,9 @@ export function InvoicesPaymentsExpensesView({
                   onChange={(e) => setFormMethod(e.target.value)}
                   className="w-full px-2.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
                 >
-                  <option>Cash (ক্যাশ/নগদ)</option>
+                  <option>Cash (নগদ)</option>
                   <option>Bank (ব্যাংক ট্রান্সফার)</option>
-                  <option>bKash/Nagad (মোবাইল ব্যাংকিং)</option>
+                  <option>bKash/Nagad</option>
                 </select>
               </div>
               <div>
@@ -737,36 +796,65 @@ export function InvoicesPaymentsExpensesView({
               </div>
             </div>
 
-            {/* বিস্তারিত নোট */}
             <div>
               <label className="block font-semibold text-slate-600 mb-1">বিস্তারিত নোট ও বিবরণ *</label>
               <textarea
                 required
                 rows={2}
-                placeholder="যেমন: ৩ নম্বর সাইটে ৫০ বস্তা সিমেন্ট কেনা বাবদ নগদ প্রদান..."
+                placeholder="যেমন: ৩ নম্বর সাইটে ৫০ বস্তা সিমেন্ট কেনা বাবদ প্রদান..."
                 value={formNotes}
                 onChange={(e) => setFormNotes(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs leading-relaxed"
               />
             </div>
 
+            {/* ⭐ ইনভয়েস বা ভাউচার আপলোড সেকশন */}
+            <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-1.5">
+              <label className="block font-bold text-slate-700 flex items-center justify-between">
+                <span>📄 ইনভয়েস / ভাউচার রসিদ যুক্ত করুন</span>
+                {attachedFile && (
+                  <span className="text-[10px] text-emerald-600 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">
+                    যুক্ত হয়েছে ✓
+                  </span>
+                )}
+              </label>
+              <input
+                type="file"
+                accept="image/*,.pdf,.doc,.docx"
+                onChange={handleFileChange}
+                className="w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white file:text-xs"
+              />
+              {attachedFile && (
+                <div className="text-[10px] text-slate-600 flex items-center justify-between pt-1">
+                  <span className="truncate max-w-[200px]">{attachedFile.name} ({attachedFile.size})</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFile(null)}
+                    className="text-rose-600 font-bold hover:underline"
+                  >
+                    মুছে ফেলুন
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               type="submit"
               className={`w-full py-2.5 rounded-xl font-bold text-xs text-white transition shadow-sm ${
-                entryType === "expense" ? "bg-rose-600 hover:bg-rose-500" : "bg-emerald-600 hover:bg-emerald-500"
+                entryType === "expense"
+                  ? "bg-rose-600 hover:bg-rose-500"
+                  : "bg-emerald-600 hover:bg-emerald-500"
               }`}
             >
-              {entryType === "expense" ? "✓ খরচ সংরক্ষণ করুন" : "✓ জমা সংরক্ষণ করুন"}
+              {entryType === "expense" ? "✓ ভাউচারসহ খরচ সেভ করুন" : "✓ জমা সেভ করুন"}
             </button>
           </form>
         </div>
 
-        {/* ডান পাশ: ফিল্টারড হিসাব খাতা ও এডিটিং টেবিল */}
+        {/* ডান পাশ: টেবিল */}
         <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
-          {/* টেবিল ফিল্টার বার */}
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
-              {/* প্রজেক্ট ফিল্টার */}
               <select
                 value={selectedProjectId}
                 onChange={(e) => setSelectedProjectId(e.target.value)}
@@ -774,11 +862,12 @@ export function InvoicesPaymentsExpensesView({
               >
                 <option value="all">📂 সকল প্রজেক্ট</option>
                 {projects.map((p: any) => (
-                  <option key={p.id} value={p.id}>{p.projectCode} — {p.name}</option>
+                  <option key={p.id} value={p.id}>
+                    {p.projectCode} — {p.name}
+                  </option>
                 ))}
               </select>
 
-              {/* খরচের মূল খাত ফিল্টার */}
               <select
                 value={selectedCostCategory}
                 onChange={(e) => setSelectedCostCategory(e.target.value)}
@@ -796,22 +885,21 @@ export function InvoicesPaymentsExpensesView({
             </span>
           </div>
 
-          {/* লেনদেনের মাস্টার টেবিল */}
           <div className="overflow-x-auto flex-1">
-            <table className="w-full text-left text-xs min-w-[750px]">
+            <table className="w-full text-left text-xs min-w-[780px]">
               <thead>
                 <tr className="bg-slate-100 text-slate-600 border-b border-slate-200 text-[11px] font-bold">
                   <th className="p-3">তারিখ ও কোড</th>
-                  <th className="p-3">খাত / ক্যাটাগরি</th>
+                  <th className="p-3">খাত</th>
                   <th className="p-3">প্রজেক্ট / স্টাফ</th>
                   <th className="p-3">বিবরণ ও নোট</th>
                   <th className="p-3 text-right">পরিমাণ (৳)</th>
-                  <th className="p-3 text-center">মাধ্যম</th>
+                  <th className="p-3 text-center">ইনভয়েস/ভাউচার</th>
                   <th className="p-3 text-center">অ্যাকশন</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {/* ১. জমা / আয়সমূহ */}
+                {/* জমা / আয় */}
                 {filteredRecords.incomes.map((inc: any) => (
                   <tr key={`inc-${inc.id}`} className="hover:bg-emerald-50/30 transition">
                     <td className="p-3">
@@ -830,14 +918,26 @@ export function InvoicesPaymentsExpensesView({
                     <td className="p-3 text-right font-bold text-emerald-600 text-sm">
                       +৳{Number(inc.amount).toLocaleString()}
                     </td>
-                    <td className="p-3 text-center font-medium text-slate-500">{inc.method}</td>
+                    <td className="p-3 text-center">
+                      {inc.attachmentUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewDoc({ name: inc.paymentCode, url: inc.attachmentUrl })}
+                          className="px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-[10px] font-bold flex items-center gap-1 mx-auto"
+                        >
+                          📄 রসিদ দেখুন
+                        </button>
+                      ) : (
+                        <span className="text-slate-300 text-[10px]">নেই</span>
+                      )}
+                    </td>
                     <td className="p-3 text-center">
                       <span className="text-slate-400 text-[11px]">—</span>
                     </td>
                   </tr>
                 ))}
 
-                {/* ২. খরচসমূহ */}
+                {/* খরচ */}
                 {filteredRecords.expenses.map((exp: any) => {
                   const cat = (exp.category || "").toLowerCase();
                   let badge = (
@@ -865,7 +965,11 @@ export function InvoicesPaymentsExpensesView({
                         <div className="text-[10px] text-slate-500 mt-0.5 font-semibold">{exp.category}</div>
                       </td>
                       <td className="p-3 font-semibold text-slate-800">
-                        {linkedProject ? linkedProject.name : linkedStaff ? `${linkedStaff.name} (${linkedStaff.empCode})` : exp.vendorName || "হেড অফিস"}
+                        {linkedProject
+                          ? linkedProject.name
+                          : linkedStaff
+                          ? `${linkedStaff.name} (${linkedStaff.empCode})`
+                          : exp.vendorName || "হেড অফিস"}
                       </td>
                       <td className="p-3 text-slate-700 max-w-xs text-[11px] leading-relaxed">
                         {exp.description}
@@ -873,7 +977,22 @@ export function InvoicesPaymentsExpensesView({
                       <td className="p-3 text-right font-bold text-rose-600 text-sm">
                         -৳{Number(exp.amount).toLocaleString()}
                       </td>
-                      <td className="p-3 text-center text-slate-500 font-medium">{exp.paymentMethod}</td>
+
+                      {/* ⭐ ভাউচার দেখা ও ডাউনলোড বাটন */}
+                      <td className="p-3 text-center">
+                        {exp.attachmentUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewDoc({ name: exp.expenseCode, url: exp.attachmentUrl })}
+                            className="px-2 py-1 rounded bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 text-[10px] font-bold flex items-center gap-1 mx-auto"
+                          >
+                            📄 ভাউচার দেখুন
+                          </button>
+                        ) : (
+                          <span className="text-slate-300 text-[10px]">নেই</span>
+                        )}
+                      </td>
+
                       <td className="p-3 text-center">
                         <button
                           type="button"
@@ -892,7 +1011,44 @@ export function InvoicesPaymentsExpensesView({
         </div>
       </div>
 
-      {/* ===== ৪. এডিট ও নোট আপডেট মোডাল (Edit Modal) ===== */}
+      {/* ===== ৪. ভাউচার / ইনভয়েস প্রিভিউ পপ-আপ মোডাল ===== */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-5 shadow-2xl space-y-3">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="text-sm font-bold text-slate-900">
+                ভাউচার / ইনভয়েস প্রিভিউ ({previewDoc.name})
+              </h3>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewDoc.url}
+                  download={previewDoc.name}
+                  className="px-3 py-1 rounded-lg bg-slate-900 text-white text-xs font-bold"
+                >
+                  ডাউনলোড
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewDoc(null)}
+                  className="text-slate-400 hover:text-slate-900 text-base font-bold px-2"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-[70vh] overflow-auto flex items-center justify-center p-2 bg-slate-50 rounded-2xl border">
+              {previewDoc.url.startsWith("data:image/") ? (
+                <img src={previewDoc.url} alt="Voucher Receipt" className="max-w-full h-auto rounded-lg" />
+              ) : (
+                <iframe src={previewDoc.url} className="w-full h-96 rounded-lg" title="Document Preview" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== ৫. এডিট মোডাল ===== */}
       {editingItem && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200">
@@ -947,6 +1103,17 @@ export function InvoicesPaymentsExpensesView({
                   value={editingItem.description}
                   onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-300"
+                />
+              </div>
+
+              {/* নতুন করে ফাইল বদলানোর সুযোগ */}
+              <div>
+                <label className="block font-semibold text-slate-600 mb-1">ভাউচার ফাইল পরিবর্তন (ঐচ্ছিক)</label>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={handleFileChange}
+                  className="w-full text-xs"
                 />
               </div>
 
