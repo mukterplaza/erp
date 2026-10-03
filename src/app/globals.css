@@ -6,5 +6,6 @@ html, body {
 }
 
 body {
-  font-family: "Noto Sans Bengali", "Kalpurush", "SolaimanLipi", system-ui, sans-serif;
+  /* গুগলের বাংলা ফন্ট সবার আগে থাকবে, এরপর ডিভাইসের ফন্ট ফলব্যাক */
+  font-family: var(--font-bengali), "Noto Sans Bengali", "Kalpurush", "SolaimanLipi", var(--font-inter), system-ui, sans-serif;
 }

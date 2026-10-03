@@ -16,8 +16,55 @@ import {
 } from "lucide-react";
 import { exportToCSV, exportToExcel, exportToPDFPrint } from "@/lib/export-utils";
 
- 
+// ============================================================================
+// ⭐ PERMANENT BANGLA & MULTILINGUAL ENCODING HEALER (MOJIBAKE AUTO-REPAIR)
+// ============================================================================
+const WIN1252_MAP: Record<number, number> = {
+  0x20ac: 0x80, 0x201a: 0x82, 0x0192: 0x83, 0x201e: 0x84,
+  0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x02c6: 0x88,
+  0x2030: 0x89, 0x0160: 0x8a, 0x2039: 0x8b, 0x0152: 0x8c,
+  0x017d: 0x8e, 0x2018: 0x91, 0x2019: 0x92, 0x201c: 0x93,
+  0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+  0x02dc: 0x98, 0x2122: 0x99, 0x0161: 0x9a, 0x203a: 0x9b,
+  0x0153: 0x9c, 0x017e: 0x9e, 0x0178: 0x9f,
+};
 
+export function fixBanglaEncoding(text: any): string {
+  if (!text || typeof text !== "string") return text || "";
+
+  // যদি টেক্সট স্বাভাবিক থাকে এবং কোনো Mojibake লক্ষণ না থাকে, সরাসরি রিটার্ন করবে
+  if (
+    !text.includes("à¦") &&
+    !text.includes("à§") &&
+    !text.includes("à¥") &&
+    !text.includes("â€") &&
+    !text.includes("Ã")
+  ) {
+    return text;
+  }
+
+  try {
+    const bytes = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      bytes[i] = WIN1252_MAP[code] ?? (code & 0xff);
+    }
+    const decoded = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+
+    // ডিকোড করার পর যদি সঠিক বাংলা ক্যারেক্টার পাওয়া যায়
+    if (/[\u0980-\u09FF]/.test(decoded)) {
+      return decoded;
+    }
+  } catch {
+    // fallback to original if decoding fails
+  }
+
+  return text;
+}
+
+// ============================================================================
+// 1. ACCOUNTING VIEW
+// ============================================================================
 export function AccountingView({
   data,
   onMutate,
@@ -92,7 +139,7 @@ export function AccountingView({
                 {(data.accounts || []).map((acc: any) => (
                   <tr key={acc.id}>
                     <td className="p-2.5 font-mono font-bold">{acc.code}</td>
-                    <td className="p-2.5 font-semibold text-slate-900">{acc.name}</td>
+                    <td className="p-2.5 font-semibold text-slate-900">{fixBanglaEncoding(acc.name)}</td>
                     <td className="p-2.5 text-slate-500">{acc.type}</td>
                     <td className="p-2.5 text-right font-bold text-slate-900">
                       ৳{Number(acc.balance).toLocaleString()}
@@ -192,11 +239,11 @@ export function AccountingView({
                       {Number(jv.totalCredit).toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-slate-600">{jv.description}</p>
+                  <p className="text-slate-600">{fixBanglaEncoding(jv.description)}</p>
                   <div className="border-t border-slate-200 pt-2 space-y-1">
                     {lines.map((ln: any) => (
                       <div key={ln.id} className="flex justify-between font-mono text-[11px]">
-                        <span>{ln.accountName}</span>
+                        <span>{fixBanglaEncoding(ln.accountName)}</span>
                         <span>
                           {Number(ln.debit) > 0
                             ? `Debit: ৳${Number(ln.debit).toLocaleString()}`
@@ -216,7 +263,7 @@ export function AccountingView({
 }
 
 // ============================================================================
-// INVOICES, PAYMENTS & EXPENSES VIEW (/invoices, /income, /payments, /expenses)
+// 2. INVOICES, PAYMENTS & EXPENSES VIEW
 // ============================================================================
 export function InvoicesPaymentsExpensesView({
   data,
@@ -228,13 +275,11 @@ export function InvoicesPaymentsExpensesView({
   tab?: "invoices" | "payments" | "expenses";
 }) {
   const today = new Date().toISOString().split("T")[0];
-  // Create Invoice state
   const [clientId, setClientId] = useState(String(data.clients?.[0]?.id || 1));
   const [projectId, setProjectId] = useState(String(data.projects?.[0]?.id || 1));
   const [invAmount, setInvAmount] = useState("250000");
   const [invNotes, setInvNotes] = useState("Running Bill for Structural Works");
 
-  // Create Expense state
   const [expCategory, setExpCategory] = useState("Material");
   const [expAmount, setExpAmount] = useState("15000");
   const [expDesc, setExpDesc] = useState("");
@@ -318,7 +363,7 @@ export function InvoicesPaymentsExpensesView({
             >
               {(data.clients || []).map((c: any) => (
                 <option key={c.id} value={c.id}>
-                  {c.clientCode} — {c.name}
+                  {c.clientCode} — {fixBanglaEncoding(c.name)}
                 </option>
               ))}
             </select>
@@ -329,7 +374,7 @@ export function InvoicesPaymentsExpensesView({
             >
               {(data.projects || []).map((p: any) => (
                 <option key={p.id} value={p.id}>
-                  {p.projectCode} — {p.name}
+                  {p.projectCode} — {fixBanglaEncoding(p.name)}
                 </option>
               ))}
             </select>
@@ -436,7 +481,7 @@ export function InvoicesPaymentsExpensesView({
                   <tr key={inv.id}>
                     <td className="p-3">
                       <div className="font-mono font-bold text-slate-900">{inv.invoiceCode}</div>
-                      <div className="text-[11px] text-slate-500">{inv.notes}</div>
+                      <div className="text-[11px] text-slate-500">{fixBanglaEncoding(inv.notes)}</div>
                     </td>
                     <td className="p-3 font-semibold">
                       ৳{Number(inv.totalAmount).toLocaleString()}
@@ -506,7 +551,7 @@ export function InvoicesPaymentsExpensesView({
                     <td className="p-3 font-mono font-bold">{ex.expenseCode}</td>
                     <td className="p-3">{ex.date}</td>
                     <td className="p-3 font-semibold">{ex.category}</td>
-                    <td className="p-3 text-slate-600">{ex.description}</td>
+                    <td className="p-3 text-slate-600">{fixBanglaEncoding(ex.description)}</td>
                     <td className="p-3 font-bold text-slate-900">
                       ৳{Number(ex.amount).toLocaleString()}
                     </td>
@@ -549,7 +594,7 @@ export function InvoicesPaymentsExpensesView({
                     <td className="p-3 font-bold text-emerald-700">
                       ৳{Number(py.amount).toLocaleString()}
                     </td>
-                    <td className="p-3 text-slate-500">{py.notes}</td>
+                    <td className="p-3 text-slate-500">{fixBanglaEncoding(py.notes)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -562,7 +607,7 @@ export function InvoicesPaymentsExpensesView({
 }
 
 // ============================================================================
-// REPORT CENTER WITH DATE FILTERS & PDF / EXCEL / CSV EXPORT (/reports)
+// 3. REPORT CENTER
 // ============================================================================
 export function ReportsCenterView({ data }: { data: any }) {
   const [category, setCategory] = useState<
@@ -706,7 +751,9 @@ export function ReportsCenterView({ data }: { data: any }) {
                 <tr key={idx}>
                   {Object.keys(rows[0]).slice(0, 8).map((k) => (
                     <td key={k} className="p-2.5">
-                      {typeof r[k] === "object" ? JSON.stringify(r[k]) : String(r[k] ?? "")}
+                      {typeof r[k] === "object"
+                        ? JSON.stringify(r[k])
+                        : fixBanglaEncoding(String(r[k] ?? ""))}
                     </td>
                   ))}
                 </tr>
@@ -722,7 +769,7 @@ export function ReportsCenterView({ data }: { data: any }) {
 }
 
 // ============================================================================
-// 6 & 11. SMART NOTIFICATION CENTER (With Direct Accept / Start / Complete)
+// 4. SMART NOTIFICATION CENTER (উন্নত বাংলা এনকোডিং মেরামতসহ)
 // ============================================================================
 const SMART_NOTIFICATION_CATEGORIES = [
   "সব ক্যাটাগরি",
@@ -772,7 +819,7 @@ export function NotificationsView({
   const [filter, setFilter] = useState<"All" | "Unread" | "Read">("All");
   const [categoryFilter, setCategoryFilter] = useState("সব ক্যাটাগরি");
 
-  // Broadcast Announcement / Task Notice State
+  // Broadcast Announcement State
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeDesc, setNoticeDesc] = useState("");
   const [noticePriority, setNoticePriority] = useState("High");
@@ -855,7 +902,7 @@ export function NotificationsView({
         ))}
       </div>
 
-      {/* Broadcast Company-Wide Task / Notice Form */}
+      {/* Broadcast Form */}
       {data.currentUser?.role !== "Staff" && (
         <form
           onSubmit={async (e) => {
@@ -912,7 +959,7 @@ export function NotificationsView({
                 <option value="All Staff">All Staff</option>
                 {(data.allEmployeesDirectory || []).map((e: any) => (
                   <option key={e.id} value={`${e.name} (${e.empCode})`}>
-                    {e.name}
+                    {fixBanglaEncoding(e.name)}
                   </option>
                 ))}
               </select>
@@ -936,136 +983,171 @@ export function NotificationsView({
         </form>
       )}
 
+      {/* Notifications List (স্বয়ংক্রিয়ভাবে মেরামত করা বাংলা ও ইংরেজি টেক্সটসহ) */}
       <div className="space-y-3">
-        {list.map((n: any) => (
-          <div
-            key={n.id}
-            className={`p-4 rounded-2xl border flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
-              n.isRead
-                ? "bg-white border-slate-200"
-                : "bg-emerald-50/40 border-emerald-300"
-            }`}
-          >
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-slate-900 text-white text-[11px] font-bold">
-                  {CATEGORY_BN[notifCategory(n)] || n.type}
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  {new Date(n.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                </span>
-                {n.recipientName && (
-                  <span className="text-[11px] text-slate-500">প্রাপক: <strong>{n.recipientName}</strong></span>
-                )}
-                <span
-                  className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                    n.priority === "Critical" || n.priority === "High"
-                      ? "bg-rose-100 text-rose-700"
-                      : "bg-blue-100 text-blue-700"
-                  }`}
-                >
-                  Priority: {n.priority || "Medium"}
-                </span>
-                <span className="text-xs font-semibold text-slate-600">
-                  Assigned: {n.assignedPersonOrTeam || "All Staff"}
-                </span>
-                <span className="text-xs text-slate-500">
-                  Created by: <strong>{n.createdBy || "System"}</strong>
-                </span>
-                {n.dueDate && (
-                  <span className="text-xs text-amber-700 font-semibold">
-                    Due: {n.dueDate}
+        {list.map((n: any) => {
+          const repairedTitle = fixBanglaEncoding(n.title);
+          const repairedMessage = fixBanglaEncoding(n.message);
+          const repairedRecipient = fixBanglaEncoding(n.recipientName);
+          const repairedAssigned = fixBanglaEncoding(n.assignedPersonOrTeam);
+          const repairedCreatedBy = fixBanglaEncoding(n.createdBy);
+
+          return (
+            <div
+              key={n.id}
+              className={`p-4 rounded-2xl border flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+                n.isRead
+                  ? "bg-white border-slate-200"
+                  : "bg-emerald-50/40 border-emerald-300"
+              }`}
+            >
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-slate-900 text-white text-[11px] font-bold">
+                    {CATEGORY_BN[notifCategory(n)] || fixBanglaEncoding(n.type)}
                   </span>
+                  <span className="text-[11px] text-slate-500">
+                    {new Date(n.createdAt).toLocaleString("en-GB", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                  {repairedRecipient && (
+                    <span className="text-[11px] text-slate-500">
+                      প্রাপক: <strong>{repairedRecipient}</strong>
+                    </span>
+                  )}
+                  <span
+                    className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                      n.priority === "Critical" || n.priority === "High"
+                        ? "bg-rose-100 text-rose-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}
+                  >
+                    Priority: {n.priority || "Medium"}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-600">
+                    Assigned: {repairedAssigned || "All Staff"}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    Created by: <strong>{repairedCreatedBy || "System"}</strong>
+                  </span>
+                  {n.dueDate && (
+                    <span className="text-xs text-amber-700 font-semibold">
+                      Due: {n.dueDate}
+                    </span>
+                  )}
+                  <span className="text-xs font-mono text-slate-400">
+                    {n.relatedEntityCode}
+                  </span>
+                  {!n.isRead && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  )}
+                </div>
+
+                {/* মেরামত করা টাইটেল */}
+                <h3 className="text-sm font-bold text-slate-900 leading-snug">
+                  {repairedTitle}
+                </h3>
+
+                {/* মেরামত করা মেসেজ */}
+                <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">
+                  {repairedMessage}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {/* Direct Task Actions */}
+                {(n.relatedTaskId ||
+                  n.type === "Task Assigned" ||
+                  n.type === "New Task" ||
+                  n.type === "Task Overdue") && (
+                  <div className="flex items-center gap-1.5 mr-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onMutate({
+                          action: "updateTaskStatus",
+                          taskId: n.relatedTaskId || 1,
+                          status: "Accepted",
+                        })
+                      }
+                      className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onMutate({
+                          action: "updateTaskStatus",
+                          taskId: n.relatedTaskId || 1,
+                          status: "In Progress",
+                        })
+                      }
+                      className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
+                    >
+                      Start
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onMutate({
+                          action: "updateTaskStatus",
+                          taskId: n.relatedTaskId || 1,
+                          status: "Completed",
+                          completionNote: "Completed directly from Notification Center",
+                        })
+                      }
+                      className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+                    >
+                      Complete
+                    </button>
+                  </div>
                 )}
-                <span className="text-xs font-mono text-slate-400">
-                  {n.relatedEntityCode}
-                </span>
+
+                <Link
+                  href={n.relatedUrl || "/dashboard"}
+                  onClick={() => {
+                    if (!n.isRead && n.userId)
+                      onMutate({
+                        action: "markNotificationRead",
+                        notificationId: n.id,
+                      });
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-semibold"
+                >
+                  {n.relatedTaskId ? "কাজটি দেখুন →" : "খুলুন →"}
+                </Link>
                 {!n.isRead && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onMutate({
+                        action: "markNotificationRead",
+                        notificationId: n.id,
+                      })
+                    }
+                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700"
+                  >
+                    পঠিত করুন
+                  </button>
                 )}
               </div>
-              <h3 className="text-sm font-bold text-slate-900">{n.title}</h3>
-              <p className="text-xs text-slate-600 whitespace-pre-line">{n.message}</p>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {/* Direct Task Accept / Start / Complete buttons right inside Notification */}
-              {(n.relatedTaskId || n.type === "Task Assigned" || n.type === "New Task" || n.type === "Task Overdue") && (
-                <div className="flex items-center gap-1.5 mr-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onMutate({
-                        action: "updateTaskStatus",
-                        taskId: n.relatedTaskId || 1,
-                        status: "Accepted",
-                      })
-                    }
-                    className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onMutate({
-                        action: "updateTaskStatus",
-                        taskId: n.relatedTaskId || 1,
-                        status: "In Progress",
-                      })
-                    }
-                    className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
-                  >
-                    Start
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onMutate({
-                        action: "updateTaskStatus",
-                        taskId: n.relatedTaskId || 1,
-                        status: "Completed",
-                        completionNote: "Completed directly from Notification Center",
-                      })
-                    }
-                    className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
-                  >
-                    Complete
-                  </button>
-                </div>
-              )}
-
-              <Link
-                href={n.relatedUrl || "/dashboard"}
-                onClick={() => {
-                  if (!n.isRead && n.userId) onMutate({ action: "markNotificationRead", notificationId: n.id });
-                }}
-                className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-semibold"
-              >
-                {n.relatedTaskId ? "কাজটি দেখুন →" : "খুলুন →"}
-              </Link>
-              {!n.isRead && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    onMutate({
-                      action: "markNotificationRead",
-                      notificationId: n.id,
-                    })
-                  }
-                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700"
-                >
-                  পঠিত করুন
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
+// ============================================================================
+// 5. DOCUMENTS AND USERS VIEW
+// ============================================================================
 export function DocumentsAndUsersView({
   data,
   onMutate,
@@ -1080,12 +1162,10 @@ export function DocumentsAndUsersView({
   const [docType, setDocType] = useState("PDF");
   const [relatedCode, setRelatedCode] = useState("PRJ-0001");
 
-  // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [pwdMsg, setPwdMsg] = useState("");
 
-  // 12. রিমাইন্ডার অটোমেশন সেটিংস State
   const [lateCheckInAfter, setLateCheckInAfter] = useState(
     data.reminderSettings?.lateCheckInAfter || "09:30"
   );
@@ -1357,7 +1437,7 @@ export function DocumentsAndUsersView({
                   {(data.users || []).map((u: any) => (
                     <tr key={u.id}>
                       <td className="p-3">
-                        <div className="font-bold text-slate-900">{u.name}</div>
+                        <div className="font-bold text-slate-900">{fixBanglaEncoding(u.name)}</div>
                         <div className="text-[11px] text-slate-500">{u.email}</div>
                       </td>
                       <td className="p-3 font-semibold">{u.role}</td>
@@ -1419,11 +1499,11 @@ export function DocumentsAndUsersView({
                   <tr key={doc.id}>
                     <td className="p-3 font-mono font-bold">{doc.docCode}</td>
                     <td className="p-3 font-semibold text-slate-900">
-                      {doc.name} ({doc.fileType})
+                      {fixBanglaEncoding(doc.name)} ({doc.fileType})
                     </td>
                     <td className="p-3">{doc.category}</td>
                     <td className="p-3 font-mono">{doc.relatedEntityCode}</td>
-                    <td className="p-3 text-slate-500">{doc.uploadedBy}</td>
+                    <td className="p-3 text-slate-500">{fixBanglaEncoding(doc.uploadedBy)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1452,7 +1532,7 @@ export function DocumentsAndUsersView({
                     {(data.auditLogs || []).map((log: any) => (
                       <tr key={log.id}>
                         <td className="p-2.5">
-                          <strong>{log.userName}</strong> ({log.userRole})
+                          <strong>{fixBanglaEncoding(log.userName)}</strong> ({log.userRole})
                         </td>
                         <td className="p-2.5 font-mono font-bold text-emerald-700">
                           {log.action}
