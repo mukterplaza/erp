@@ -354,46 +354,85 @@ export function InvoicesPaymentsExpensesView({
     reader.readAsDataURL(file);
   };
 
-  // ফিল্টার করা খরচ ও জমা
+    // ফিল্টার করা খরচ ও জমা (TypeScript type error fixed)
   const filteredRecords = useMemo(() => {
-    let rawExp = [...expenses];
-    let rawInc = payments.filter(
+    let rawExp: any[] = [...expenses];
+    let rawInc: any[] = payments.filter(
       (p: any) => p.paymentType === "Client Receipt" || p.paymentType === "Other Income"
     );
 
-    if (timeframe === "today") {
-      rawExp = rawExp.filter((e) => e.date === today);
-      rawInc = rawInc.filter((p) => p.date === today);
-    } else if (timeframe === "month") {
-      rawExp = rawExp.filter((e) => e.date && e.date.startsWith(currentMonthStr));
-      rawInc = rawInc.filter((p) => p.date && p.date.startsWith(currentMonthStr));
-    } else if (timeframe === "year") {
-      rawExp = rawExp.filter((e) => e.date && e.date.startsWith(currentYearStr));
-      rawInc = rawInc.filter((p) => p.date && p.date.startsWith(currentYearStr));
+    // সাধারণ কর্মী হলে শুধুমাত্র নিজের ডাটা ফিল্টার হবে
+    if (!isManagement) {
+      rawExp = rawExp.filter((e: any) => Number(e.employeeId) === myEmpId);
+      rawInc = rawInc.filter((p: any) => Number(p.employeeId) === myEmpId);
+    } else if (selectedStaffFilter !== "all") {
+      rawExp = rawExp.filter((e: any) => Number(e.employeeId) === Number(selectedStaffFilter));
+      rawInc = rawInc.filter((p: any) => Number(p.employeeId) === Number(selectedStaffFilter));
     }
 
+    // টাইমলাইন ফিল্টার
+    if (timeframe === "today") {
+      rawExp = rawExp.filter((e: any) => e.date === today);
+      rawInc = rawInc.filter((p: any) => p.date === today);
+    } else if (timeframe === "month") {
+      rawExp = rawExp.filter((e: any) => e.date && String(e.date).startsWith(currentMonthStr));
+      rawInc = rawInc.filter((p: any) => p.date && String(p.date).startsWith(currentMonthStr));
+    } else if (timeframe === "year") {
+      rawExp = rawExp.filter((e: any) => e.date && String(e.date).startsWith(currentYearStr));
+      rawInc = rawInc.filter((p: any) => p.date && String(p.date).startsWith(currentYearStr));
+    }
+
+    // প্রজেক্ট ফিল্টার
     if (selectedProjectId !== "all") {
       const pid = Number(selectedProjectId);
-      rawExp = rawExp.filter((e) => Number(e.projectId) === pid);
-      rawInc = rawInc.filter((p) => Number(p.projectId) === pid);
+      rawExp = rawExp.filter((e: any) => Number(e.projectId) === pid);
+      rawInc = rawInc.filter((p: any) => Number(p.projectId) === pid);
     }
 
+    // ক্যাটাগরি ফিল্টার
     if (selectedCostCategory !== "all") {
-      rawExp = rawExp.filter((e) => {
+      rawExp = rawExp.filter((e: any) => {
         const cat = (e.category || "").toLowerCase();
-        if (selectedCostCategory === "staff")
-          return cat.includes("staff") || cat.includes("salary") || cat.includes("advance");
-        if (selectedCostCategory === "office")
-          return cat.includes("office") || cat.includes("rent") || cat.includes("utility");
-        if (selectedCostCategory === "project")
-          return !cat.includes("staff") && !cat.includes("office") && !cat.includes("salary");
+        if (selectedCostCategory === "staff") return cat.includes("staff") || cat.includes("salary") || cat.includes("advance") || cat.includes("ta/da");
+        if (selectedCostCategory === "office") return cat.includes("office") || cat.includes("rent") || cat.includes("utility");
+        if (selectedCostCategory === "project") return !cat.includes("staff") && !cat.includes("office");
         return true;
       });
     }
 
     return { expenses: rawExp, incomes: rawInc };
-  }, [expenses, payments, timeframe, selectedProjectId, selectedCostCategory, today, currentMonthStr, currentYearStr]);
+  }, [expenses, payments, isManagement, myEmpId, selectedStaffFilter, timeframe, selectedProjectId, selectedCostCategory, today, currentMonthStr, currentYearStr]);
 
+  // সামারি হিসাব
+  const summary = useMemo(() => {
+    const totalIncome = filteredRecords.incomes.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    const totalExpense = filteredRecords.expenses.reduce((s: number, e: any) => s + Number(e.amount || 0), 0);
+
+    let projectExpense = 0;
+    let staffExpense = 0;
+    let officeExpense = 0;
+
+    filteredRecords.expenses.forEach((e: any) => {
+      const amt = Number(e.amount || 0);
+      const cat = (e.category || "").toLowerCase();
+      if (cat.includes("staff") || cat.includes("salary") || cat.includes("advance") || cat.includes("ta/da")) {
+        staffExpense += amt;
+      } else if (cat.includes("office") || cat.includes("rent") || cat.includes("utility")) {
+        officeExpense += amt;
+      } else {
+        projectExpense += amt;
+      }
+    });
+
+    return {
+      totalIncome,
+      totalExpense,
+      balance: totalIncome - totalExpense,
+      projectExpense,
+      staffExpense,
+      officeExpense,
+    };
+  }, [filteredRecords]);
   // ফিন্যান্সিয়াল সামারি
   const summary = useMemo(() => {
     const totalIncome = filteredRecords.incomes.reduce((s, p) => s + Number(p.amount || 0), 0);
