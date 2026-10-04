@@ -1063,7 +1063,7 @@ export function DashboardView({
                     <td className="p-3">
                       {num(att?.lateMinutes) > 0 ? (
                         <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">
-                          {att?.lateMinutes} মিনিট
+                          {att.lateMinutes} মিনিট
                         </span>
                       ) : (
                         <span className="text-slate-400">—</span>
@@ -1071,7 +1071,7 @@ export function DashboardView({
                     </td>
                     <td className="p-3 font-mono text-indigo-600 font-semibold">
                       {num(att?.overtimeHours) > 0
-                        ? `${att?.overtimeHours} ঘণ্টা`
+                        ? `${att.overtimeHours} ঘণ্টা`
                         : "—"}
                     </td>
                     <td className="p-3">
@@ -2991,7 +2991,7 @@ export function MonthlyAttendanceView({
         (s?.totalHours || 0).toFixed(2), (s?.totalOT || 0).toFixed(2),
       ];
     });
-    const csv = [headers, ...rows].map((r) => r.map((c: unknown) => `"${c}"`).join(",")).join("\n");
+    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -3393,13 +3393,13 @@ export function MonthlyAttendanceView({
 
                             {/* OT */}
                             <td className="p-2.5 text-center text-indigo-600 font-semibold">
-                              {Number(att?.overtimeHours || 0) > 0 ? `${att?.overtimeHours}h` : "—"}
+                              {Number(att?.overtimeHours || 0) > 0 ? `${att.overtimeHours}h` : "—"}
                             </td>
 
                             {/* দেরি */}
                             <td className="p-2.5 text-center">
                               {Number(att?.lateMinutes || 0) > 0 ? (
-                                <span className="text-amber-600 font-bold">{att?.lateMinutes}m</span>
+                                <span className="text-amber-600 font-bold">{att.lateMinutes}m</span>
                               ) : (
                                 <span className="text-slate-300">—</span>
                               )}
