@@ -706,7 +706,6 @@ export default function ErpAppShell({
               <p className="text-xs text-slate-700 mt-1 leading-relaxed">{fixBanglaEncoding(a.message)}</p>
               <p className="text-[11px] text-slate-500 mt-1 font-semibold">প্রকাশক: {fixBanglaEncoding(a.createdBy)}</p>
             </div>
-          ))}
           
       {/* Mobile Bottom Navigation Bar */}
       <div className="lg:hidden fixed bottom-0 inset-x-0 bg-slate-950 border-t border-slate-800 px-2 py-1.5 flex items-center justify-around z-30">
