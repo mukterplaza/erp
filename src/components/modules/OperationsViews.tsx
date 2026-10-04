@@ -32,11 +32,37 @@ import {
   Calendar,
 } from "lucide-react";
 import { exportToCSV, exportToPDFPrint } from "@/lib/export-utils";
+import { fixBanglaEncoding } from "./FinanceAdminViews";
 
 // ============================================================================
-// 🛠️ Helpers & Constants
+// 🛠️ Helpers & Constants (বাংলাদেশ রিয়েল-টাইম ইঞ্জিন — Asia/Dhaka)
 // ============================================================================
-const getTodayLocal = (): string => new Date().toLocaleDateString("en-CA"); // "YYYY-MM-DD"
+// প্রতিদিন স্বয়ংক্রিয়ভাবে বাংলাদেশ সময় অনুযায়ী আজকের আসল তারিখ নির্ধারণ (YYYY-MM-DD)
+const getTodayLocal = (): string => {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
+};
+
+// বাংলাদেশের বর্তমান লাইভ সময় (HH:MM - 24 ঘণ্টা)
+export const getNowTimeBD = (): string => {
+  return new Date().toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Dhaka",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
+// বাংলায় সুন্দর তারিখ প্রদর্শন (যেমন: ৪ অক্টোবর ২০২৬)
+export const formatBanglaDate = (dateStr: string): string => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("bn-BD", {
+    timeZone: "Asia/Dhaka",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+};
 
 const formatTime = (time?: string): string => {
   if (!time || time === "--:--") return "—";
@@ -130,7 +156,7 @@ function StatPill({
 }: {
   label: string;
   value: React.ReactNode;
-  hint?: string;
+  hint?: React.ReactNode;
   color?: "emerald" | "amber" | "rose" | "slate" | "blue" | "indigo";
 }) {
   const map = {
@@ -234,9 +260,12 @@ export function DashboardView({
   data: any;
   onMutate: (payload: Record<string, unknown>) => Promise<any>;
 }) {
+  // ⭐ প্রতিদিন বাংলাদেশ সময় অনুযায়ী রিয়েল তারিখ সেট থাকবে
   const today = getTodayLocal();
   const role = data.currentUser?.role || "Staff";
-  const myEmpId: number | undefined = data.currentUser?.employeeId;
+  const myEmpId: number | undefined = data.currentUser?.employeeId
+    ? Number(data.currentUser.employeeId)
+    : undefined;
 
   const [selectedStaffTimelineId, setSelectedStaffTimelineId] = useState<
     number | null
@@ -245,6 +274,19 @@ export function DashboardView({
   const [noticeMsg, setNoticeMsg] = useState("");
   const [noticePriority, setNoticePriority] = useState("High");
   const [attendanceDate, setAttendanceDate] = useState(today);
+  const [liveTime, setLiveTime] = useState(getNowTimeBD());
+
+  // লাইভ বাংলাদেশ ঘড়ি ও মধ্যরাতের পর অটো তারিখ পরিবর্তন
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveTime(getNowTimeBD());
+      const currentBDToday = getTodayLocal();
+      if (currentBDToday !== attendanceDate && attendanceDate === today) {
+        setAttendanceDate(currentBDToday);
+      }
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [attendanceDate, today]);
 
   const isManagement = ["Owner", "MD", "Admin", "Manager", "HR"].includes(role);
   const isOwnerOrMD = ["Owner", "MD", "Admin"].includes(role);
@@ -264,7 +306,7 @@ export function DashboardView({
 
   const myTodayAtt = useMemo(() => {
     if (!myEmpId) return undefined;
-    return todayAtt.find((a) => a.employeeId === myEmpId);
+    return todayAtt.find((a) => Number(a.employeeId) === Number(myEmpId));
   }, [todayAtt, myEmpId]);
 
   const todayWorkPlans = useMemo(
@@ -274,12 +316,12 @@ export function DashboardView({
 
   const myTodayPlan = useMemo(() => {
     if (!myEmpId) return undefined;
-    return todayWorkPlans.find((p) => p.employeeId === myEmpId);
+    return todayWorkPlans.find((p) => Number(p.employeeId) === Number(myEmpId));
   }, [todayWorkPlans, myEmpId]);
 
   const myDailyWorks = useMemo(
     () =>
-      myEmpId ? dailyWorks.filter((d: any) => d.employeeId === myEmpId) : [],
+      myEmpId ? dailyWorks.filter((d: any) => Number(d.employeeId) === Number(myEmpId)) : [],
     [dailyWorks, myEmpId]
   );
 
@@ -287,7 +329,7 @@ export function DashboardView({
     () =>
       myEmpId
         ? tasks.filter(
-            (t) => t.assignedTo === myEmpId || t.isCompanyWide
+            (t) => Number(t.assignedTo) === Number(myEmpId) || t.isCompanyWide
           )
         : [],
     [tasks, myEmpId]
@@ -331,9 +373,9 @@ export function DashboardView({
       );
     }
 
-    const myAttendances = attendances.filter((a) => a.employeeId === myEmpId);
+    const myAttendances = attendances.filter((a) => Number(a.employeeId) === Number(myEmpId));
     const myLeaves = (data.leaveRequests || []).filter(
-      (l: any) => l.employeeId === myEmpId
+      (l: any) => Number(l.employeeId) === Number(myEmpId)
     );
 
     const handleQuickCheckIn = () =>
@@ -341,7 +383,7 @@ export function DashboardView({
         action: "checkIn",
         employeeId: myEmpId,
         date: today,
-        checkIn: new Date().toTimeString().slice(0, 5),
+        checkIn: getNowTimeBD(),
         notes: "Quick IN from Staff Dashboard",
       });
 
@@ -353,7 +395,7 @@ export function DashboardView({
       onMutate({
         action: "checkOut",
         attendanceId: myTodayAtt.id,
-        checkOut: new Date().toTimeString().slice(0, 5),
+        checkOut: getNowTimeBD(),
       });
     };
 
@@ -482,7 +524,7 @@ export function DashboardView({
                       className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs"
                     >
                       <span className="font-semibold text-slate-800">
-                        {item.title}
+                        {fixBanglaEncoding(item.title)}
                       </span>
                       <div className="flex items-center gap-1.5">
                         {(
@@ -553,7 +595,7 @@ export function DashboardView({
                         {t.taskCode}
                       </span>
                       <span className="ml-2 font-bold text-slate-900">
-                        {t.title}
+                        {fixBanglaEncoding(t.title)}
                       </span>
                       <p className="text-slate-500 mt-0.5">
                         Due: {t.dueDate} • Status:{" "}
@@ -642,11 +684,11 @@ export function DashboardView({
                         {n.type}
                       </span>
                       <span className="text-[11px] text-slate-400">
-                        By {n.createdBy || "System"}
+                        By {fixBanglaEncoding(n.createdBy) || "System"}
                       </span>
                     </div>
-                    <p className="font-bold text-slate-900">{n.title}</p>
-                    <p className="text-slate-600">{n.message}</p>
+                    <p className="font-bold text-slate-900">{fixBanglaEncoding(n.title)}</p>
+                    <p className="text-slate-600">{fixBanglaEncoding(n.message)}</p>
                   </div>
                 ))}
               </div>
@@ -688,7 +730,7 @@ export function DashboardView({
                     <span className="font-bold text-slate-800">
                       দৈনিক সারাংশ ({dw.date}):
                     </span>{" "}
-                    {dw.workSummary}
+                    {fixBanglaEncoding(dw.workSummary)}
                   </div>
                 ))}
               </div>
@@ -757,10 +799,10 @@ export function DashboardView({
   );
 
   const updatedEmpIdsToday = new Set(
-    todayDailyWorks.map((d: any) => d.employeeId)
+    todayDailyWorks.map((d: any) => Number(d.employeeId))
   );
   const staffWithoutDailyUpdate = allEmps.filter(
-    (e: any) => !updatedEmpIdsToday.has(e.id)
+    (e: any) => !updatedEmpIdsToday.has(Number(e.id))
   );
 
   const teamCompletionPercent = useMemo(() => {
@@ -826,7 +868,7 @@ export function DashboardView({
   const payr1 = (data.payrolls || []).find((p: any) => p.payrollCode === "PAYR-0001");
 
   const inspectedStaff = selectedStaffTimelineId
-    ? allEmps.find((e: any) => e.id === selectedStaffTimelineId)
+    ? allEmps.find((e: any) => Number(e.id) === Number(selectedStaffTimelineId))
     : null;
 
   return (
@@ -945,7 +987,7 @@ export function DashboardView({
         </div>
       </div>
 
-      {/* OWNER ATTENDANCE PANEL */}
+      {/* OWNER ATTENDANCE PANEL (বাংলাদেশ লাইভ সময় ও তারিখসহ) */}
       <section className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-5 border-b border-slate-200">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -953,11 +995,11 @@ export function DashboardView({
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-emerald-600" />
                 <h2 className="text-base font-bold text-slate-900">
-                  আজকের সকলের হাজিরা
+                  আজকের সকলের হাজিরা — {formatBanglaDate(attendanceDate)}
                 </h2>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Owner / Management Dashboard — সকল কর্মকর্তা ও কর্মচারীর দৈনিক হাজিরা
+                বাংলাদেশ সময়: <span className="font-mono font-bold text-emerald-700">{liveTime}</span> • সকল কর্মকর্তা ও কর্মচারীর দৈনিক লাইভ হাজিরা
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -968,7 +1010,7 @@ export function DashboardView({
                 type="date"
                 value={attendanceDate}
                 onChange={(e) => setAttendanceDate(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium bg-white"
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white text-slate-900"
               />
             </div>
           </div>
@@ -997,21 +1039,22 @@ export function DashboardView({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {allEmps.map((emp: any) => {
+                // ⭐ সঠিক আইডি ম্যাচিং (নাম্বার টাইপ কাস্টিং সহ)
                 const att = selectedDateAttendances.find(
-                  (a) => a.employeeId === emp.id
+                  (a) => Number(a.employeeId) === Number(emp.id)
                 );
-                const status = att?.status || "Absent";
+                const status = att?.status || (att?.checkIn ? "Present" : "Absent");
                 return (
                   <tr key={emp.id} className="hover:bg-slate-50 transition">
                     <td className="p-3">
                       <div className="font-bold text-slate-900">{emp.name}</div>
-                      <div className="text-[10px] text-slate-500">{emp.empCode}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">{emp.empCode}</div>
                     </td>
                     <td className="p-3 text-slate-600">{emp.designation || "—"}</td>
                     <td className="p-3 font-mono font-semibold text-emerald-700">
                       {att?.checkIn || "—"}
                     </td>
-                    <td className="p-3 font-mono text-slate-700">
+                    <td className="p-3 font-mono text-blue-700">
                       {att?.checkOut || (att?.checkIn ? "কার্যরত" : "—")}
                     </td>
                     <td className="p-3 font-mono font-semibold">
@@ -1019,14 +1062,14 @@ export function DashboardView({
                     </td>
                     <td className="p-3">
                       {num(att?.lateMinutes) > 0 ? (
-                        <span className="text-rose-600 font-bold">
+                        <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">
                           {att.lateMinutes} মিনিট
                         </span>
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
                     </td>
-                    <td className="p-3 font-mono">
+                    <td className="p-3 font-mono text-indigo-600 font-semibold">
                       {num(att?.overtimeHours) > 0
                         ? `${att.overtimeHours} ঘণ্টা`
                         : "—"}
@@ -1076,12 +1119,12 @@ export function DashboardView({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {allEmps.map((emp: any) => {
-                  const att = todayAtt.find((a) => a.employeeId === emp.id);
+                  const att = todayAtt.find((a) => Number(a.employeeId) === Number(emp.id));
                   const plan = todayWorkPlans.find(
-                    (p) => p.employeeId === emp.id
+                    (p) => Number(p.employeeId) === Number(emp.id)
                   );
                   const dw = todayDailyWorks.find(
-                    (d: any) => d.employeeId === emp.id
+                    (d: any) => Number(d.employeeId) === Number(emp.id)
                   );
                   const doneCount = (plan?.items || []).filter(
                     (i: any) => i.status === "Completed"
@@ -1131,7 +1174,7 @@ export function DashboardView({
                             </span>
                             <div className="text-[11px] text-slate-500 truncate max-w-48">
                               {(plan.items || [])
-                                .map((i: any) => i.title)
+                                .map((i: any) => fixBanglaEncoding(i.title))
                                 .join(" • ")}
                             </div>
                           </div>
@@ -1237,7 +1280,7 @@ export function DashboardView({
                   </strong>
                   {(() => {
                     const att = todayAtt.find(
-                      (a) => a.employeeId === inspectedStaff.id
+                      (a) => Number(a.employeeId) === Number(inspectedStaff.id)
                     );
                     return att
                       ? `IN: ${formatTime(att.checkIn)} | OUT: ${formatTime(att.checkOut) || "Active"}`
@@ -1250,11 +1293,11 @@ export function DashboardView({
                   </strong>
                   {(
                     todayWorkPlans.find(
-                      (p) => p.employeeId === inspectedStaff.id
+                      (p) => Number(p.employeeId) === Number(inspectedStaff.id)
                     )?.items || []
                   ).map((it: any) => (
                     <div key={it.id} className="text-slate-600">
-                      • {it.title} — <strong>{it.status}</strong> (
+                      • {fixBanglaEncoding(it.title)} — <strong>{it.status}</strong> (
                       {it.completionPercent}%)
                     </div>
                   ))}
@@ -1264,11 +1307,11 @@ export function DashboardView({
                     ৩. দৈনিক সারাংশ:
                   </strong>
                   {dailyWorks
-                    .filter((d: any) => d.employeeId === inspectedStaff.id)
+                    .filter((d: any) => Number(d.employeeId) === Number(inspectedStaff.id))
                     .slice(0, 2)
                     .map((d: any) => (
                       <div key={d.id} className="text-slate-600">
-                        • [{d.date}] {d.workSummary} ({d.progressPercent}%)
+                        • [{d.date}] {fixBanglaEncoding(d.workSummary)} ({d.progressPercent}%)
                       </div>
                     ))}
                 </div>
@@ -1277,10 +1320,10 @@ export function DashboardView({
                     4. অ্যাসাইনকৃত টাস্ক:
                   </strong>
                   {tasks
-                    .filter((t) => t.assignedTo === inspectedStaff.id)
+                    .filter((t) => Number(t.assignedTo) === Number(inspectedStaff.id))
                     .map((t) => (
                       <div key={t.id} className="text-slate-600">
-                        • {t.taskCode}: {t.title} ({t.status} -{" "}
+                        • {t.taskCode}: {fixBanglaEncoding(t.title)} ({t.status} -{" "}
                         {t.progressPercent}%)
                       </div>
                     ))}
@@ -1292,12 +1335,12 @@ export function DashboardView({
                   Leaves:{" "}
                   {
                     (data.leaveRequests || []).filter(
-                      (l: any) => l.employeeId === inspectedStaff.id
+                      (l: any) => Number(l.employeeId) === Number(inspectedStaff.id)
                     ).length
                   }{" "}
                   • Score:{" "}
                   {(data.performanceReviews || []).find(
-                    (r: any) => r.employeeId === inspectedStaff.id
+                    (r: any) => Number(r.employeeId) === Number(inspectedStaff.id)
                   )?.totalPoints || 90}
                   /100
                 </div>
@@ -1407,7 +1450,7 @@ export function DashboardView({
         </div>
       </div>
 
-      {/* LIVE DB VERIFICATION MATRIX */}
+            {/* LIVE DB VERIFICATION MATRIX */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
           <div>
@@ -1516,7 +1559,7 @@ export function DashboardView({
 }
 
 // ============================================================================
-// 2. ATTENDANCE VIEW
+// 2. ATTENDANCE VIEW (রিয়েল-টাইম বাংলাদেশ সময় ও নির্ভুল আইডি ম্যাপিং)
 // ============================================================================
 export function AttendanceView({
   data,
@@ -1525,11 +1568,12 @@ export function AttendanceView({
   data: any;
   onMutate: (payload: Record<string, unknown>) => Promise<any>;
 }) {
+  // ⭐ স্বয়ংক্রিয় বাংলাদেশ রিয়েল-টাইম তারিখ
   const today = getTodayLocal();
   const [employeeId, setEmployeeId] = useState(
     String(data.currentUser?.employeeId || data.allEmployeesDirectory?.[0]?.id || 1)
   );
-  const [checkInTime, setCheckInTime] = useState("09:30");
+  const [checkInTime, setCheckInTime] = useState(getNowTimeBD() || "09:30");
   const [notes, setNotes] = useState("Office / Site Shift Check-In");
 
   // Correction state
@@ -1539,7 +1583,7 @@ export function AttendanceView({
   const [corrReason, setCorrReason] = useState("");
 
   const empMap = useMemo(
-    () => new Map<number, any>((data.allEmployeesDirectory || []).map((e: any) => [e.id, e])),
+    () => new Map<number, any>((data.allEmployeesDirectory || []).map((e: any) => [Number(e.id), e])),
     [data.allEmployeesDirectory]
   );
 
@@ -1559,7 +1603,8 @@ export function AttendanceView({
 
   const handleCheckOut = useCallback(
     async (attendanceId: number) => {
-      const outTime = prompt("Enter OUT TIME (HH:mm, Official End 19:30):", "19:30");
+      const currentBDTime = getNowTimeBD() || "19:30";
+      const outTime = prompt("Enter OUT TIME (HH:mm, Official End 19:30):", currentBDTime);
       if (!outTime) return;
       await onMutate({
         action: "checkOut",
@@ -1600,7 +1645,7 @@ export function AttendanceView({
             </span>
           </div>
           <h1 className="text-xl font-bold text-slate-900">
-            হাজিরা ও শিফট হিসাব ব্যবস্থা
+            হাজিরা ও শিফট হিসাব ব্যবস্থা — {formatBanglaDate(today)}
           </h1>
           <p className="text-xs text-slate-500">
             IN TIME & OUT TIME auto-approved. Only Leave / Correction need Manager approval.
@@ -1747,7 +1792,8 @@ export function AttendanceView({
                 Correction Requests ({(data.attendanceCorrections || []).length})
               </p>
               {(data.attendanceCorrections || []).map((c: any) => {
-                const emp = empMap.get(c.employeeId);
+                // ⭐ নিরাপদ নাম্বার টাইপ আইডি লুকআপ
+                const emp = empMap.get(Number(c.employeeId));
                 return (
                   <div
                     key={c.id}
@@ -1758,7 +1804,7 @@ export function AttendanceView({
                         {emp?.name || `EMP-${c.employeeId}`}
                       </span>{" "}
                       • {c.date} ({c.requestedCheckIn} → {c.requestedCheckOut}) —{" "}
-                      <span className="text-slate-600">{c.reason}</span>
+                      <span className="text-slate-600">{fixBanglaEncoding(c.reason)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge status={c.status} />
@@ -1827,7 +1873,8 @@ export function AttendanceView({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {(data.attendances || []).map((a: any) => {
-                const emp = empMap.get(a.employeeId);
+                // ⭐ নিরাপদ আইডি লুকআপ যাতে কোনো কর্মচারীর নাম মিস না হয়
+                const emp = empMap.get(Number(a.employeeId));
                 return (
                   <tr key={a.id} className="hover:bg-slate-50">
                     <td className="p-3 font-medium text-slate-800">{a.date}</td>
@@ -1882,10 +1929,10 @@ export function MyDayAndDailyWorksView({
   onMutate: (payload: Record<string, unknown>) => Promise<any>;
 }) {
   const today = getTodayLocal();
-  const myEmpId = data.currentUser?.employeeId;
+  const myEmpId = Number(data.currentUser?.employeeId);
 
   const existingMyPlan = useMemo(
-    () => (data.dailyWorkPlans || []).find((p: any) => p.employeeId === myEmpId && p.date === today),
+    () => (data.dailyWorkPlans || []).find((p: any) => Number(p.employeeId) === myEmpId && p.date === today),
     [data.dailyWorkPlans, myEmpId, today]
   );
 
@@ -1914,19 +1961,19 @@ export function MyDayAndDailyWorksView({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const empMap = useMemo(
-    () => new Map<number, any>((data.allEmployeesDirectory || []).map((e: any) => [e.id, e])),
+    () => new Map<number, any>((data.allEmployeesDirectory || []).map((e: any) => [Number(e.id), e])),
     [data.allEmployeesDirectory]
   );
   const projMap = useMemo(
-    () => new Map<number, any>((data.projects || []).map((p: any) => [p.id, p])),
+    () => new Map<number, any>((data.projects || []).map((p: any) => [Number(p.id), p])),
     [data.projects]
   );
   const siteMap = useMemo(
-    () => new Map<number, any>((data.sites || []).map((s: any) => [s.id, s])),
+    () => new Map<number, any>((data.sites || []).map((s: any) => [Number(s.id), s])),
     [data.sites]
   );
   const taskMap = useMemo(
-    () => new Map<number, any>((data.tasks || []).map((t: any) => [t.id, t])),
+    () => new Map<number, any>((data.tasks || []).map((t: any) => [Number(t.id), t])),
     [data.tasks]
   );
 
@@ -2056,7 +2103,7 @@ export function MyDayAndDailyWorksView({
               className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-xs"
             >
               <span className="font-semibold text-slate-800">
-                {idx + 1}. {it.title}
+                {idx + 1}. {fixBanglaEncoding(it.title)}
               </span>
               <div className="flex items-center gap-1 shrink-0">
                 {(["Completed", "In Progress", "Pending", "Blocked"] as const).map((st) => (
@@ -2089,7 +2136,7 @@ export function MyDayAndDailyWorksView({
         </div>
       </div>
 
-      {/* Daily Work Summary Form */}
+            {/* Daily Work Summary Form */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <form
           onSubmit={handleSubmitSummary}
@@ -2126,7 +2173,7 @@ export function MyDayAndDailyWorksView({
                 <option value="">-- ঐচ্ছিক টাস্ক --</option>
                 {(data.tasks || []).map((t: any) => (
                   <option key={t.id} value={t.id}>
-                    {t.taskCode}: {t.title}
+                    {t.taskCode}: {fixBanglaEncoding(t.title)}
                   </option>
                 ))}
               </select>
@@ -2206,10 +2253,11 @@ export function MyDayAndDailyWorksView({
               <p className="text-xs text-slate-400 text-center py-4">কোনো সারাংশ জমা হয়নি</p>
             ) : (
               (data.dailyWorks || []).map((dw: any) => {
-                const emp = empMap.get(dw.employeeId);
-                const proj = projMap.get(dw.projectId);
-                const site = siteMap.get(dw.siteId);
-                const task = taskMap.get(dw.taskId);
+                // ⭐ নিরাপদ নাম্বার টাইপ আইডি লুকআপ
+                const emp = empMap.get(Number(dw.employeeId));
+                const proj = projMap.get(Number(dw.projectId));
+                const site = siteMap.get(Number(dw.siteId));
+                const task = taskMap.get(Number(dw.taskId));
                 return (
                   <div key={dw.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2231,7 +2279,7 @@ export function MyDayAndDailyWorksView({
                       </div>
                     </div>
                     <p className="text-xs text-slate-800 font-medium leading-relaxed">
-                      {dw.workSummary}
+                      {fixBanglaEncoding(dw.workSummary)}
                     </p>
                     {(dw.attachments || []).length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
@@ -2293,8 +2341,9 @@ export function TasksView({
   const [completionNote, setCompletionNote] = useState("");
   const [evidenceFiles, setEvidenceFiles] = useState<Attachment[]>([]);
 
+  // ⭐ নিরাপদ নাম্বার টাইপ আইডি ম্যাপ
   const empMap = useMemo(
-    () => new Map<number, any>((data.allEmployeesDirectory || []).map((e: any) => [e.id, e])),
+    () => new Map<number, any>((data.allEmployeesDirectory || []).map((e: any) => [Number(e.id), e])),
     [data.allEmployeesDirectory]
   );
 
@@ -2323,7 +2372,7 @@ export function TasksView({
 
   const filteredTasks = useMemo(() => {
     const all = data.tasks || [];
-    if (focusedTaskId) return all.filter((t: any) => t.id === focusedTaskId);
+    if (focusedTaskId) return all.filter((t: any) => Number(t.id) === Number(focusedTaskId));
     if (statusFilter === "All") return all;
     return all.filter((t: any) => t.status === statusFilter);
   }, [data.tasks, focusedTaskId, statusFilter]);
@@ -2519,14 +2568,15 @@ export function TasksView({
             </div>
           ) : (
             filteredTasks.map((t: any) => {
-              const emp = empMap.get(t.assignedTo);
+              // ⭐ নিরাপদ নাম্বার টাইপ আইডি লুকআপ
+              const emp = empMap.get(Number(t.assignedTo));
               const isOverdue =
                 t.dueDate &&
                 t.dueDate < today &&
                 t.status !== "Completed" &&
                 t.status !== "Cancelled";
               const comments = (data.taskComments || []).filter(
-                (c: any) => c.taskId === t.id
+                (c: any) => Number(c.taskId) === Number(t.id)
               );
 
               return (
@@ -2557,16 +2607,16 @@ export function TasksView({
                         )}
                       </div>
                       <Link href={`/tasks/${t.id}`} className="text-base font-bold text-slate-900 hover:text-emerald-600 mt-1.5 block">
-                        {t.title}
+                        {fixBanglaEncoding(t.title)}
                       </Link>
-                      <p className="text-xs text-slate-500 mt-0.5">{t.description}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{fixBanglaEncoding(t.description)}</p>
                     </div>
                     <div className="text-right text-xs">
                       <p className="font-semibold text-slate-800">
                         Assignee: {t.isCompanyWide ? "All Staff" : emp?.name || `EMP-${t.assignedTo}`}
                       </p>
                       <p className="text-slate-500">
-                        By: {t.createdBy || "Manager"} • Due: {t.dueDate}
+                        By: {fixBanglaEncoding(t.createdBy) || "Manager"} • Due: {t.dueDate}
                       </p>
                       <p className="font-bold text-emerald-600 mt-1">Progress: {t.progressPercent}%</p>
                     </div>
@@ -2578,7 +2628,7 @@ export function TasksView({
                         ✓ Completed by {t.completedBy || t.reviewedBy || "Staff"}{" "}
                         {t.completedAt ? `on ${new Date(t.completedAt).toLocaleString()}` : ""}
                       </div>
-                      {t.completionNote && <p className="text-emerald-800">Note: {t.completionNote}</p>}
+                      {t.completionNote && <p className="text-emerald-800">Note: {fixBanglaEncoding(t.completionNote)}</p>}
                       {(t.evidenceAttachments || []).length > 0 && (
                         <div className="flex flex-wrap gap-1.5 pt-1">
                           {(t.evidenceAttachments || []).map((ev: any, i: number) => (
@@ -2622,8 +2672,8 @@ export function TasksView({
                     {comments.map((c: any) => (
                       <div key={c.id} className="text-xs bg-slate-50 px-3 py-2 rounded-lg border border-slate-200/60 flex items-center justify-between">
                         <div>
-                          <span className="font-bold text-slate-800">{c.authorName}: </span>
-                          <span className="text-slate-600">{c.comment}</span>
+                          <span className="font-bold text-slate-800">{fixBanglaEncoding(c.authorName)}: </span>
+                          <span className="text-slate-600">{fixBanglaEncoding(c.comment)}</span>
                         </div>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">
                           {c.actionType}
@@ -2658,6 +2708,7 @@ export function TasksView({
     </div>
   );
 }
+
 // ============================================================================
 // ⭐ MONTHLY ATTENDANCE REGISTER — সম্পূর্ণ সংস্করণ (দিনে ৪টি পাঞ্চ ও ৩টি ভিউ)
 // 1. Grid: সব কর্মচারী × সব দিন (ম্যানেজমেন্টের জন্য)
@@ -2706,8 +2757,9 @@ export function MonthlyAttendanceView({
 
   const activeEmpId = isManagement ? individualEmpId : myEmpId;
 
+  // ⭐ নিরাপদ নাম্বার টাইপ আইডি ম্যাপ
   const empMap = useMemo(
-    () => new Map<number, any>((data.allEmployeesDirectory || []).map((e: any) => [e.id, e])),
+    () => new Map<number, any>((data.allEmployeesDirectory || []).map((e: any) => [Number(e.id), e])),
     [data.allEmployeesDirectory]
   );
 
@@ -2750,9 +2802,10 @@ export function MonthlyAttendanceView({
     );
 
     rawList.forEach((a: any) => {
-      const key = `${a.employeeId}_${a.date}`;
+      // ⭐ নিরাপদ নাম্বার টাইপ কী (Key) ফরম্যাট
+      const key = `${Number(a.employeeId)}_${a.date}`;
       const existing = map.get(key) || {
-        employeeId: a.employeeId,
+        employeeId: Number(a.employeeId),
         date: a.date,
         morningIn: "",
         morningOut: "",
@@ -2842,14 +2895,15 @@ export function MonthlyAttendanceView({
     >();
 
     monthAttendances.forEach((a: any) => {
-      if (!map.has(a.employeeId)) {
-        map.set(a.employeeId, {
+      const empIdNum = Number(a.employeeId);
+      if (!map.has(empIdNum)) {
+        map.set(empIdNum, {
           present: 0, late: 0, leave: 0, absent: 0,
           totalHours: 0, totalOT: 0, totalLateMin: 0,
           firstIn: "99:99", lastOut: "00:00",
         });
       }
-      const s = map.get(a.employeeId)!;
+      const s = map.get(empIdNum)!;
       const isPresent = Boolean(a.morningIn || a.afternoonIn || a.status === "Present" || a.status === "Late");
 
       if (a.status === "Late") {
@@ -2879,7 +2933,7 @@ export function MonthlyAttendanceView({
 
   const getDayAtt = (empId: number, day: number) => {
     const dateStr = `${selectedMonth}-${String(day).padStart(2, "0")}`;
-    return dailyAttendanceMap.get(`${empId}_${dateStr}`);
+    return dailyAttendanceMap.get(`${Number(empId)}_${dateStr}`);
   };
 
   // নির্বাচিত কর্মচারীর ১ থেকে ৩০ দিনের পূর্ণাঙ্গ দিনভিত্তিক রেকর্ড
@@ -2895,7 +2949,7 @@ export function MonthlyAttendanceView({
         weekdayBn: ["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"][dateObj.getDay()],
         isFriday: dateObj.getDay() === 5,
         isSunday: dateObj.getDay() === 0,
-        att: dailyAttendanceMap.get(`${activeEmpId}_${dateStr}`),
+        att: dailyAttendanceMap.get(`${Number(activeEmpId)}_${dateStr}`),
       };
     });
   }, [activeEmpId, daysArray, selectedMonth, dailyAttendanceMap]);
@@ -2903,14 +2957,14 @@ export function MonthlyAttendanceView({
   // ব্যক্তিগত সারাংশ
   const individualStats = useMemo(() => {
     if (!activeEmpId) return null;
-    return empMonthlySummary.get(activeEmpId) || {
+    return empMonthlySummary.get(Number(activeEmpId)) || {
       present: 0, late: 0, leave: 0, absent: 0,
       totalHours: 0, totalOT: 0, totalLateMin: 0,
       firstIn: "99:99", lastOut: "00:00",
     };
   }, [activeEmpId, empMonthlySummary]);
 
-  const individualEmp = activeEmpId ? empMap.get(activeEmpId) || {
+  const individualEmp = activeEmpId ? empMap.get(Number(activeEmpId)) || {
     name: currentUser.name,
     empCode: currentUser.empCode || "EMP",
     designation: currentUser.role,
@@ -2921,9 +2975,9 @@ export function MonthlyAttendanceView({
   const exportMonthlyCSV = () => {
     const headers = ["Employee", "Code", ...daysArray.map((d) => `Day ${d}`), "Present", "Late", "Leave", "Total Hrs", "OT Hrs"];
     const rows = filteredEmployees.map((emp: any) => {
-      const s = empMonthlySummary.get(emp.id);
+      const s = empMonthlySummary.get(Number(emp.id));
       const dayCells = daysArray.map((d) => {
-        const att = getDayAtt(emp.id, d);
+        const att = getDayAtt(Number(emp.id), d);
         if (!att) return "";
         const inTime = att.morningIn || att.afternoonIn || "";
         const outTime = att.eveningOut || att.morningOut || "";
@@ -3017,7 +3071,7 @@ export function MonthlyAttendanceView({
             <h1 className="text-2xl sm:text-3xl font-bold mt-2">
               {isManagement
                 ? `${monthName} — সকল কর্মচারীর In/Out`
-                : `${currentUser.name} — ${monthName} হাজিরা`}
+                : `${individualEmp?.name || currentUser.name} — ${monthName} হাজিরা`}
             </h1>
             <p className="text-sm text-white/80 mt-1">
               সারা মাসের In-Time / Out-Time / Overtime • {monthStats.records} দিন উপস্থিতি রেকর্ড
@@ -3090,9 +3144,9 @@ export function MonthlyAttendanceView({
                   <button
                     key={emp.id}
                     type="button"
-                    onClick={() => setIndividualEmpId(emp.id)}
+                    onClick={() => setIndividualEmpId(Number(emp.id))}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
-                      activeEmpId === emp.id
+                      Number(activeEmpId) === Number(emp.id)
                         ? "bg-indigo-600 text-white border-indigo-600 shadow"
                         : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                     }`}
@@ -3271,11 +3325,11 @@ export function MonthlyAttendanceView({
                 </div>
               </div>
 
-              {/* ⭐ Detailed Daily Table — ৪টি পাঞ্চসহ ১ থেকে ৩০ দিনের পূর্ণ বিবরণী */}
+                            {/* ⭐ Detailed Daily Table — ৪টি পাঞ্চসহ ১ থেকে ৩০ দিনের পূর্ণ বিবরণী */}
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-sm font-bold text-slate-900">
-                    📋 দৈনিক বিস্তারিত রেজিস্টার (সকাল ও বিকাল ৪টি পাঞ্চ) — {individualEmp.name}
+                    📋 দৈনিক বিস্তারিত রেজিস্টার (সকাল ও বিকাল ৪টি পাঞ্চ) — {fixBanglaEncoding(individualEmp?.name)}
                   </h3>
                   <span className="text-xs text-slate-500">
                     শিফট ১: ০৯:৩০–০১:১৫ | বিরতি | শিফট ২: ০২:৩০–০৭:৩০
@@ -3334,7 +3388,7 @@ export function MonthlyAttendanceView({
 
                             {/* মোট ঘণ্টা */}
                             <td className="p-2.5 text-center font-semibold">
-                              {att?.workingHours ? `${att.workingHours.toFixed(1)}h` : "—"}
+                              {att?.workingHours ? `${Number(att.workingHours).toFixed(1)}h` : "—"}
                             </td>
 
                             {/* OT */}
@@ -3368,7 +3422,7 @@ export function MonthlyAttendanceView({
                               )}
                             </td>
                             <td className="p-2.5 text-slate-500 text-[11px] max-w-40 truncate">
-                              {att?.notes || (d.isFriday ? "সাপ্তাহিক ছুটি" : "—")}
+                              {fixBanglaEncoding(att?.notes) || (d.isFriday ? "সাপ্তাহিক ছুটি" : "—")}
                             </td>
                           </tr>
                         );
@@ -3380,8 +3434,8 @@ export function MonthlyAttendanceView({
                         <td className="p-2.5 text-center font-mono" colSpan={4}>
                           সকাল শুরু: {individualStats.firstIn === "99:99" ? "—" : individualStats.firstIn} • ছুটি: {individualStats.lastOut === "00:00" ? "—" : individualStats.lastOut}
                         </td>
-                        <td className="p-2.5 text-center">{individualStats.totalHours.toFixed(1)}h</td>
-                        <td className="p-2.5 text-center text-indigo-700">{individualStats.totalOT.toFixed(1)}h</td>
+                        <td className="p-2.5 text-center">{Number(individualStats.totalHours || 0).toFixed(1)}h</td>
+                        <td className="p-2.5 text-center text-indigo-700">{Number(individualStats.totalOT || 0).toFixed(1)}h</td>
                         <td className="p-2.5 text-center text-amber-700">{individualStats.totalLateMin}m</td>
                         <td className="p-2.5 text-center text-[11px]" colSpan={2}>
                           উপস্থিত: {individualStats.present} | দেরি: {individualStats.late} | ছুটি: {individualStats.leave} | অনুপস্থিত: {individualStats.absent}
@@ -3441,23 +3495,24 @@ export function MonthlyAttendanceView({
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredEmployees.map((emp: any) => {
-                    const s = empMonthlySummary.get(emp.id);
+                    // ⭐ নিরাপদ নাম্বার টাইপ আইডি লুকআপ
+                    const s = empMonthlySummary.get(Number(emp.id));
                     return (
                       <tr key={emp.id} className="hover:bg-slate-50">
                         <td className="p-3">
                           <button
                             type="button"
                             onClick={() => {
-                              setIndividualEmpId(emp.id);
+                              setIndividualEmpId(Number(emp.id));
                               setViewMode("individual");
                             }}
                             className="text-left font-bold text-slate-900 hover:text-indigo-600 underline decoration-indigo-400/50"
                           >
-                            {emp.name}
+                            {fixBanglaEncoding(emp.name)}
                           </button>
                           <div className="text-[10px] text-slate-400 font-mono">{emp.empCode}</div>
                         </td>
-                        <td className="p-3 text-slate-600">{emp.department}</td>
+                        <td className="p-3 text-slate-600">{fixBanglaEncoding(emp.department)}</td>
                         <td className="p-3 text-center font-mono font-bold text-emerald-700">
                           {s?.firstIn === "99:99" || !s ? "—" : s.firstIn}
                         </td>
@@ -3567,24 +3622,25 @@ export function MonthlyAttendanceView({
                 </thead>
                 <tbody>
                   {filteredEmployees.map((emp: any) => {
-                    const s = empMonthlySummary.get(emp.id);
+                    // ⭐ নিরাপদ নাম্বার টাইপ আইডি লুকআপ
+                    const s = empMonthlySummary.get(Number(emp.id));
                     return (
                       <tr key={emp.id} className="hover:bg-slate-50">
                         <td className="sticky left-0 bg-white z-10 p-2 border border-slate-200">
                           <button
                             type="button"
                             onClick={() => {
-                              setIndividualEmpId(emp.id);
+                              setIndividualEmpId(Number(emp.id));
                               setViewMode("individual");
                             }}
                             className="font-bold text-slate-900 hover:text-indigo-600 text-left"
                           >
-                            {emp.name}
+                            {fixBanglaEncoding(emp.name)}
                           </button>
                           <div className="text-[9px] text-slate-400 font-mono">{emp.empCode}</div>
                         </td>
                         {daysArray.map((d) => {
-                          const att = getDayAtt(emp.id, d);
+                          const att = getDayAtt(Number(emp.id), d);
                           const isFriday =
                             new Date(`${selectedMonth}-${String(d).padStart(2, "0")}`).getDay() === 5;
                           const isSunday =
@@ -3658,6 +3714,7 @@ export function MonthlyAttendanceView({
     </div>
   );
 }
+
 void Users;
 void DollarSign;
 void Calendar;

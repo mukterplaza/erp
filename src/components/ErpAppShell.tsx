@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { fixBanglaEncoding } from "./modules/FinanceAdminViews";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Building2,
@@ -44,7 +43,7 @@ import {
   AttendanceView,
   MyDayAndDailyWorksView,
   TasksView,
-  MonthlyAttendanceView,  // ⭐ NEW: মাসিক হাজিরা
+  MonthlyAttendanceView, // ⭐ NEW: মাসিক হাজিরা
 } from "./modules/OperationsViews";
 import {
   LeaveView,
@@ -71,9 +70,18 @@ import {
   ReportsCenterView,
   NotificationsView,
   DocumentsAndUsersView,
+  fixBanglaEncoding,
 } from "./modules/FinanceAdminViews";
 
-const NAV_GROUPS = [
+type NavItem = {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  needsLeads?: boolean;
+  execOnly?: boolean;
+};
+
+const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   {
     group: "দৈনন্দিন কাজ",
     items: [
@@ -147,15 +155,13 @@ export default function ErpAppShell({
   routeKey?: string;
   entityId?: number;
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() || "/dashboard";
   const router = useRouter();
 
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [toast, setToast] = useState<{ type: "ok" | "err"; msg: string } | null>(
-    null
-  );
+  const [toast, setToast] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -190,10 +196,7 @@ export default function ErpAppShell({
         setToast({ type: "err", msg: json.error || "কাজটি সম্পন্ন হয়নি" });
         return json;
       }
-      setToast({
-        type: "ok",
-        msg: "সংরক্ষণ হয়েছে — ডাটাবেস আপডেট হয়েছে",
-      });
+      setToast({ type: "ok", msg: "সংরক্ষণ হয়েছে — ডাটাবেস আপডেট হয়েছে" });
       await loadData();
       return json;
     } catch {
@@ -202,24 +205,20 @@ export default function ErpAppShell({
   }
 
   async function handleLogout() {
-    await fetch("/api/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "logout" }),
-    });
+    try {
+      await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "logout" }),
+      });
+    } catch {
+      // ignore
+    }
     router.push("/login");
   }
 
   const canViewExecutive = (role: string) => {
-    return [
-      "Owner",
-      "Chairman",
-      "MD",
-      "Admin",
-      "Manager",
-      "HR",
-      "Accounts",
-    ].includes(role);
+    return ["Owner", "Chairman", "MD", "Admin", "Manager", "HR", "Accounts"].includes(role);
   };
 
   if (loading) {
@@ -240,142 +239,24 @@ export default function ErpAppShell({
     return null;
   }
 
-  const unreadCount = (data.notifications || []).filter(
-    (n: any) => !n.isRead
-  ).length;
+  const role: string = data.currentUser.role;
+  const userName: string = data.currentUser.name || "";
+
+  const unreadCount = (data.notifications || []).filter((n: any) => !n.isRead).length;
 
   const activeRoute = routeKey || pathname;
 
+  const isStaffRestricted = role === "Staff" || role === "Site Staff" || role === "Engineer";
+  const noLeadAccess = role === "Staff" || role === "Site Staff" || role === "Engineer";
+
+  const filterItem = (item: NavItem) => {
+    if (item.needsLeads) return !noLeadAccess;
+    if (item.execOnly) return canViewExecutive(role);
+    return true;
+  };
+
   function renderMainContent() {
-    if (activeRoute === "/attendance") {
-      return <AttendanceView data={data} onMutate={handleMutate} />;
-    }
-    // ⭐ NEW: মাসিক হাজিরা রুট
-    if (activeRoute === "/monthly-attendance") {
-      return <MonthlyAttendanceView data={data} onMutate={handleMutate} />;
-    }
-    if (activeRoute === "/my-day" || activeRoute === "/daily-works") {
-      return <MyDayAndDailyWorksView data={data} onMutate={handleMutate} />;
-    }
-    if (activeRoute === "/team-tasks") {
-      return <TeamTaskMonitorView data={data} onMutate={handleMutate} />;
-    }
-    if (activeRoute.startsWith("/tasks/") && entityId) {
-      return <TeamTaskMonitorView data={data} onMutate={handleMutate} focusedTaskId={entityId} />;
-    }
-    if (activeRoute.startsWith("/tasks")) {
-      return (
-        <TasksView
-          data={data}
-          onMutate={handleMutate}
-          focusedTaskId={entityId}
-        />
-      );
-    }
-    if (activeRoute.startsWith("/employees")) {
-      const mgmtRoles = ["Owner", "Chairman", "MD", "Admin", "Manager", "HR", "Project Manager"];
-      if (
-        entityId &&
-        !mgmtRoles.includes(data.currentUser.role) &&
-        entityId !== data.currentUser.employeeId
-      ) {
-        return (
-          <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-6 text-center space-y-2">
-            <h2 className="text-lg font-bold text-rose-900">প্রবেশাধিকার নেই</h2>
-            <p className="text-xs text-rose-700">অন্য কর্মীর ব্যক্তিগত প্রোফাইল দেখা যাবে না।</p>
-          </div>
-        );
-      }
-      return (
-        <EmployeeDirectoryView
-          data={data}
-          onMutate={handleMutate}
-          focusedEmployeeId={entityId}
-        />
-      );
-    }
-    if (activeRoute === "/leave") {
-      return <LeaveView data={data} onMutate={handleMutate} />;
-    }
-    if (activeRoute === "/payroll") {
-      return <PayrollView data={data} onMutate={handleMutate} />;
-    }
-    if (activeRoute === "/executive-payroll") {
-      if (!canViewExecutive(data.currentUser.role)) {
-        return (
-          <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-8 text-center space-y-3">
-            <h2 className="text-xl font-bold text-rose-900">403 Forbidden</h2>
-            <p className="text-xs text-rose-700 max-w-xl mx-auto">
-              Executive Dashboard শুধুমাত্র Owner, MD, Chairman, Admin, Manager, HR ও Accounts এর জন্য।
-            </p>
-            <Link
-              href="/dashboard"
-              className="inline-block px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-semibold min-h-[44px]"
-            >
-              ড্যাশবোর্ডে ফিরুন
-            </Link>
-          </div>
-        );
-      }
-      return <ExecutivePayrollDashboard data={data} onMutate={handleMutate} />;
-    }
-    if (activeRoute === "/performance") {
-      return <PerformanceView data={data} onMutate={handleMutate} />;
-    }
-    if (activeRoute === "/leads") {
-      return <LeadsView data={data} onMutate={handleMutate} />;
-    }
-    if (activeRoute === "/clients") {
-      return (
-        <ClientsAndQuotationsView
-          data={data}
-          onMutate={handleMutate}
-          mode="clients"
-        />
-      );
-    }
-    if (activeRoute === "/quotations") {
-      return (
-        <ClientsAndQuotationsView
-          data={data}
-          onMutate={handleMutate}
-          mode="quotations"
-        />
-      );
-    }
-    if (activeRoute.startsWith("/projects")) {
-      return (
-        <ProjectsView
-          data={data}
-          onMutate={handleMutate}
-          focusedProjectId={entityId}
-        />
-      );
-    }
-    if (activeRoute === "/sites" || activeRoute === "/site-reports") {
-      return <SitesAndReportsView data={data} onMutate={handleMutate} />;
-    }
-    if (activeRoute === "/materials" || activeRoute === "/inventory") {
-      return <MaterialsAndInventoryView data={data} onMutate={handleMutate} />;
-    }
-    if (activeRoute === "/purchase-orders" || activeRoute === "/suppliers") {
-      return (
-        <ProcurementAndSuppliersView data={data} onMutate={handleMutate} />
-      );
-    }
-    if (activeRoute === "/labour") {
-      return <LabourAndContractorsView data={data} onMutate={handleMutate} />;
-    }
-    const isStaffRestricted =
-      data.currentUser.role === "Staff" ||
-      data.currentUser.role === "Site Staff" ||
-      data.currentUser.role === "Engineer";
-
-    const noLeadAccess =
-      data.currentUser.role === "Staff" ||
-      data.currentUser.role === "Site Staff" ||
-      data.currentUser.role === "Engineer";
-
+    // 🔒 FIX: Permission check আগে — আগে এগুলো রুট return হওয়ার পরে ছিল, তাই কখনো চলতো না
     if (
       noLeadAccess &&
       (activeRoute === "/leads" || activeRoute === "/clients" || activeRoute === "/quotations")
@@ -386,7 +267,10 @@ export default function ErpAppShell({
           <p className="text-xs text-rose-700 max-w-xl mx-auto">
             সাধারণ স্টাফ INSAF BUILDING DESIGN বা INSAF REAL ESTATE LTD.-এর লিড ডাটাবেস দেখতে পারেন না।
           </p>
-          <Link href="/dashboard" className="inline-block px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-semibold min-h-[44px]">
+          <Link
+            href="/dashboard"
+            className="inline-block px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-semibold min-h-[44px]"
+          >
             ড্যাশবোর্ডে ফিরুন
           </Link>
         </div>
@@ -419,35 +303,100 @@ export default function ErpAppShell({
       );
     }
 
+    if (activeRoute === "/attendance") {
+      return <AttendanceView data={data} onMutate={handleMutate} />;
+    }
+    // ⭐ NEW: মাসিক হাজিরা রুট
+    if (activeRoute === "/monthly-attendance") {
+      return <MonthlyAttendanceView data={data} onMutate={handleMutate} />;
+    }
+    if (activeRoute === "/my-day" || activeRoute === "/daily-works") {
+      return <MyDayAndDailyWorksView data={data} onMutate={handleMutate} />;
+    }
+    if (activeRoute === "/team-tasks") {
+      return <TeamTaskMonitorView data={data} onMutate={handleMutate} />;
+    }
+    if (activeRoute.startsWith("/tasks/") && entityId) {
+      return <TeamTaskMonitorView data={data} onMutate={handleMutate} focusedTaskId={entityId} />;
+    }
+    if (activeRoute.startsWith("/tasks")) {
+      return <TasksView data={data} onMutate={handleMutate} focusedTaskId={entityId} />;
+    }
+    if (activeRoute.startsWith("/employees")) {
+      const mgmtRoles = ["Owner", "Chairman", "MD", "Admin", "Manager", "HR", "Project Manager"];
+      if (entityId && !mgmtRoles.includes(role) && entityId !== data.currentUser.employeeId) {
+        return (
+          <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-6 text-center space-y-2">
+            <h2 className="text-lg font-bold text-rose-900">প্রবেশাধিকার নেই</h2>
+            <p className="text-xs text-rose-700">অন্য কর্মীর ব্যক্তিগত প্রোফাইল দেখা যাবে না।</p>
+          </div>
+        );
+      }
+      return <EmployeeDirectoryView data={data} onMutate={handleMutate} focusedEmployeeId={entityId} />;
+    }
+    if (activeRoute === "/leave") {
+      return <LeaveView data={data} onMutate={handleMutate} />;
+    }
+    if (activeRoute === "/payroll") {
+      return <PayrollView data={data} onMutate={handleMutate} />;
+    }
+    if (activeRoute === "/executive-payroll") {
+      if (!canViewExecutive(role)) {
+        return (
+          <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-8 text-center space-y-3">
+            <h2 className="text-xl font-bold text-rose-900">403 Forbidden</h2>
+            <p className="text-xs text-rose-700 max-w-xl mx-auto">
+              Executive Dashboard শুধুমাত্র Owner, MD, Chairman, Admin, Manager, HR ও Accounts এর জন্য।
+            </p>
+            <Link
+              href="/dashboard"
+              className="inline-block px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-semibold min-h-[44px]"
+            >
+              ড্যাশবোর্ডে ফিরুন
+            </Link>
+          </div>
+        );
+      }
+      return <ExecutivePayrollDashboard data={data} onMutate={handleMutate} />;
+    }
+    if (activeRoute === "/performance") {
+      return <PerformanceView data={data} onMutate={handleMutate} />;
+    }
+    if (activeRoute === "/leads") {
+      return <LeadsView data={data} onMutate={handleMutate} />;
+    }
+    if (activeRoute === "/clients") {
+      return <ClientsAndQuotationsView data={data} onMutate={handleMutate} mode="clients" />;
+    }
+    if (activeRoute === "/quotations") {
+      return <ClientsAndQuotationsView data={data} onMutate={handleMutate} mode="quotations" />;
+    }
+    if (activeRoute.startsWith("/projects")) {
+      return <ProjectsView data={data} onMutate={handleMutate} focusedProjectId={entityId} />;
+    }
+    if (activeRoute === "/sites" || activeRoute === "/site-reports") {
+      return <SitesAndReportsView data={data} onMutate={handleMutate} />;
+    }
+    if (activeRoute === "/materials" || activeRoute === "/inventory") {
+      return <MaterialsAndInventoryView data={data} onMutate={handleMutate} />;
+    }
+    if (activeRoute === "/purchase-orders" || activeRoute === "/suppliers") {
+      return <ProcurementAndSuppliersView data={data} onMutate={handleMutate} />;
+    }
+    if (activeRoute === "/labour") {
+      return <LabourAndContractorsView data={data} onMutate={handleMutate} />;
+    }
     if (activeRoute === "/accounts") {
       return <AccountingView data={data} onMutate={handleMutate} />;
     }
     if (activeRoute === "/invoices" || activeRoute === "/income") {
-      return (
-        <InvoicesPaymentsExpensesView
-          data={data}
-          onMutate={handleMutate}
-          tab="invoices"
-        />
-      );
+      return <InvoicesPaymentsExpensesView data={data} onMutate={handleMutate} tab="invoices" />;
     }
     if (activeRoute === "/expenses") {
-      return (
-        <InvoicesPaymentsExpensesView
-          data={data}
-          onMutate={handleMutate}
-          tab="expenses"
-        />
-      );
+      return <InvoicesPaymentsExpensesView data={data} onMutate={handleMutate} tab="expenses" />;
     }
     if (activeRoute === "/payments") {
-      return (
-        <InvoicesPaymentsExpensesView
-          data={data}
-          onMutate={handleMutate}
-          tab="payments"
-        />
-      );
+      return <InvoicesPaymentsExpensesView data={data} onMutate={handleMutate} tab="payments" />;
     }
     if (activeRoute === "/reports") {
       return <ReportsCenterView data={data} />;
@@ -455,11 +404,7 @@ export default function ErpAppShell({
     if (activeRoute === "/notifications") {
       return <NotificationsView data={data} onMutate={handleMutate} />;
     }
-    if (
-      activeRoute === "/documents" ||
-      activeRoute === "/users" ||
-      activeRoute === "/settings"
-    ) {
+    if (activeRoute === "/documents" || activeRoute === "/users" || activeRoute === "/settings") {
       return (
         <DocumentsAndUsersView
           data={data}
@@ -481,29 +426,22 @@ export default function ErpAppShell({
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-white text-sm block leading-none">
-                INSAF ERP
-              </span>
-              <span className="text-[10px] text-emerald-400">
-                Full Business Suite
-              </span>
+              <span className="font-bold text-white text-sm block leading-none">INSAF ERP</span>
+              <span className="text-[10px] text-emerald-400">Full Business Suite</span>
             </div>
           </Link>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-4">
           {NAV_GROUPS.filter((grp) => {
-            if (
-              data.currentUser.role === "Staff" ||
-              data.currentUser.role === "Site Staff"
-            ) {
+            if (role === "Staff" || role === "Site Staff") {
               return (
                 grp.group === "দৈনন্দিন কাজ" ||
                 grp.group === "এইচআর ও কর্মী" ||
                 grp.group === "রিপোর্ট ও নিয়ন্ত্রণ"
               );
             }
-            if (data.currentUser.role === "Sales") {
+            if (role === "Sales") {
               return (
                 grp.group === "দৈনন্দিন কাজ" ||
                 grp.group === "CRM ও প্রজেক্ট" ||
@@ -517,26 +455,12 @@ export default function ErpAppShell({
                 {grp.group}
               </p>
               <div className="space-y-0.5">
-                {grp.items.filter((item) => {
-                  if ((item as { needsLeads?: boolean; execOnly?: boolean }).needsLeads) {
-                    return !(
-                      data.currentUser.role === "Staff" ||
-                      data.currentUser.role === "Site Staff" ||
-                      data.currentUser.role === "Engineer"
-                    );
-                  }
-                  if ((item as { execOnly?: boolean }).execOnly) {
-                    return canViewExecutive(data.currentUser.role);
-                  }
-                  return true;
-                }).map((item) => {
+                {grp.items.filter(filterItem).map((item) => {
                   const Icon = item.icon;
-                  const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
+                  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
                   return (
                     <Link
-                      key={item.href}
+                      key={`${grp.group}-${item.href}`}
                       href={item.href}
                       className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition ${
                         isActive
@@ -547,7 +471,7 @@ export default function ErpAppShell({
                       <span className="flex items-center gap-2.5">
                         <Icon className="w-4 h-4" />
                         {item.label}
-                        {(item as { execOnly?: boolean }).execOnly && (
+                        {item.execOnly && (
                           <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-400 text-amber-900">
                             MD
                           </span>
@@ -569,11 +493,9 @@ export default function ErpAppShell({
         <div className="p-3 border-t border-slate-800 bg-slate-900/60">
           <div className="flex items-center justify-between text-xs">
             <div className="truncate">
-              <p className="font-bold text-white truncate">
-                {data.currentUser.name}
-              </p>
+              <p className="font-bold text-white truncate">{userName}</p>
               <p className="text-[11px] text-emerald-400">
-                {data.currentUser.role} • {data.currentUser.empCode || "HQ"}
+                {role} • {data.currentUser.empCode || "HQ"}
               </p>
             </div>
             <button
@@ -611,7 +533,7 @@ export default function ErpAppShell({
 
           <div className="flex items-center gap-2.5">
             <span className="hidden sm:inline text-xs font-semibold text-slate-600">
-              {data.currentUser.name.split(" ").slice(-2).join(" ")}
+              {userName.split(" ").slice(-2).join(" ")}
             </span>
             <Link
               href="/notifications"
@@ -639,23 +561,11 @@ export default function ErpAppShell({
         {mobileMenuOpen && (
           <div className="lg:hidden bg-slate-950 text-white p-4 space-y-3 border-b border-slate-800">
             <div className="grid grid-cols-2 gap-1.5">
-              {NAV_GROUPS.flatMap((g) => g.items)
-                .filter((item) => {
-                  if ((item as { needsLeads?: boolean }).needsLeads) {
-                    return !(
-                      data.currentUser.role === "Staff" ||
-                      data.currentUser.role === "Site Staff" ||
-                      data.currentUser.role === "Engineer"
-                    );
-                  }
-                  if ((item as { execOnly?: boolean }).execOnly) {
-                    return canViewExecutive(data.currentUser.role);
-                  }
-                  return true;
-                })
+              {NAV_GROUPS.flatMap((g) => g.items.map((item) => ({ ...item, _group: g.group })))
+                .filter(filterItem)
                 .map((item) => (
                   <Link
-                    key={item.href}
+                    key={`${item._group}-${item.href}`}
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={`px-3 py-2 rounded-xl text-xs font-medium ${
@@ -698,15 +608,30 @@ export default function ErpAppShell({
           </div>
         )}
 
-                  {/* ঘোষণা ব্যানার (১০০% খাঁটি বাংলা ও এনকোডিং ফিক্সসহ) */}
-          {(data.announcements || []).filter((a: { published: boolean }) => a.published).slice(0, 2).map((a: { id: number; title: string; message: string; createdBy: string }) => (
-            <div key={a.id} className="mb-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-xs">
-              <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">অফিসিয়াল ঘোষণা</p>
-              <h3 className="text-sm font-bold text-slate-900 mt-0.5">{fixBanglaEncoding(a.title)}</h3>
-              <p className="text-xs text-slate-700 mt-1 leading-relaxed">{fixBanglaEncoding(a.message)}</p>
-              <p className="text-[11px] text-slate-500 mt-1 font-semibold">প্রকাশক: {fixBanglaEncoding(a.createdBy)}</p>
-            </div>
-          
+        {/* ✅ FIX: হারিয়ে যাওয়া <main> ও মূল কনটেন্ট ফিরিয়ে আনা হয়েছে */}
+        <main className="flex-1 p-4 lg:p-6">
+          {/* প্রথম লগইনে পাসওয়ার্ড পরিবর্তন */}
+          {data.currentUser.mustChangePassword && <ForcePasswordBanner />}
+
+          {/* ঘোষণা ব্যানার (১০০% খাঁটি বাংলা ও এনকোডিং ফিক্সসহ) */}
+          {(data.announcements || [])
+            .filter((a: { published: boolean }) => a.published)
+            .slice(0, 2)
+            .map((a: { id: number; title: string; message: string; createdBy: string }) => (
+              <div key={a.id} className="mb-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-xs">
+                <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">অফিসিয়াল ঘোষণা</p>
+                <h3 className="text-sm font-bold text-slate-900 mt-0.5">{fixBanglaEncoding(a.title)}</h3>
+                <p className="text-xs text-slate-700 mt-1 leading-relaxed">{fixBanglaEncoding(a.message)}</p>
+                <p className="text-[11px] text-slate-500 mt-1 font-semibold">
+                  প্রকাশক: {fixBanglaEncoding(a.createdBy)}
+                </p>
+              </div>
+            ))}
+
+          {renderMainContent()}
+        </main>
+      </div>
+
       {/* Mobile Bottom Navigation Bar */}
       <div className="lg:hidden fixed bottom-0 inset-x-0 bg-slate-950 border-t border-slate-800 px-2 py-1.5 flex items-center justify-around z-30">
         {[
@@ -740,29 +665,59 @@ function ForcePasswordBanner() {
   const [currentPassword, setCurrentPassword] = React.useState("");
   const [newPassword, setNewPassword] = React.useState("");
   const [msg, setMsg] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const res = await fetch("/api/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "changePassword", currentPassword, newPassword }),
-    });
-    const d = await res.json();
-    if (!res.ok) setMsg(d.error || "ব্যর্থ");
-    else {
-      setMsg("পাসওয়ার্ড পরিবর্তন হয়েছে। পাতা রিফ্রেশ করুন।");
-      window.location.reload();
+    setBusy(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "changePassword", currentPassword, newPassword }),
+      });
+      const d = await res.json();
+      if (!res.ok) setMsg(d.error || "ব্যর্থ");
+      else {
+        setMsg("পাসওয়ার্ড পরিবর্তন হয়েছে। পাতা রিফ্রেশ করুন।");
+        window.location.reload();
+      }
+    } catch {
+      setMsg("নেটওয়ার্ক সমস্যা");
+    } finally {
+      setBusy(false);
     }
   }
+
   return (
     <form onSubmit={submit} className="mb-4 p-4 rounded-2xl bg-amber-50 border-2 border-amber-400 space-y-2">
       <h3 className="text-sm font-bold text-amber-900">প্রথম লগইন — পাসওয়ার্ড পরিবর্তন বাধ্যতামূলক</h3>
-      <input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
-        placeholder="বর্তমান পাসওয়ার্ড" className="w-full px-3 py-3 rounded-xl border border-amber-300 text-sm min-h-[44px]" />
-      <input type="password" required minLength={6} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-        placeholder="নতুন পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)" className="w-full px-3 py-3 rounded-xl border border-amber-300 text-sm min-h-[44px]" />
+      <input
+        type="password"
+        required
+        value={currentPassword}
+        onChange={(e) => setCurrentPassword(e.target.value)}
+        placeholder="বর্তমান পাসওয়ার্ড"
+        className="w-full px-3 py-3 rounded-xl border border-amber-300 text-sm min-h-[44px]"
+      />
+      <input
+        type="password"
+        required
+        minLength={6}
+        value={newPassword}
+        onChange={(e) => setNewPassword(e.target.value)}
+        placeholder="নতুন পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)"
+        className="w-full px-3 py-3 rounded-xl border border-amber-300 text-sm min-h-[44px]"
+      />
       {msg && <p className="text-xs text-amber-800">{msg}</p>}
-      <button type="submit" className="w-full py-3 rounded-xl bg-slate-900 text-white text-sm font-bold min-h-[48px]">পাসওয়ার্ড সেট করুন</button>
+      <button
+        type="submit"
+        disabled={busy}
+        className="w-full py-3 rounded-xl bg-slate-900 text-white text-sm font-bold min-h-[48px] disabled:opacity-60"
+      >
+        {busy ? "অপেক্ষা করুন..." : "পাসওয়ার্ড সেট করুন"}
+      </button>
     </form>
   );
 }
