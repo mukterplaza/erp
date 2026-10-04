@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { fixBanglaEncoding } from "./modules/FinanceAdminViews";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Building2,
@@ -697,23 +698,16 @@ export default function ErpAppShell({
           </div>
         )}
 
-        {/* Main View */}
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1600px] w-full mx-auto overflow-x-hidden">
-          {data.currentUser.mustChangePassword && (
-            <ForcePasswordBanner />
-          )}
+                  {/* ঘোষণা ব্যানার (১০০% খাঁটি বাংলা ও এনকোডিং ফিক্সসহ) */}
           {(data.announcements || []).filter((a: { published: boolean }) => a.published).slice(0, 2).map((a: { id: number; title: string; message: string; createdBy: string }) => (
-            <div key={a.id} className="mb-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
-              <p className="text-[10px] font-bold text-emerald-800 uppercase">ঘোষণা</p>
-              <h3 className="text-sm font-bold text-slate-900">{a.title}</h3>
-              <p className="text-xs text-slate-600 mt-1">{a.message}</p>
-              <p className="text-[11px] text-slate-400 mt-1">প্রকাশক: {a.createdBy}</p>
+            <div key={a.id} className="mb-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-xs">
+              <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">অফিসিয়াল ঘোষণা</p>
+              <h3 className="text-sm font-bold text-slate-900 mt-0.5">{fixBanglaEncoding(a.title)}</h3>
+              <p className="text-xs text-slate-700 mt-1 leading-relaxed">{fixBanglaEncoding(a.message)}</p>
+              <p className="text-[11px] text-slate-500 mt-1 font-semibold">প্রকাশক: {fixBanglaEncoding(a.createdBy)}</p>
             </div>
           ))}
-          {renderMainContent()}
-        </main>
-      </div>
-
+          
       {/* Mobile Bottom Navigation Bar */}
       <div className="lg:hidden fixed bottom-0 inset-x-0 bg-slate-950 border-t border-slate-800 px-2 py-1.5 flex items-center justify-around z-30">
         {[
