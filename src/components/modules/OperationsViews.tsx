@@ -32,6 +32,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { exportToCSV, exportToPDFPrint } from "@/lib/export-utils";
+import { calculateFinancialDashboardMetrics } from "@/lib/financial-metrics";
 import { fixBanglaEncoding } from "./FinanceAdminViews";
 
 // ============================================================================
@@ -917,48 +918,16 @@ export function DashboardView({
     return 0;
   }, [todayWorkPlans, tasks]);
 
-  // Financial KPIs
-  const accounts = data.accounts || [];
-  const cashAcc = accounts.find((a: any) => a.code === "1010");
-  const bankAcc = accounts.find((a: any) => a.code === "1020");
-  const cashAndBank = num(cashAcc?.balance) + num(bankAcc?.balance);
-
-  const invoices = data.invoices || [];
-  const totalRevenue = invoices.reduce(
-    (s: number, i: any) => s + num(i.totalAmount),
-    0
-  );
-  const totalAR = invoices.reduce(
-    (s: number, i: any) => s + num(i.outstandingAmount),
-    0
-  );
-
-  const totalSupplierAP = (data.suppliers || []).reduce(
-    (s: number, sup: any) => s + num(sup.outstandingPayable),
-    0
-  );
-  const totalContractorDue = (data.contractors || []).reduce(
-    (s: number, c: any) => s + num(c.outstandingDue),
-    0
-  );
-
-  const totalExpenses = (data.expenses || [])
-    .filter((e: any) => e.approvalStatus === "Approved")
-    .reduce((s: number, e: any) => s + num(e.amount), 0);
-
-  const totalSalaryExpense = (data.payrolls || [])
-    .filter((p: any) => p.status === "Paid")
-    .reduce((s: number, p: any) => s + num(p.netSalary), 0);
-
-  const netProfit = totalRevenue - totalExpenses - totalSalaryExpense;
-
-  // Verification records
-  const mat1 = (data.materials || []).find((m: any) => m.materialCode === "MAT-0001");
-  const prj1 = (data.projects || []).find((p: any) => p.projectCode === "PRJ-0001");
-  const inv1 = (data.invoices || []).find((i: any) => i.invoiceCode === "INV-0001");
-  const sup1 = (data.suppliers || []).find((s: any) => s.supplierCode === "SUP-0001");
-  const con1 = (data.contractors || []).find((c: any) => c.contractorCode === "CON-0001");
-  const payr1 = (data.payrolls || []).find((p: any) => p.payrollCode === "PAYR-0001");
+  const financialMetrics = calculateFinancialDashboardMetrics({
+    accounts: data.accounts || [],
+    invoices: data.invoices || [],
+    expenses: data.expenses || [],
+    payrolls: data.payrolls || [],
+    payments: data.payments || [],
+    suppliers: data.suppliers || [],
+    contractors: data.contractors || [],
+    supplierBills: data.supplierBills || [],
+  });
 
   const inspectedStaff = selectedStaffTimelineId
     ? allEmps.find((e: any) => Number(e.id) === Number(selectedStaffTimelineId))
@@ -1536,144 +1505,21 @@ export function DashboardView({
           icon={<DollarSign className="w-4 h-4 text-emerald-500" />}
           title="ম্যানেজমেন্ট আর্থিক সারাংশ"
         />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <StatPill
-            label="নগদ ও ব্যাংক ব্যালেন্স"
-            value={taka(cashAndBank)}
-            hint={`Cash: ${taka(cashAcc?.balance)} | Bank: ${taka(bankAcc?.balance)}`}
-            color="slate"
-          />
-          <StatPill
-            label="ইনভয়েস আয়"
-            value={taka(totalRevenue)}
-            hint={`Net P&L: ${taka(netProfit)}`}
-            color="emerald"
-          />
-          <StatPill
-            label="প্রাপ্য হিসাব (AR)"
-            value={taka(totalAR)}
-            hint={`Collected: ${taka(totalRevenue - totalAR)}`}
-            color="amber"
-          />
-          <StatPill
-            label="সাপ্লায়ার ও ঠিকাদার পরিশোধযোগ্য"
-            value={taka(totalSupplierAP + totalContractorDue)}
-            hint={`Suppliers: ${taka(totalSupplierAP)} | Contr: ${taka(totalContractorDue)}`}
-            color="rose"
-          />
-          <StatPill
-            label="সরাসরি প্রজেক্ট খরচ"
-            value={taka(totalExpenses)}
-            hint={`Payroll Disbursed: ${taka(totalSalaryExpense)}`}
-            color="slate"
-          />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          <StatPill label="নগদ ব্যালেন্স" value={taka(financialMetrics.cash)} color="slate" />
+          <StatPill label="ব্যাংক ব্যালেন্স" value={taka(financialMetrics.bank)} color="slate" />
+          <StatPill label="ইনভয়েস আয়" value={taka(financialMetrics.revenue)} hint={`Net P&L: ${taka(financialMetrics.netProfit)}`} color="emerald" />
+          <StatPill label="প্রাপ্য হিসাব (AR)" value={taka(financialMetrics.receivables)} hint={`Collected: ${taka(financialMetrics.collected)}`} color="amber" />
+          <StatPill label="সাপ্লায়ার ও ঠিকাদার পরিশোধযোগ্য" value={taka(financialMetrics.supplierDue + financialMetrics.contractorDue)} hint={`Suppliers: ${taka(financialMetrics.supplierDue)} | Contr: ${taka(financialMetrics.contractorDue)}`} color="rose" />
+          <StatPill label="সরাসরি প্রজেক্ট খরচ" value={taka(financialMetrics.projectCosts)} hint={`Payroll Disbursed: ${taka(financialMetrics.payrollDisbursed)}`} color="slate" />
         </div>
       </div>
 
-            {/* LIVE DB VERIFICATION MATRIX */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              লাইভ হিসাব ও ফর্মুলা যাচাই
-            </h3>
-            <p className="text-xs text-slate-500">
-              All 6 core mathematical formulas computed dynamically from
-              PostgreSQL rows
-            </p>
-          </div>
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            6 / 6 Exact Formula Tests Verified
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700">
-                1. Inventory (MAT-0001)
-              </span>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
-                Stock = {num(mat1?.currentStock)} {mat1?.unit}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600 mt-1.5 font-mono">
-              Open({num(mat1?.openingStock)}) + Pur({num(mat1?.purchaseReceived)}) - Iss({num(mat1?.issueQty)}) - TrfOut({num(mat1?.transferOut)}) + TrfIn({num(mat1?.transferIn)}) - Con({num(mat1?.consumptionQty)}) = {num(mat1?.currentStock)}
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700">
-                2. Project Cost (PRJ-0001)
-              </span>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
-                Cost = {taka(prj1?.actualCost)}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600 mt-1.5 font-mono">
-              Mat({taka(prj1?.materialCost)}) + Lab({taka(prj1?.labourCost)}) + Con({taka(prj1?.contractorCost)}) + Trp({taka(prj1?.transportCost)}) + Site({taka(prj1?.siteExpenseCost)}) = {taka(prj1?.actualCost)}
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700">
-                3. Client Receivable (INV-0001)
-              </span>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
-                AR = {taka(inv1?.outstandingAmount)}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600 mt-1.5 font-mono">
-              Invoice({taka(inv1?.totalAmount)}) - Paid({taka(inv1?.paidAmount)}) = {taka(inv1?.outstandingAmount)}
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700">
-                4. Supplier Payable (SUP-0001)
-              </span>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
-                AP = {taka(sup1?.outstandingPayable)}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600 mt-1.5 font-mono">
-              Bill({taka(sup1?.totalBilled)}) - Paid({taka(sup1?.totalPaid)}) = {taka(sup1?.outstandingPayable)}
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700">
-                5. Contractor Due (CON-0001)
-              </span>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
-                Due = {taka(con1?.outstandingDue)}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600 mt-1.5 font-mono">
-              Approved({taka(con1?.approvedBillAmount)}) - Paid({taka(con1?.paidAmount)}) = {taka(con1?.outstandingDue)}
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700">
-                6. Payroll Net (PAYR-0001)
-              </span>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
-                Net = {taka(payr1?.netSalary)}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600 mt-1.5 font-mono">
-              {taka(payr1?.basicSalary)} + {taka(payr1?.allowance)} + {taka(payr1?.overtimePay)} - {taka(payr1?.advanceDeduction)} - {taka(payr1?.otherDeduction)} = {taka(payr1?.netSalary)}
-            </p>
-          </div>
-        </div>
-      </div>
+            {!financialMetrics.hasFinancialActivity && (
+              <div role="status" className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                এখনো কোনো বাস্তব আর্থিক লেনদেন নেই। নতুন লেনদেন জমা হলে এই সারাংশ database records থেকে হিসাব হবে।
+              </div>
+            )}
     </div>
   );
 }

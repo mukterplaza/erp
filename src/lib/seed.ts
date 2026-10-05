@@ -317,17 +317,17 @@ async function runSeedInternal() {
     const insertedAccounts = await db
       .insert(accounts)
       .values([
-        { code: "1010", name: "Cash in Hand", type: "Asset", subType: "Cash", balance: "450000.00" },
-        { code: "1020", name: "City Bank Corporate A/C", type: "Asset", subType: "Bank", balance: "1850000.00" },
-        { code: "1100", name: "Accounts Receivable", type: "Asset", subType: "Accounts Receivable", balance: "200000.00" },
-        { code: "1200", name: "Construction Material Inventory", type: "Asset", subType: "Inventory", balance: "545000.00" },
-        { code: "1300", name: "Site Equipment & Machinery", type: "Asset", subType: "Fixed Asset", balance: "1200000.00" },
-        { code: "2010", name: "Accounts Payable (Suppliers)", type: "Liability", subType: "Accounts Payable", balance: "200000.00" },
-        { code: "2020", name: "Contractor Payable", type: "Liability", subType: "Accounts Payable", balance: "250000.00" },
-        { code: "3010", name: "Owner Equity & Capital", type: "Equity", subType: "Equity", balance: "3493000.00" },
-        { code: "4010", name: "Project Construction Revenue", type: "Revenue", subType: "Revenue", balance: "500000.00" },
-        { code: "5010", name: "Project Direct Expense", type: "Expense", subType: "Expense", balance: "165000.00" },
-        { code: "5020", name: "Employee Salary Expense", type: "Expense", subType: "Salary Expense", balance: "33000.00" },
+        { code: "1010", name: "Cash in Hand", type: "Asset", subType: "Cash", balance: "0.00" },
+        { code: "1020", name: "City Bank Corporate A/C", type: "Asset", subType: "Bank", balance: "0.00" },
+        { code: "1100", name: "Accounts Receivable", type: "Asset", subType: "Accounts Receivable", balance: "0.00" },
+        { code: "1200", name: "Construction Material Inventory", type: "Asset", subType: "Inventory", balance: "0.00" },
+        { code: "1300", name: "Site Equipment & Machinery", type: "Asset", subType: "Fixed Asset", balance: "0.00" },
+        { code: "2010", name: "Accounts Payable (Suppliers)", type: "Liability", subType: "Accounts Payable", balance: "0.00" },
+        { code: "2020", name: "Contractor Payable", type: "Liability", subType: "Accounts Payable", balance: "0.00" },
+        { code: "3010", name: "Owner Equity & Capital", type: "Equity", subType: "Equity", balance: "0.00" },
+        { code: "4010", name: "Project Construction Revenue", type: "Revenue", subType: "Revenue", balance: "0.00" },
+        { code: "5010", name: "Project Direct Expense", type: "Expense", subType: "Expense", balance: "0.00" },
+        { code: "5020", name: "Employee Salary Expense", type: "Expense", subType: "Salary Expense", balance: "0.00" },
       ])
       .returning();
 
