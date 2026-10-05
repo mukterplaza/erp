@@ -172,6 +172,61 @@ export function calculateAttendanceMetrics(
   };
 }
 
+export function calculateFourPunchAttendanceMetrics(times: {
+  checkIn?: string | null;
+  checkOut?: string | null;
+  checkIn2?: string | null;
+  checkOut2?: string | null;
+  overrideStatus?: string;
+}) {
+  const { checkIn, checkOut, checkIn2, checkOut2, overrideStatus } = times;
+  if (overrideStatus === "Leave" || overrideStatus === "Holiday" || overrideStatus === "Absent") {
+    return calculateAttendanceMetrics(null, null, overrideStatus);
+  }
+
+  const toMinutes = (value: string) => {
+    const [hours, minutes] = value.split(":").map(Number);
+    return hours * 60 + minutes;
+  };
+  const morningStart = 9 * 60 + 30;
+  const morningEnd = 13 * 60 + 15;
+  const afternoonStart = 14 * 60 + 30;
+  const officialEnd = 19 * 60 + 30;
+  const morningIn = checkIn ? toMinutes(checkIn) : null;
+  const morningOut = checkOut ? toMinutes(checkOut) : null;
+  const afternoonIn = checkIn2 ? toMinutes(checkIn2) : null;
+  const afternoonOut = checkOut2 ? toMinutes(checkOut2) : null;
+
+  const lateMinutes = morningIn === null ? 0 : Math.max(0, morningIn - morningStart);
+  const morningMinutes =
+    morningIn === null || morningOut === null
+      ? 0
+      : Math.max(0, Math.min(morningOut, morningEnd) - morningIn);
+  const afternoonMinutes =
+    afternoonIn === null || afternoonOut === null
+      ? 0
+      : Math.max(0, afternoonOut - Math.max(afternoonIn, afternoonStart));
+  const earlyLeaveMinutes =
+    afternoonOut === null ? 0 : Math.max(0, officialEnd - afternoonOut);
+  const overtimeMinutes =
+    afternoonOut === null ? 0 : Math.max(0, afternoonOut - officialEnd);
+  const workingMinutes = morningMinutes + afternoonMinutes;
+
+  let status = lateMinutes > 0 ? "Late" : "Present";
+  if (earlyLeaveMinutes > 15) status = "Early Leave";
+  if (lateMinutes > 0 && earlyLeaveMinutes > 15) status = "Late";
+
+  return {
+    status,
+    lateMinutes,
+    earlyLeaveMinutes,
+    morningHours: (morningMinutes / 60).toFixed(2),
+    afternoonHours: (afternoonMinutes / 60).toFixed(2),
+    workingHours: (workingMinutes / 60).toFixed(2),
+    overtimeHours: (overtimeMinutes / 60).toFixed(2),
+  };
+}
+
 // 3b. AUTOMATIC WORK PLAN PROGRESS ENGINE
 // 5 planned tasks: 5 completed = 100%, 4 completed = 80%, 3 completed = 60%
 export function calculateWorkPlanProgress(

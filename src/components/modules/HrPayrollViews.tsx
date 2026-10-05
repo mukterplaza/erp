@@ -72,6 +72,7 @@ export function EmployeesView({
   const [allowance, setAllowance] = useState("5000");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [employeeSetupMessage, setEmployeeSetupMessage] = useState("");
   const [bankName, setBankName] = useState("City Bank PLC");
   const [bankAccountNo, setBankAccountNo] = useState("");
   const [role, setRole] = useState("Engineer");
@@ -81,7 +82,8 @@ export function EmployeesView({
 
   async function handleCreateEmployee(e: React.FormEvent) {
     e.preventDefault();
-    await onMutate({
+    setEmployeeSetupMessage("");
+    const result = await onMutate({
       action: "createEmployee",
       name,
       department,
@@ -94,9 +96,13 @@ export function EmployeesView({
       bankAccountNo,
       role,
     });
+    if (!result?.success) return;
     setName("");
     setPhone("");
     setEmail("");
+    setEmployeeSetupMessage(result.passwordSetupRequired
+      ? "কর্মী তৈরি হয়েছে। কর্মী Login পৃষ্ঠার password reset ব্যবহার করে নিজের password সেট করবেন।"
+      : "কর্মী profile বিদ্যমান login-এর সঙ্গে যুক্ত হয়েছে।");
   }
 
   const canViewAll =
@@ -331,6 +337,11 @@ export function EmployeesView({
             >
               কর্মচারী তৈরি ও ইউজার অ্যাকাউন্ট যুক্ত করুন
             </button>
+            {employeeSetupMessage && (
+              <p role="status" className="text-xs text-emerald-700" aria-live="polite">
+                {employeeSetupMessage}
+              </p>
+            )}
           </form>
         )}
 

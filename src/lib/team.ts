@@ -148,12 +148,13 @@ export const FINAL_TEAM = [
   },
 ] as const;
 
-export function initialPasswordFor(email: string): string {
-  const member = FINAL_TEAM.find((t) => t.email === email);
-  return member?.tempPassword || `Insaf#${email.split("@")[0].replace(/\./g, "")}26`;
+export function initialPasswordFor(_email: string): never {
+  throw new Error("Initial password generation is disabled; use account password setup.");
 }
 
-export async function ensureFinalTeam() {
+async function legacyEnsureFinalTeam() {
+  if (process.env.ENABLE_DEMO_SEED !== "true") return;
+
   const existingUsers = await db.select().from(users);
   const existingEmps = await db.select().from(employees);
   const finalEmails = new Set<string>(FINAL_TEAM.map((t) => t.email));
@@ -314,6 +315,10 @@ export async function ensureFinalTeam() {
       })
       .where(eq(tasks.id, t.id));
   }
+}
+
+export async function ensureFinalTeam() {
+  return;
 }
 
 

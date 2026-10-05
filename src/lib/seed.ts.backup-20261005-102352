@@ -32,26 +32,24 @@
   leaveRequests,
   performanceReviews,
   documents,
+  notifications,
   auditLogs,
   dailyWorkPlans,
   reminderSettings,
 } from "@/db";
 import { hashPassword, ROLE_DEFAULT_PERMISSIONS } from "./auth";
 import { sql, eq } from "drizzle-orm";
-import { randomBytes } from "crypto";
+import { ensureFinalTeam } from "./team";
 
 let seedPromise: Promise<void> | null = null;
 
 export async function ensureSeeded() {
-  // Explicit opt-in ছাড়া demo data বা team rewrite চলবে না।
-  if (process.env.ENABLE_DEMO_SEED !== "true") {
-    return;
-  }
-
   if (seedPromise) {
     return seedPromise;
   }
-  seedPromise = runSeedInternal().finally(() => {
+  seedPromise = runSeedInternal()
+    .then(() => ensureFinalTeam())
+    .finally(() => {
       seedPromise = null;
     });
   return seedPromise;
@@ -160,6 +158,39 @@ async function ensureEnhancementsSeeded() {
       });
     }
 
+    const allTasks = await db.select().from(tasks);
+    if (allTasks.length > 0) {
+      await db.insert(notifications).values([
+        {
+          targetRole: "All",
+          type: "Task Assigned",
+          title: `Task Assigned: ${allTasks[0].taskCode} â€” ${allTasks[0].title}`,
+          message: allTasks[0].description || "Please complete the structural quality check and attach site evidence.",
+          createdBy: "Engr. Rafiqul Alam (Project Manager)",
+          priority: allTasks[0].priority,
+          assignedPersonOrTeam: "Engr. Tanvir Ahmed (EMP-0005)",
+          dueDate: allTasks[0].dueDate,
+          relatedTaskId: allTasks[0].id,
+          relatedUrl: `/tasks/${allTasks[0].id}`,
+          relatedEntityCode: allTasks[0].taskCode,
+          isRead: false,
+        },
+        {
+          targetRole: "All",
+          type: "Announcement",
+          title: "à¦…à¦«à¦¿à¦¸ à¦¸à¦®à§Ÿà¦¸à§‚à¦šà¦¿ à¦“ à¦¡à§‡à¦‡à¦²à¦¿ à¦“à§Ÿà¦¾à¦°à§à¦• à¦ªà§à¦²à§à¦¯à¦¾à¦¨ à¦¨à¦¿à¦°à§à¦¦à§‡à¦¶à¦¨à¦¾ (Official Working Schedule Notice)",
+          message:
+            "à¦¸à¦•à¦² à¦¸à§à¦Ÿà¦¾à¦«à¦¦à§‡à¦° à¦¸à¦•à¦¾à¦² à§¯:à§©à§¦ à¦®à¦¿à¦¨à¦¿à¦Ÿà§‡à¦° à¦®à¦§à§à¦¯à§‡ IN TIME à¦à¦¬à¦‚ à¦¦à¦¿à¦¨à§‡à¦° à¦¶à§à¦°à§à¦¤à§‡ Today's Work Plan à¦¸à¦¾à¦¬à¦®à¦¿à¦Ÿ à¦•à¦°à¦¾à¦° à¦¨à¦¿à¦°à§à¦¦à§‡à¦¶ à¦¦à§‡à¦“à§Ÿà¦¾ à¦¹à¦²à§‹à¥¤ (Morning: 9:30 AMâ€“1:15 PM, Break: 1:15 PMâ€“2:30 PM, Afternoon: 2:30 PMâ€“7:30 PM)à¥¤",
+          createdBy: "Engr. Tariqul Islam (Owner)",
+          priority: "High",
+          assignedPersonOrTeam: "All Staff",
+          dueDate: today,
+          relatedUrl: "/my-day",
+          relatedEntityCode: "NOTICE-001",
+          isRead: false,
+        },
+      ]);
+    }
   }
 }
 
@@ -307,11 +338,13 @@ async function runSeedInternal() {
   try {
     const existing = await db.select({ count: sql<number>`count(*)` }).from(users);
     if (Number(existing[0]?.count || 0) > 0) {
+      await ensureEnhancementsSeeded();
+      await ensureCrmCompanySeparation();
       return;
     }
 
     const today = new Date().toISOString().split("T")[0];
-    const temporaryDemoPasswordHash = () => hashPassword(randomBytes(48).toString("base64url"));
+    const defaultPass = hashPassword("insaf123");
 
     // 1. CHART OF ACCOUNTS
     const insertedAccounts = await db
@@ -340,8 +373,7 @@ async function runSeedInternal() {
         {
           name: "Engr. Tariqul Islam (Owner)",
           email: "owner@insaferp.com",
-          passwordHash: temporaryDemoPasswordHash(),
-          mustChangePassword: true,
+          passwordHash: defaultPass,
           role: "Owner",
           permissions: ROLE_DEFAULT_PERMISSIONS["Owner"],
           status: "Active",
@@ -349,8 +381,7 @@ async function runSeedInternal() {
         {
           name: "Mahmudul Hasan (General Manager)",
           email: "manager@insaferp.com",
-          passwordHash: temporaryDemoPasswordHash(),
-          mustChangePassword: true,
+          passwordHash: defaultPass,
           role: "Manager",
           permissions: ROLE_DEFAULT_PERMISSIONS["Manager"],
           status: "Active",
@@ -358,8 +389,7 @@ async function runSeedInternal() {
         {
           name: "Farhana Yeasmin (HR Head)",
           email: "hr@insaferp.com",
-          passwordHash: temporaryDemoPasswordHash(),
-          mustChangePassword: true,
+          passwordHash: defaultPass,
           role: "HR",
           permissions: ROLE_DEFAULT_PERMISSIONS["HR"],
           status: "Active",
@@ -367,8 +397,7 @@ async function runSeedInternal() {
         {
           name: "Kamrul Hasan (Chief Accountant)",
           email: "accounts@insaferp.com",
-          passwordHash: temporaryDemoPasswordHash(),
-          mustChangePassword: true,
+          passwordHash: defaultPass,
           role: "Accounts",
           permissions: ROLE_DEFAULT_PERMISSIONS["Accounts"],
           status: "Active",
@@ -376,8 +405,7 @@ async function runSeedInternal() {
         {
           name: "Engr. Rafiqul Alam (Project Manager)",
           email: "pm@insaferp.com",
-          passwordHash: temporaryDemoPasswordHash(),
-          mustChangePassword: true,
+          passwordHash: defaultPass,
           role: "Project Manager",
           permissions: ROLE_DEFAULT_PERMISSIONS["Project Manager"],
           status: "Active",
@@ -385,8 +413,7 @@ async function runSeedInternal() {
         {
           name: "Sadia Afrin (CRM & Sales Executive)",
           email: "sales@insaferp.com",
-          passwordHash: temporaryDemoPasswordHash(),
-          mustChangePassword: true,
+          passwordHash: defaultPass,
           role: "Sales",
           permissions: ROLE_DEFAULT_PERMISSIONS["Sales"],
           status: "Active",
@@ -394,8 +421,7 @@ async function runSeedInternal() {
         {
           name: "Engr. Tanvir Ahmed (Site Engineer)",
           email: "engineer@insaferp.com",
-          passwordHash: temporaryDemoPasswordHash(),
-          mustChangePassword: true,
+          passwordHash: defaultPass,
           role: "Engineer",
           permissions: ROLE_DEFAULT_PERMISSIONS["Engineer"],
           status: "Active",
@@ -403,8 +429,7 @@ async function runSeedInternal() {
         {
           name: "Mehedi Hasan (Site Supervisor)",
           email: "staff@insaferp.com",
-          passwordHash: temporaryDemoPasswordHash(),
-          mustChangePassword: true,
+          passwordHash: defaultPass,
           role: "Staff",
           permissions: ROLE_DEFAULT_PERMISSIONS["Staff"],
           status: "Active",
@@ -1880,6 +1905,81 @@ async function runSeedInternal() {
     ]);
 
     // 20. NOTIFICATIONS (Covering all key operational alerts)
+    await db.insert(notifications).values([
+      {
+        targetRole: "All",
+        type: "Missing Checkout",
+        title: "Missing Checkout Alert: Mehedi Hasan",
+        message: "EMP-0006 (Mehedi Hasan) checked in at 08:50 AM at Site-0001 and has not checked out yet.",
+        relatedUrl: "/attendance",
+        relatedEntityCode: "EMP-0006",
+        isRead: false,
+      },
+      {
+        targetRole: "All",
+        type: "Late Attendance",
+        title: "Late Check-in: Engr. Tanvir Ahmed",
+        message: "EMP-0005 checked in at 09:35 AM (35 mins late) due to Mirpur traffic.",
+        relatedUrl: "/attendance",
+        relatedEntityCode: "EMP-0005",
+        isRead: false,
+      },
+      {
+        targetRole: "All",
+        type: "Low Stock",
+        title: "Low Stock Alert: Sylhet Coarse Sand",
+        message: "MAT-0003 stock at Site-0001 Yard is 15 CFT (below reorder level of 100 CFT).",
+        relatedUrl: "/inventory",
+        relatedEntityCode: "MAT-0003",
+        isRead: false,
+      },
+      {
+        targetRole: "All",
+        type: "Task Overdue",
+        title: "Overdue Task: TSK-0003 Basement Dewatering",
+        message: "Task TSK-0003 at Tejgaon Site-0002 is overdue and at 45% progress.",
+        relatedUrl: `/tasks/${insertedTasks[2].id}`,
+        relatedEntityCode: "TSK-0003",
+        isRead: false,
+      },
+      {
+        targetRole: "All",
+        type: "Task Review",
+        title: "Task Ready for Review: TSK-0002",
+        message: "Mehedi Hasan submitted TSK-0002 (Cement & Steel Stock Verification) for manager approval.",
+        relatedUrl: `/tasks/${insertedTasks[1].id}`,
+        relatedEntityCode: "TSK-0002",
+        isRead: false,
+      },
+      {
+        targetRole: "All",
+        type: "Follow-up Due",
+        title: "CRM Follow-up Due Today: LEAD-0002 & LEAD-0003",
+        message: "Dr. Shafiqur Rahman (QUO-0002) and Syed Monirul Islam are scheduled for follow-up today.",
+        relatedUrl: "/leads",
+        relatedEntityCode: "LEAD-0002",
+        isRead: false,
+      },
+      {
+        targetRole: "All",
+        type: "Leave Request",
+        title: "Pending Leave Request: LV-0002",
+        message: "Mehedi Hasan applied for 2 days Sick Leave (2026-04-20 to 2026-04-21).",
+        relatedUrl: "/leave",
+        relatedEntityCode: "LV-0002",
+        isRead: false,
+      },
+      {
+        targetRole: "All",
+        type: "Payment Due",
+        title: "Supplier Payable Outstanding: à§³200,000",
+        message: "BILL-0001 from BSRM & Crown Building Materials has à§³200,000 balance due.",
+        relatedUrl: "/suppliers",
+        relatedEntityCode: "BILL-0001",
+        isRead: false,
+      },
+    ]);
+
     // 21. AUDIT LOGS
     await db.insert(auditLogs).values([
       {

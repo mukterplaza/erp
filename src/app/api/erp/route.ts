@@ -43,7 +43,7 @@ import {
   announcementReads,
   workFiles,
 } from "@/db";
-import { eq, desc, and, isNull } from "drizzle-orm";
+import { eq, desc, and, isNull, sql } from "drizzle-orm";
 import {
   getCurrentUser,
   hasPermission,
@@ -56,16 +56,19 @@ import {
   isManagementRole,
 } from "@/lib/auth";
 import { ensureSeeded } from "@/lib/seed";
+import { runReminderAutomation } from "@/lib/reminder-automation";
 import {
   logAudit,
   createNotification,
   calculateAttendanceMetrics,
+  calculateFourPunchAttendanceMetrics,
   calculateWorkPlanProgress,
   recordStockMovementTx,
   postDoubleEntryJournalTx,
   computeExactMaterialStock,
 } from "@/lib/erp-engine";
 import { computeEmployeeWork } from "@/lib/work-tracking";
+import { randomBytes } from "crypto";
 import {
   notifyUsers,
   managementUserIds,
@@ -75,18 +78,69 @@ import {
   TASK_MGMT_ROLES,
 } from "@/lib/task-notify";
 
+class AttendanceRequestError extends Error {
+  constructor(message: string, readonly status: number = 400) {
+    super(message);
+  }
+}
+
+function getDhakaDateTime(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return {
+    date: `${values.year}-${values.month}-${values.day}`,
+    time: `${values.hour}:${values.minute}`,
+  };
+}
+
+function validateFourPunches(punches: {
+  checkIn?: string | null;
+  checkOut?: string | null;
+  checkIn2?: string | null;
+  checkOut2?: string | null;
+  overrideStatus?: string;
+}) {
+  const values = [punches.checkIn, punches.checkOut, punches.checkIn2, punches.checkOut2];
+  if (values.some((value) => value && !/^([01]\d|2[0-3]):[0-5]\d$/.test(value))) {
+    throw new AttendanceRequestError("Attendance times must use HH:mm format.");
+  }
+  if (punches.checkOut && !punches.checkIn) {
+    throw new AttendanceRequestError("Morning OUT requires morning IN.");
+  }
+  if (punches.checkIn2 && (!punches.checkIn || !punches.checkOut)) {
+    throw new AttendanceRequestError("Afternoon IN requires both morning punches.");
+  }
+  if (punches.checkOut2 && !punches.checkIn2) {
+    throw new AttendanceRequestError("Afternoon OUT requires afternoon IN.");
+  }
+  if (punches.checkOut && punches.checkOut >= "14:30") {
+    throw new AttendanceRequestError("Morning OUT must be before the afternoon shift.");
+  }
+  if (punches.checkIn2 && punches.checkIn2 < "14:30") {
+    throw new AttendanceRequestError("Afternoon IN cannot be before 14:30.");
+  }
+  for (let index = 1; index < values.length; index++) {
+    if (values[index - 1] && values[index] && values[index]! <= values[index - 1]!) {
+      throw new AttendanceRequestError("Attendance punches must follow IN, OUT, IN, OUT order.");
+    }
+  }
+  return calculateFourPunchAttendanceMetrics(punches);
+}
+
 export async function GET(req: NextRequest) {
   await ensureSeeded();
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  try {
-    await runTaskDeadlineScan();
-  } catch (e) {
-    console.error("deadline scan failed", e);
   }
 
   const section = req.nextUrl.searchParams.get("section") || "all";
@@ -327,30 +381,46 @@ export async function GET(req: NextRequest) {
     return true;
   });
 
+  const attendanceEmployeeIds = new Set(allAttendances.map((attendance) => attendance.employeeId));
   const scopedDirectory =
-    isFullAccess || isHR || isPM || isAccounts
+    isFullAccess || isHR
       ? allEmployees
-          .filter((e) => !e.archived)
-          .map((e) => ({
-            id: e.id,
-            empCode: e.empCode,
-            name: e.name,
-            department: e.department,
-            designation: e.designation,
-            companyId: e.companyId,
-            assignedSite: e.assignedSite,
+          .filter((employee) => !employee.archived || attendanceEmployeeIds.has(employee.id))
+          .map((employee) => ({
+            id: employee.id,
+            empCode: employee.empCode,
+            name: employee.name,
+            department: employee.department,
+            designation: employee.designation,
+            companyId: employee.companyId,
+            assignedSite: employee.assignedSite,
+            archived: employee.archived,
           }))
-      : allEmployees
-          .filter((e) => e.id === myEmpId)
-          .map((e) => ({
-            id: e.id,
-            empCode: e.empCode,
-            name: e.name,
-            department: e.department,
-            designation: e.designation,
-            companyId: e.companyId,
-            assignedSite: e.assignedSite,
-          }));
+      : isPM || isAccounts
+        ? allEmployees
+            .filter((employee) => !employee.archived)
+            .map((employee) => ({
+              id: employee.id,
+              empCode: employee.empCode,
+              name: employee.name,
+              department: employee.department,
+              designation: employee.designation,
+              companyId: employee.companyId,
+              assignedSite: employee.assignedSite,
+              archived: employee.archived,
+            }))
+        : allEmployees
+            .filter((employee) => employee.id === myEmpId)
+            .map((employee) => ({
+              id: employee.id,
+              empCode: employee.empCode,
+              name: employee.name,
+              department: employee.department,
+              designation: employee.designation,
+              companyId: employee.companyId,
+              assignedSite: employee.assignedSite,
+              archived: employee.archived,
+            }));
   // Enrich Projects with Real Dynamic Calculations (Budget vs Actual Cost vs Revenue vs Profit/Loss)
   const enrichedProjects = scopedProjects.map((proj) => {
     const projExpenses = allExpenses.filter(
@@ -725,7 +795,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { action } = body;
-    const today = new Date().toISOString().split("T")[0];
+    const today = getDhakaDateTime().date;
 
     const LEAD_ACTIONS = [
       "createLead",
@@ -932,58 +1002,112 @@ export async function POST(req: NextRequest) {
       if (!name || !department || !designation || !phone || !email) {
         return NextResponse.json({ error: "Required employee fields missing" }, { status: 400 });
       }
-      if (Number(basicSalary) < 0 || Number(allowance || 0) < 0) {
+      const salary = Number(basicSalary || 0);
+      const monthlyAllowance = Number(allowance || 0);
+      if (!Number.isFinite(salary) || !Number.isFinite(monthlyAllowance) || salary < 0 || monthlyAllowance < 0) {
         return NextResponse.json({ error: "Salary/Allowance cannot be negative" }, { status: 400 });
       }
+      const normalizedEmail = String(email).trim().toLowerCase();
+      const normalizedName = String(name).trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalizedEmail)) {
+        return NextResponse.json({ error: "A valid employee email is required." }, { status: 400 });
+      }
+      if (role && !ROLE_DEFAULT_PERMISSIONS[role]) {
+        return NextResponse.json({ error: "Invalid employee login role." }, { status: 400 });
+      }
+      const assignedRole = role || "Staff";
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`employee-create:${normalizedEmail}`}, 0))`
+        );
+        const [emailEmployee] = await tx
+          .select({ id: employees.id })
+          .from(employees)
+          .where(eq(employees.email, normalizedEmail))
+          .limit(1);
+        if (emailEmployee) {
+          throw new AttendanceRequestError("An employee profile already uses this email.", 409);
+        }
 
-      const existingEmps = await db.select().from(employees);
-      const nextCode = `EMP-${String(existingEmps.length + 1).padStart(4, "0")}`;
+        const [existingUser] = await tx
+          .select()
+          .from(users)
+          .where(eq(users.email, normalizedEmail))
+          .limit(1);
+        let linkedUserId: number;
+        let accountCreated = false;
+        let passwordSetupRequired = false;
+        if (existingUser) {
+          const [linkedEmployee] = await tx
+            .select({ id: employees.id })
+            .from(employees)
+            .where(eq(employees.userId, existingUser.id))
+            .limit(1);
+          if (linkedEmployee || existingUser.status !== "Active" || existingUser.name.trim().toLowerCase() !== normalizedName.toLowerCase()) {
+            throw new AttendanceRequestError("This login already belongs to another or inactive profile; review the account before linking.", 409);
+          }
+          linkedUserId = existingUser.id;
+          passwordSetupRequired = existingUser.mustChangePassword;
+        } else {
+          const bootstrapSecret = randomBytes(48).toString("base64url");
+          const [newUser] = await tx
+            .insert(users)
+            .values({
+              name: normalizedName,
+              email: normalizedEmail,
+              passwordHash: hashPassword(bootstrapSecret),
+              role: assignedRole,
+              permissions: ROLE_DEFAULT_PERMISSIONS[assignedRole] || ROLE_DEFAULT_PERMISSIONS.Staff,
+              status: "Active",
+              mustChangePassword: true,
+            })
+            .returning({ id: users.id });
+          linkedUserId = newUser.id;
+          accountCreated = true;
+          passwordSetupRequired = true;
+        }
 
-      // Also create a linked user account if email doesn't exist
-      let linkedUserId: number | null = null;
-      const existingUser = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, String(email).toLowerCase().trim()));
-      if (existingUser.length > 0) {
-        linkedUserId = existingUser[0].id;
-      } else {
-        const assignedRole = role || "Staff";
-        const [newUser] = await db
-          .insert(users)
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('employee-code-allocation', 0))`
+        );
+        const codes = await tx.select({ empCode: employees.empCode }).from(employees);
+        const usedCodes = new Set(codes.map((row) => row.empCode));
+        const maxCodeNumber = codes.reduce((max, row) => {
+          const match = /^EMP-(\d+)$/.exec(row.empCode);
+          return match ? Math.max(max, Number(match[1])) : max;
+        }, 0);
+        let nextCodeNumber = maxCodeNumber + 1;
+        let empCode = `EMP-${String(nextCodeNumber).padStart(4, "0")}`;
+        while (usedCodes.has(empCode)) {
+          nextCodeNumber++;
+          empCode = `EMP-${String(nextCodeNumber).padStart(4, "0")}`;
+        }
+
+        const [employee] = await tx
+          .insert(employees)
           .values({
-            name,
-            email: String(email).toLowerCase().trim(),
-            passwordHash: hashPassword("insaf123"),
-            role: assignedRole,
-            permissions: ROLE_DEFAULT_PERMISSIONS[assignedRole] || ROLE_DEFAULT_PERMISSIONS["Staff"],
-            status: "Active",
+            empCode,
+            userId: linkedUserId,
+            name: normalizedName,
+            department: String(department).trim(),
+            designation: String(designation).trim(),
+            joiningDate: joiningDate || today,
+            basicSalary: salary.toFixed(2),
+            allowance: monthlyAllowance.toFixed(2),
+            phone: String(phone).trim(),
+            email: normalizedEmail,
+            address: address || "",
+            emergencyContact: emergencyContact || "",
+            bankName: bankName || "",
+            bankAccountNo: bankAccountNo || "",
+            paymentMethod: paymentMethod || "Bank",
+            employmentStatus: "Active",
+            archived: false,
           })
           .returning();
-        linkedUserId = newUser.id;
-      }
-
-      const [emp] = await db
-        .insert(employees)
-        .values({
-          empCode: nextCode,
-          userId: linkedUserId,
-          name,
-          department,
-          designation,
-          joiningDate: joiningDate || today,
-          basicSalary: Number(basicSalary || 0).toFixed(2),
-          allowance: Number(allowance || 0).toFixed(2),
-          phone,
-          email: String(email).toLowerCase().trim(),
-          address: address || "",
-          emergencyContact: emergencyContact || "",
-          bankName: bankName || "",
-          bankAccountNo: bankAccountNo || "",
-          paymentMethod: paymentMethod || "Bank",
-          employmentStatus: "Active",
-        })
-        .returning();
+        return { employee, accountCreated, passwordSetupRequired };
+      });
+      const emp = result.employee;
 
       await logAudit({
         userId: currentUser.id,
@@ -995,124 +1119,150 @@ export async function POST(req: NextRequest) {
         afterData: emp,
       });
 
-      return NextResponse.json({ success: true, employee: emp });
+      return NextResponse.json({
+        success: true,
+        employee: emp,
+        accountCreated: result.accountCreated,
+        passwordSetupRequired: result.passwordSetupRequired,
+      });
     }
 
     // =========================================================================
     // 3. ATTENDANCE & CORRECTION WORKFLOW (Auto-Approved on IN/OUT)
     // =========================================================================
-    if (action === "checkIn") {
+    if (action === "checkIn" || action === "checkOut") {
       const canManageOthers = canViewAllEmployeeProfiles(currentUser.role);
-      if (
-        !canManageOthers &&
-        body.employeeId &&
-        Number(body.employeeId) !== currentUser.employeeId
-      ) {
-        return NextResponse.json(
-          { error: "Forbidden: Staff can only record their own IN TIME." },
-          { status: 403 }
-        );
-      }
-
       const employeeId = Number(body.employeeId || currentUser.employeeId);
-      if (!employeeId) {
+      if (!Number.isInteger(employeeId) || employeeId <= 0) {
         return NextResponse.json({ error: "Employee ID required" }, { status: 400 });
       }
-      const checkInTime =
-        body.checkIn ||
-        new Date().toTimeString().slice(0, 5);
-      const date = body.date || today;
+      if (!canManageOthers && employeeId !== currentUser.employeeId) {
+        return NextResponse.json({ error: "Staff can only record their own attendance." }, { status: 403 });
+      }
 
-      const metrics = calculateAttendanceMetrics(checkInTime, null);
+      const { date, time } = getDhakaDateTime();
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`attendance:${employeeId}:${date}`}, 0))`
+        );
+        const [employee] = await tx
+          .select()
+          .from(employees)
+          .where(eq(employees.id, employeeId))
+          .limit(1);
+        if (!employee || employee.archived || employee.employmentStatus !== "Active") {
+          throw new AttendanceRequestError("Only active, non-archived employees can punch.", 404);
+        }
 
-      const [att] = await db
-        .insert(attendances)
-        .values({
-          employeeId,
-          date,
-          checkIn: checkInTime,
-          checkOut: null,
-          status: metrics.status,
-          lateMinutes: metrics.lateMinutes,
-          earlyLeaveMinutes: 0,
-          morningHours: "0.00",
-          afternoonHours: "0.00",
-          workingHours: "0.00",
-          overtimeHours: "0.00",
-          isApproved: true, // Auto-approved immediately!
-          notes: body.notes || "Auto-approved Check-In",
-        })
-        .returning();
+        const rows = await tx
+          .select()
+          .from(attendances)
+          .where(and(eq(attendances.employeeId, employeeId), eq(attendances.date, date)))
+          .limit(2);
+        if (rows.length > 1) {
+          throw new AttendanceRequestError("Multiple records exist for this employee and date; ask management to review them.", 409);
+        }
+        const existing = rows[0];
+        if (existing) {
+          validateFourPunches({
+            checkIn: existing.checkIn,
+            checkOut: existing.checkOut,
+            checkIn2: existing.checkIn2,
+            checkOut2: existing.checkOut2,
+          });
+        }
+        if (body.attendanceId && Number(body.attendanceId) !== existing?.id) {
+          throw new AttendanceRequestError("Attendance record does not match today's employee record.", 409);
+        }
 
-      if (metrics.lateMinutes > 0) {
+        const nextSlot = !existing
+          ? "checkIn"
+          : !existing.checkOut
+            ? "checkOut"
+            : !existing.checkIn2
+              ? "checkIn2"
+              : !existing.checkOut2
+                ? "checkOut2"
+                : null;
+        if (!nextSlot) {
+          throw new AttendanceRequestError("All four attendance punches are already recorded.", 409);
+        }
+        if ((action === "checkIn" && nextSlot !== "checkIn" && nextSlot !== "checkIn2") ||
+            (action === "checkOut" && nextSlot !== "checkOut" && nextSlot !== "checkOut2")) {
+          throw new AttendanceRequestError(`Next required punch is ${nextSlot}.`, 409);
+        }
+        if (nextSlot === "checkIn" && time >= "14:30") {
+          throw new AttendanceRequestError("Morning IN has passed; submit an attendance correction request.", 409);
+        }
+        if (nextSlot === "checkOut" && time >= "14:30") {
+          throw new AttendanceRequestError("Morning OUT window has passed; submit an attendance correction request.", 409);
+        }
+        if (nextSlot === "checkIn2" && time < "14:30") {
+          throw new AttendanceRequestError("Afternoon IN is available from 14:30 Bangladesh time.", 409);
+        }
+
+        const priorTime =
+          nextSlot === "checkOut" ? existing?.checkIn :
+          nextSlot === "checkIn2" ? existing?.checkOut :
+          nextSlot === "checkOut2" ? existing?.checkIn2 : null;
+        if (priorTime && time <= priorTime) {
+          throw new AttendanceRequestError("Punch time must be later than the previous punch.", 409);
+        }
+
+        const punches = {
+          checkIn: nextSlot === "checkIn" ? time : existing?.checkIn,
+          checkOut: nextSlot === "checkOut" ? time : existing?.checkOut,
+          checkIn2: nextSlot === "checkIn2" ? time : existing?.checkIn2,
+          checkOut2: nextSlot === "checkOut2" ? time : existing?.checkOut2,
+        };
+        const metrics = calculateFourPunchAttendanceMetrics(punches);
+        const note = typeof body.notes === "string" ? body.notes.trim().slice(0, 500) : "";
+        const updateValues = {
+          ...punches,
+          ...metrics,
+          isApproved: true,
+          notes: [existing?.notes, note].filter(Boolean).join(" | ") || "Attendance punch",
+        };
+
+        const [attendance] = existing
+          ? await tx
+              .update(attendances)
+              .set(updateValues)
+              .where(eq(attendances.id, existing.id))
+              .returning()
+          : await tx
+              .insert(attendances)
+              .values({ employeeId, date, ...updateValues })
+              .returning();
+        return { attendance, before: existing, employeeName: employee.name, slot: nextSlot };
+      });
+
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: result.before ? "UPDATE" : "CREATE",
+        entity: "AttendancePunch",
+        recordId: String(result.attendance.id),
+        beforeData: result.before,
+        afterData: { attendance: result.attendance, punch: result.slot },
+      });
+      if (result.slot === "checkIn" && result.attendance.lateMinutes > 0) {
         await createNotification({
           targetRole: "Manager",
           type: "Attendance Correction",
-          title: `Late IN TIME (${metrics.lateMinutes}m after 9:30 AM)`,
-          message: `${currentUser.name} checked in at ${checkInTime} on ${date}.`,
+          title: `Late IN TIME: ${result.employeeName}`,
+          message: `${result.employeeName} checked in at ${time} on ${date}.`,
           createdBy: currentUser.name,
           relatedUrl: "/attendance",
           relatedEntityCode: `EMP-${String(employeeId).padStart(4, "0")}`,
         });
       }
-
-      return NextResponse.json({ success: true, attendance: att });
-    }
-
-    if (action === "checkOut") {
-      const attendanceId = Number(body.attendanceId);
-      const checkOutTime =
-        body.checkOut ||
-        new Date().toTimeString().slice(0, 5);
-
-      const [existing] = await db
-        .select()
-        .from(attendances)
-        .where(eq(attendances.id, attendanceId));
-
-      if (!existing) {
-        return NextResponse.json({ error: "Attendance record not found" }, { status: 404 });
-      }
-
-      if (
-        !canViewAllEmployeeProfiles(currentUser.role) &&
-        existing.employeeId !== currentUser.employeeId
-      ) {
-        return NextResponse.json(
-          { error: "Forbidden: Staff can only record their own OUT TIME." },
-          { status: 403 }
-        );
-      }
-
-      const metrics = calculateAttendanceMetrics(existing.checkIn, checkOutTime);
-
-      const [updated] = await db
-        .update(attendances)
-        .set({
-          checkOut: checkOutTime,
-          status: metrics.status,
-          lateMinutes: metrics.lateMinutes,
-          earlyLeaveMinutes: metrics.earlyLeaveMinutes,
-          morningHours: metrics.morningHours,
-          afternoonHours: metrics.afternoonHours,
-          workingHours: metrics.workingHours,
-          overtimeHours: metrics.overtimeHours,
-          isApproved: true, // Auto-approved
-        })
-        .where(eq(attendances.id, attendanceId))
-        .returning();
-
-      return NextResponse.json({ success: true, attendance: updated });
+      return NextResponse.json({ success: true, attendance: result.attendance, punch: result.slot });
     }
 
     if (action === "editApprovedAttendance") {
-      // Staff CANNOT directly edit approved attendance!
-      if (
-        currentUser.role !== "Owner" &&
-        currentUser.role !== "Admin" &&
-        currentUser.role !== "HR" &&
-        currentUser.role !== "Manager"
-      ) {
+      if (!canViewAllEmployeeProfiles(currentUser.role)) {
         return NextResponse.json(
           {
             error:
@@ -1122,19 +1272,32 @@ export async function POST(req: NextRequest) {
         );
       }
       const { attendanceId, checkIn, checkOut, status } = body;
-      const metrics = calculateAttendanceMetrics(checkIn, checkOut, status);
+      const id = Number(attendanceId);
+      if (!Number.isInteger(id) || id <= 0) {
+        return NextResponse.json({ error: "Attendance ID is required." }, { status: 400 });
+      }
+      const [existing] = await db
+        .select()
+        .from(attendances)
+        .where(eq(attendances.id, id))
+        .limit(1);
+      if (!existing) {
+        return NextResponse.json({ error: "Attendance record not found." }, { status: 404 });
+      }
+      const punches = {
+        checkIn: checkIn === undefined ? existing.checkIn : checkIn || null,
+        checkOut: checkOut === undefined ? existing.checkOut : checkOut || null,
+        checkIn2: body.checkIn2 === undefined ? existing.checkIn2 : body.checkIn2 || null,
+        checkOut2: body.checkOut2 === undefined ? existing.checkOut2 : body.checkOut2 || null,
+      };
+      const metrics = validateFourPunches({ ...punches, overrideStatus: status });
       const [updated] = await db
         .update(attendances)
         .set({
-          checkIn,
-          checkOut,
-          status: metrics.status,
-          lateMinutes: metrics.lateMinutes,
-          earlyLeaveMinutes: metrics.earlyLeaveMinutes,
-          workingHours: metrics.workingHours,
-          overtimeHours: metrics.overtimeHours,
+          ...punches,
+          ...metrics,
         })
-        .where(eq(attendances.id, Number(attendanceId)))
+        .where(eq(attendances.id, id))
         .returning();
 
       await logAudit({
@@ -1143,7 +1306,8 @@ export async function POST(req: NextRequest) {
         userRole: currentUser.role,
         action: "UPDATE",
         entity: "Attendance",
-        recordId: String(attendanceId),
+        recordId: String(id),
+        beforeData: existing,
         afterData: updated,
       });
       return NextResponse.json({ success: true, attendance: updated });
@@ -1151,9 +1315,45 @@ export async function POST(req: NextRequest) {
 
     if (action === "requestAttendanceCorrection") {
       const employeeId = Number(body.employeeId || currentUser.employeeId);
-      const { attendanceId, date, requestedCheckIn, requestedCheckOut, reason } = body;
-      if (!date || !requestedCheckIn || !requestedCheckOut || !reason) {
+      const canManageCorrections = canViewAllEmployeeProfiles(currentUser.role);
+      if (!Number.isInteger(employeeId) || employeeId <= 0) {
+        return NextResponse.json({ error: "Employee ID required." }, { status: 400 });
+      }
+      if (!canManageCorrections && employeeId !== currentUser.employeeId) {
+        return NextResponse.json({ error: "Staff can request corrections only for their own attendance." }, { status: 403 });
+      }
+      const {
+        attendanceId,
+        date,
+        requestedCheckIn,
+        requestedCheckOut,
+        requestedCheckIn2,
+        requestedCheckOut2,
+        reason,
+      } = body;
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) ||
+        !requestedCheckIn ||
+        !requestedCheckOut ||
+        !String(reason || "").trim()
+      ) {
         return NextResponse.json({ error: "All correction fields are required" }, { status: 400 });
+      }
+      validateFourPunches({
+        checkIn: requestedCheckIn,
+        checkOut: requestedCheckOut,
+        checkIn2: requestedCheckIn2 || null,
+        checkOut2: requestedCheckOut2 || null,
+      });
+      if (attendanceId) {
+        const [record] = await db
+          .select()
+          .from(attendances)
+          .where(eq(attendances.id, Number(attendanceId)))
+          .limit(1);
+        if (!record || record.employeeId !== employeeId || record.date !== date) {
+          return NextResponse.json({ error: "Attendance record does not match the correction request." }, { status: 404 });
+        }
       }
 
       const [corr] = await db
@@ -1164,7 +1364,9 @@ export async function POST(req: NextRequest) {
           date,
           requestedCheckIn,
           requestedCheckOut,
-          reason,
+          requestedCheckIn2: requestedCheckIn2 || null,
+          requestedCheckOut2: requestedCheckOut2 || null,
+          reason: String(reason).trim().slice(0, 1000),
           status: "Pending",
         })
         .returning();
@@ -1185,61 +1387,100 @@ export async function POST(req: NextRequest) {
       if (!hasPermission(currentUser, "attendance.approve")) {
         return NextResponse.json({ error: "Forbidden: Manager/HR approval required" }, { status: 403 });
       }
-      const { correctionId, decision } = body; // Approved or Rejected
-      const [corr] = await db
-        .select()
-        .from(attendanceCorrections)
-        .where(eq(attendanceCorrections.id, Number(correctionId)));
-
-      if (!corr) {
-        return NextResponse.json({ error: "Correction request not found" }, { status: 404 });
+      const { correctionId, decision } = body;
+      if (decision !== "Approved" && decision !== "Rejected") {
+        return NextResponse.json({ error: "Decision must be Approved or Rejected." }, { status: 400 });
       }
+      const result = await db.transaction(async (tx) => {
+        const [corr] = await tx
+          .select()
+          .from(attendanceCorrections)
+          .where(eq(attendanceCorrections.id, Number(correctionId)))
+          .for("update")
+          .limit(1);
+        if (!corr) throw new AttendanceRequestError("Correction request not found.", 404);
+        if (corr.status !== "Pending") {
+          throw new AttendanceRequestError("Correction request has already been reviewed.", 409);
+        }
 
-      await db
-        .update(attendanceCorrections)
-        .set({
-          status: decision,
-          approvedBy: currentUser.name,
-          approvedAt: new Date(),
-        })
-        .where(eq(attendanceCorrections.id, corr.id));
+        let beforeAttendance: typeof attendances.$inferSelect | undefined;
+        let updatedAttendance: typeof attendances.$inferSelect | undefined;
+        if (decision === "Approved") {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended(${`attendance:${corr.employeeId}:${corr.date}`}, 0))`
+          );
+          if (corr.attendanceId) {
+            const [linked] = await tx
+              .select()
+              .from(attendances)
+              .where(eq(attendances.id, corr.attendanceId))
+              .limit(1);
+            if (!linked || linked.employeeId !== corr.employeeId || linked.date !== corr.date) {
+              throw new AttendanceRequestError("Correction no longer matches its attendance record.", 409);
+            }
+            beforeAttendance = linked;
+          } else {
+            const rows = await tx
+              .select()
+              .from(attendances)
+              .where(and(
+                eq(attendances.employeeId, corr.employeeId),
+                eq(attendances.date, corr.date)
+              ))
+              .limit(2);
+            if (rows.length > 1) {
+              throw new AttendanceRequestError("Multiple attendance rows exist for this date; management review is required.", 409);
+            }
+            beforeAttendance = rows[0];
+          }
 
-      if (decision === "Approved") {
-        const metrics = calculateAttendanceMetrics(
-          corr.requestedCheckIn,
-          corr.requestedCheckOut
-        );
-
-        if (corr.attendanceId) {
-          await db
-            .update(attendances)
-            .set({
-              checkIn: corr.requestedCheckIn,
-              checkOut: corr.requestedCheckOut,
-              status: metrics.status,
-              lateMinutes: metrics.lateMinutes,
-              earlyLeaveMinutes: metrics.earlyLeaveMinutes,
-              workingHours: metrics.workingHours,
-              overtimeHours: metrics.overtimeHours,
-              notes: `Corrected via request #${corr.id}`,
-            })
-            .where(eq(attendances.id, corr.attendanceId));
-        } else {
-          await db.insert(attendances).values({
-            employeeId: corr.employeeId,
-            date: corr.date,
+          const punches: {
+            checkIn: string | null;
+            checkOut: string | null;
+            checkIn2: string | null;
+            checkOut2: string | null;
+          } = {
             checkIn: corr.requestedCheckIn,
             checkOut: corr.requestedCheckOut,
-            status: metrics.status,
-            lateMinutes: metrics.lateMinutes,
-            earlyLeaveMinutes: metrics.earlyLeaveMinutes,
-            workingHours: metrics.workingHours,
-            overtimeHours: metrics.overtimeHours,
+            checkIn2: corr.requestedCheckIn2 ?? beforeAttendance?.checkIn2 ?? null,
+            checkOut2: corr.requestedCheckOut2 ?? beforeAttendance?.checkOut2 ?? null,
+          };
+          const legacyFinalOut =
+            !corr.requestedCheckIn2 &&
+            !corr.requestedCheckOut2 &&
+            corr.requestedCheckOut >= "14:30";
+          const hasAfternoonIn = Boolean(punches.checkIn2);
+          if (legacyFinalOut && hasAfternoonIn) {
+            punches.checkOut = beforeAttendance?.checkOut ?? null;
+            punches.checkOut2 = corr.requestedCheckOut;
+          }
+          const metrics = legacyFinalOut && !hasAfternoonIn
+            ? calculateAttendanceMetrics(corr.requestedCheckIn, corr.requestedCheckOut)
+            : validateFourPunches(punches);
+          const values = {
+            ...punches,
+            ...metrics,
             isApproved: true,
-            notes: `Approved Correction #${corr.id}`,
-          });
+            notes: `${beforeAttendance?.notes ? `${beforeAttendance.notes} | ` : ""}Corrected via request #${corr.id}`,
+          };
+          [updatedAttendance] = beforeAttendance
+            ? await tx
+                .update(attendances)
+                .set(values)
+                .where(eq(attendances.id, beforeAttendance.id))
+                .returning()
+            : await tx
+                .insert(attendances)
+                .values({ employeeId: corr.employeeId, date: corr.date, ...values })
+                .returning();
         }
-      }
+
+        await tx
+          .update(attendanceCorrections)
+          .set({ status: decision, approvedBy: currentUser.name, approvedAt: new Date() })
+          .where(eq(attendanceCorrections.id, corr.id));
+        return { correction: corr, beforeAttendance, updatedAttendance };
+      });
 
       await logAudit({
         userId: currentUser.id,
@@ -1247,11 +1488,29 @@ export async function POST(req: NextRequest) {
         userRole: currentUser.role,
         action: decision === "Approved" ? "APPROVE" : "REJECT",
         entity: "AttendanceCorrection",
-        recordId: String(corr.id),
-        afterData: { decision, date: corr.date, checkIn: corr.requestedCheckIn, checkOut: corr.requestedCheckOut },
+        recordId: String(result.correction.id),
+        afterData: {
+          decision,
+          date: result.correction.date,
+          checkIn: result.correction.requestedCheckIn,
+          checkOut: result.correction.requestedCheckOut,
+          checkIn2: result.correction.requestedCheckIn2,
+          checkOut2: result.correction.requestedCheckOut2,
+        },
       });
-
-      return NextResponse.json({ success: true });
+      if (result.updatedAttendance) {
+        await logAudit({
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          action: "UPDATE",
+          entity: "Attendance",
+          recordId: String(result.updatedAttendance.id),
+          beforeData: result.beforeAttendance,
+          afterData: result.updatedAttendance,
+        });
+      }
+      return NextResponse.json({ success: true, attendance: result.updatedAttendance });
     }
 
     // =========================================================================
@@ -4012,161 +4271,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, journalEntry: jv });
     }
 
-        // =========================================================================
-    // 3. ATTENDANCE WORKFLOW (দিনে ৪ বার পাঞ্চ: সকাল ৯:৩০-১:১৫ এবং দুপুর ২:৩০-৭:৩০)
-    // =========================================================================
-    if (action === "checkIn") {
-      const canManageOthers = canViewAllEmployeeProfiles(currentUser.role);
-      if (
-        !canManageOthers &&
-        body.employeeId &&
-        Number(body.employeeId) !== currentUser.employeeId
-      ) {
-        return NextResponse.json(
-          { error: "Forbidden: Staff can only record their own IN TIME." },
-          { status: 403 }
-        );
-      }
-
-      const employeeId = Number(body.employeeId || currentUser.employeeId);
-      const checkInTime = body.checkIn || new Date().toTimeString().slice(0, 5);
-      const date = body.date || today;
-
-      // শিফট নির্ধারণ: দুপুর ২:০০ (14:00) এর আগের পাঞ্চ হলো সকালের শিফট, পরেরটা বিকালের শিফট
-      const isMorningShift = checkInTime < "14:00";
-      
-      // সকাল ৯:৩০ এর পর আসলে লেট মিনিট গণনা (অফিসিয়াল সময় ০৯:৩০)
-      let lateMinutes = 0;
-      if (isMorningShift && checkInTime > "09:30") {
-        const [h, m] = checkInTime.split(":").map(Number);
-        lateMinutes = Math.max(0, (h * 60 + m) - (9 * 60 + 30));
-      }
-
-      // একই দিনের আগের এন্ট্রি আছে কিনা চেক
-      const [existing] = await db
-        .select()
-        .from(attendances)
-        .where(
-          and(
-            eq(attendances.employeeId, employeeId),
-            eq(attendances.date, date)
-          )
-        );
-
-      let att;
-      if (!existing) {
-        // দিনের প্রথম পাঞ্চ (সকাল ০৯:৩০)
-        const [created] = await db
-          .insert(attendances)
-          .values({
-            employeeId,
-            date,
-            checkIn: checkInTime,
-            checkOut: null,
-            status: lateMinutes > 0 ? "Late" : "Present",
-            lateMinutes,
-            earlyLeaveMinutes: 0,
-            morningHours: "0.00",
-            afternoonHours: "0.00",
-            workingHours: "0.00",
-            overtimeHours: "0.00",
-            isApproved: true,
-            notes: isMorningShift ? "সকালের প্রবেশ (Morning IN)" : "বিকালের প্রবেশ (Afternoon IN)",
-          })
-          .returning();
-        att = created;
-      } else {
-        // দিনের ২য় প্রবেশ (দুপুর ০২:৩০ এর পাঞ্চ)
-        // নতুন রো তৈরি না করে একই রো-তে বিকালের সেশন আপডেট
-        const [updated] = await db
-          .update(attendances)
-          .set({
-            notes: `${existing.notes || ""} | বিকাল প্রবেশ: ${checkInTime}`,
-            status: existing.status === "Late" || lateMinutes > 0 ? "Late" : existing.status,
-          })
-          .where(eq(attendances.id, existing.id))
-          .returning();
-        att = updated;
-      }
-
-      return NextResponse.json({ success: true, attendance: att });
-    }
-
-    if (action === "checkOut") {
-      const employeeId = Number(body.employeeId || currentUser.employeeId);
-      const checkOutTime = body.checkOut || new Date().toTimeString().slice(0, 5);
-      const date = body.date || today;
-
-      const [existing] = await db
-        .select()
-        .from(attendances)
-        .where(
-          and(
-            eq(attendances.employeeId, employeeId),
-            eq(attendances.date, date)
-          )
-        );
-
-      if (!existing) {
-        return NextResponse.json({ error: "আজকের কোনো প্রবেশ (In-Time) রেকর্ড পাওয়া যায়নি!" }, { status: 404 });
-      }
-
-      if (
-        !canViewAllEmployeeProfiles(currentUser.role) &&
-        existing.employeeId !== currentUser.employeeId
-      ) {
-        return NextResponse.json(
-          { error: "Forbidden: Staff can only record their own OUT TIME." },
-          { status: 403 }
-        );
-      }
-
-      // বের হওয়ার সময় যাচাই:
-      // দুপুর ৩:০০ (15:00) এর আগে বের হলে ১ম শিফট আউট (০১:১৫)
-      // দুপুর ৩:০০ এর পরে বের হলে ফাইনাল আউট (০৭:৩০)
-      const isMorningOut = checkOutTime < "15:00";
-
-      let morningHours = Number(existing.morningHours || 0);
-      let afternoonHours = Number(existing.afternoonHours || 0);
-      let overtimeHours = 0;
-
-      if (isMorningOut && existing.checkIn) {
-        // সকালের কাজের সময় হিসাব (checkIn থেকে checkOut)
-        const [inH, inM] = existing.checkIn.split(":").map(Number);
-        const [outH, outM] = checkOutTime.split(":").map(Number);
-        const mins = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
-        morningHours = Number((mins / 60).toFixed(2));
-      } else {
-        // রাত ০৭:৩০ এর পর বের হলে ওভারটাইম গণনা (অফিস ছুটি ১৯:৩০)
-        if (checkOutTime > "19:30") {
-          const [outH, outM] = checkOutTime.split(":").map(Number);
-          const otMins = Math.max(0, (outH * 60 + outM) - (19 * 60 + 30));
-          overtimeHours = Number((otMins / 60).toFixed(2));
-        }
-        // বিকালের সময় হিসাব (ধরে নেওয়া হয়েছে দুপুর ২:৩০ থেকে বের হওয়ার সময় পর্যন্ত)
-        const [outH, outM] = checkOutTime.split(":").map(Number);
-        const pmMins = Math.max(0, (outH * 60 + outM) - (14 * 60 + 30));
-        afternoonHours = Number((pmMins / 60).toFixed(2));
-      }
-
-      const totalWorkHours = Number((morningHours + afternoonHours).toFixed(2));
-
-      const [updated] = await db
-        .update(attendances)
-        .set({
-          checkOut: checkOutTime, // শেষ আউট টাইম
-          morningHours: String(morningHours),
-          afternoonHours: String(afternoonHours),
-          workingHours: String(totalWorkHours),
-          overtimeHours: String(overtimeHours),
-          notes: `${existing.notes || ""} | আউট: ${checkOutTime}`,
-        })
-        .where(eq(attendances.id, existing.id))
-        .returning();
-
-      return NextResponse.json({ success: true, attendance: updated });
-    }
-
     // =========================================================================
     // 13. PAYROLL MODULE (সকাল ৯:৩০ - রাত ৭:৩০ এবং ৮.৭৫ ঘণ্টা কর্মসময় অনুযায়ী)
     // =========================================================================
@@ -4575,114 +4679,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "runReminderAutomation") {
-      const [settings] = await db.select().from(reminderSettings);
-      const allEmps = await db.select().from(employees);
-      const todayAtt = (await db.select().from(attendances)).filter(
-        (a) => a.date === today
-      );
-      const todayPlans = (await db.select().from(dailyWorkPlans)).filter(
-        (p) => p.date === today
-      );
-      const todayWorks = (await db.select().from(dailyWorks)).filter(
-        (d) => d.date === today
-      );
-      const allTasksList = await db.select().from(tasks);
-
-      const checkedInSet = new Set(todayAtt.map((a) => a.employeeId));
-      const plannedSet = new Set(todayPlans.map((p) => p.employeeId));
-      const summarySet = new Set(todayWorks.map((d) => d.employeeId));
-
-      const missingCheckInNames = allEmps
-        .filter((e) => !checkedInSet.has(e.id))
-        .map((e) => e.name);
-      const missingPlanNames = allEmps
-        .filter((e) => !plannedSet.has(e.id))
-        .map((e) => e.name);
-      const missingSummaryNames = allEmps
-        .filter((e) => !summarySet.has(e.id))
-        .map((e) => e.name);
-      const overdueTasksList = allTasksList.filter(
-        (t) =>
-          t.dueDate < today &&
-          t.status !== "Completed" &&
-          t.status !== "Cancelled"
-      );
-
-      if (missingPlanNames.length > 0) {
-        await createNotification({
-          targetRole: "All",
-          type: "Work Plan Reminder",
-          title: `Work Plan Reminder (${settings?.workPlanReminderTime || "10:00"} AM)`,
-          message: `à¦†à¦œà¦•à§‡à¦° Today's Work Plan à¦à¦–à¦¨à¦“ à¦¸à¦¾à¦¬à¦®à¦¿à¦Ÿ à¦•à¦°à§‡à¦¨à¦¨à¦¿: ${missingPlanNames.join(", ")}à¥¤ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ My Day-à¦¤à§‡ à¦ªà¦°à¦¿à¦•à¦²à§à¦ªà¦¨à¦¾ à¦¯à§à¦•à§à¦¤ à¦•à¦°à§à¦¨à¥¤`,
-          createdBy: "Reminder Automation",
-          priority: "High",
-          assignedPersonOrTeam: "All Staff",
-          dueDate: today,
-          relatedUrl: "/my-day",
-          relatedEntityCode: "REM-PLAN",
-        });
+      if (!canViewAllEmployeeProfiles(currentUser.role)) {
+        return NextResponse.json(
+          { error: "Forbidden: Management/HR permission required." },
+          { status: 403 }
+        );
       }
-
-      if (missingSummaryNames.length > 0) {
-        await createNotification({
-          targetRole: "All",
-          type: "Daily Work Reminder",
-          title: `Daily Work Summary Reminder (${settings?.dailySummaryReminderTime || "18:30"} PM)`,
-          message: `à¦…à¦«à¦¿à¦¸ à¦¶à§‡à¦· à¦¹à¦“à§Ÿà¦¾à¦° à¦†à¦—à§‡ à¦†à¦œà¦•à§‡à¦° à¦•à¦¾à¦œà§‡à¦° à¦¸à¦¾à¦°à¦¾à¦‚à¦¶ (Daily Work Summary) à¦¸à¦¾à¦¬à¦®à¦¿à¦Ÿ à¦•à¦°à§à¦¨à¥¤ à¦ªà§‡à¦¨à§à¦¡à¦¿à¦‚: ${missingSummaryNames.join(", ")}`,
-          createdBy: "Reminder Automation",
-          priority: "High",
-          assignedPersonOrTeam: "All Staff",
-          dueDate: today,
-          relatedUrl: "/my-day",
-          relatedEntityCode: "REM-SUMMARY",
-        });
-      }
-
-      if (missingCheckInNames.length > 0) {
-        await createNotification({
-          targetRole: "All",
-          type: "Attendance Correction",
-          title: `IN TIME Reminder (After ${settings?.lateCheckInAfter || "09:30"} AM)`,
-          message: `${missingCheckInNames.join(", ")} à¦à¦–à¦¨à¦“ à¦†à¦œà¦•à§‡à¦° IN TIME à¦¦à§‡à¦¨à¦¨à¦¿à¥¤`,
-          createdBy: "Reminder Automation",
-          priority: "Medium",
-          assignedPersonOrTeam: "All Staff",
-          dueDate: today,
-          relatedUrl: "/attendance",
-          relatedEntityCode: "REM-IN",
-        });
-      }
-
-      if (
-        (settings?.enableOverdueTaskReminder ?? true) &&
-        overdueTasksList.length > 0
-      ) {
-        await createNotification({
-          targetRole: "All",
-          type: "Task Overdue",
-          title: `Overdue & Pending Task Reminder (${overdueTasksList.length} tasks)`,
-          message: `Overdue tasks requiring immediate action: ${overdueTasksList
-            .map((t) => t.taskCode)
-            .join(", ")}`,
-          createdBy: "Reminder Automation",
-          priority: "Critical",
-          assignedPersonOrTeam: "Assigned Staff",
-          dueDate: today,
-          relatedTaskId: overdueTasksList[0].id,
-          relatedUrl: `/tasks/${overdueTasksList[0].id}`,
-          relatedEntityCode: overdueTasksList[0].taskCode,
-        });
-      }
-
+      const attendanceReminders = await runReminderAutomation();
+      const taskReminders = await runTaskDeadlineScan();
       return NextResponse.json({
         success: true,
-        dispatched: {
-          missingCheckIn: missingCheckInNames.length,
-          missingPlan: missingPlanNames.length,
-          missingSummary: missingSummaryNames.length,
-          overdueTasks: overdueTasksList.length,
-        },
+        dispatched: { ...attendanceReminders, ...taskReminders },
       });
+
+      const [settings] = await db.select().from(reminderSettings);
     }
 
     return NextResponse.json({ error: `Unknown ERP action: ${action}` }, { status: 400 });

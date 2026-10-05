@@ -81,17 +81,6 @@ const hoursFromHHMM = (hhmm: string): number => {
   return h * 60 + (m || 0);
 };
 
-const isWeeklyRestDate = (date: string): boolean =>
-  new Date(`${date}T00:00:00Z`).getUTCDay() === 5;
-
-const hasApprovedLeaveOn = (leaveRequests: any[], employeeId: number, date: string): boolean =>
-  leaveRequests.some((leave) =>
-    Number(leave.employeeId) === employeeId &&
-    leave.status === "Approved" &&
-    leave.startDate <= date &&
-    leave.endDate >= date
-  );
-
 // ============================================================================
 // 📦 Strongly-typed Interfaces (No more `any` abuse)
 // ============================================================================
@@ -101,7 +90,6 @@ type AttendanceStatus =
   | "Early Leave"
   | "Missing Checkout"
   | "Leave"
-  | "Holiday"
   | "Absent";
 
 type Attendance = {
@@ -110,8 +98,6 @@ type Attendance = {
   date: string;
   checkIn?: string;
   checkOut?: string;
-  checkIn2?: string;
-  checkOut2?: string;
   status?: AttendanceStatus;
   workingHours?: number | string;
   morningHours?: number | string;
@@ -121,48 +107,6 @@ type Attendance = {
   overtimeHours?: number | string;
   notes?: string;
 };
-
-function consolidateDailyAttendance(rows: Attendance[]) {
-  const grouped = new Map<string, Attendance>();
-  const seen = new Set<string>();
-  for (const row of rows) {
-    const key = `${row.employeeId}_${row.date}`;
-    const signature = JSON.stringify([
-      row.checkIn, row.checkOut, row.checkIn2, row.checkOut2,
-      row.workingHours, row.morningHours, row.afternoonHours, row.overtimeHours,
-    ]);
-    if (seen.has(`${key}_${signature}`)) continue;
-    seen.add(`${key}_${signature}`);
-    const existing = grouped.get(key);
-    if (!existing) {
-      grouped.set(key, { ...row });
-      continue;
-    }
-    const earliest = (left?: string, right?: string) =>
-      !left ? right : !right ? left : left < right ? left : right;
-    const latest = (left?: string, right?: string) =>
-      !left ? right : !right ? left : left > right ? left : right;
-    grouped.set(key, {
-      ...existing,
-      checkIn: earliest(existing.checkIn, row.checkIn),
-      checkOut: latest(existing.checkOut, row.checkOut),
-      checkIn2: earliest(existing.checkIn2, row.checkIn2),
-      checkOut2: latest(existing.checkOut2, row.checkOut2),
-      morningHours: num(existing.morningHours) + num(row.morningHours),
-      afternoonHours: num(existing.afternoonHours) + num(row.afternoonHours),
-      workingHours: num(existing.workingHours) + num(row.workingHours),
-      overtimeHours: num(existing.overtimeHours) + num(row.overtimeHours),
-      lateMinutes: Math.max(num(existing.lateMinutes), num(row.lateMinutes)),
-      earlyLeaveMinutes: Math.max(num(existing.earlyLeaveMinutes), num(row.earlyLeaveMinutes)),
-      status: existing.status === "Leave" || row.status === "Leave"
-        ? "Leave"
-        : existing.status === "Late" || row.status === "Late"
-          ? "Late"
-          : existing.status || row.status,
-    });
-  }
-  return Array.from(grouped.values());
-}
 
 type WorkPlanItem = {
   id: string;
@@ -356,25 +300,14 @@ export function DashboardView({
   const allEmps = data.allEmployeesDirectory || [];
 
   const todayAtt = useMemo(
-    () => consolidateDailyAttendance(attendances.filter((a) => a.date === today)),
+    () => attendances.filter((a) => a.date === today),
     [attendances, today]
   );
-  const leaveRequests = data.leaveRequests || [];
 
   const myTodayAtt = useMemo(() => {
     if (!myEmpId) return undefined;
     return todayAtt.find((a) => Number(a.employeeId) === Number(myEmpId));
   }, [todayAtt, myEmpId]);
-
-  const nextPunch = !myTodayAtt?.checkIn
-    ? { action: "checkIn", label: "সকাল IN" }
-    : !myTodayAtt.checkOut
-      ? { action: "checkOut", label: "সকাল OUT" }
-      : !myTodayAtt.checkIn2
-        ? { action: "checkIn", label: "বিকাল IN" }
-        : !myTodayAtt.checkOut2
-          ? { action: "checkOut", label: "বিকাল OUT" }
-          : null;
 
   const todayWorkPlans = useMemo(
     () => workPlans.filter((p) => p.date === today),
@@ -445,13 +378,24 @@ export function DashboardView({
       (l: any) => Number(l.employeeId) === Number(myEmpId)
     );
 
-    const handleQuickAttendance = () => {
-      if (!nextPunch) return;
-      return onMutate({
-        action: nextPunch.action,
+    const handleQuickCheckIn = () =>
+      onMutate({
+        action: "checkIn",
         employeeId: myEmpId,
-        attendanceId: myTodayAtt?.id,
-        notes: `Quick ${nextPunch.label} from Staff Dashboard`,
+        date: today,
+        checkIn: getNowTimeBD(),
+        notes: "Quick IN from Staff Dashboard",
+      });
+
+    const handleQuickCheckOut = () => {
+      if (!myTodayAtt) {
+        alert("Please record IN TIME first.");
+        return;
+      }
+      onMutate({
+        action: "checkOut",
+        attendanceId: myTodayAtt.id,
+        checkOut: getNowTimeBD(),
       });
     };
 
@@ -471,12 +415,10 @@ export function DashboardView({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={handleQuickAttendance}
-              disabled={!nextPunch}
-              className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition"
+              onClick={handleQuickCheckIn}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition"
             >
-              {nextPunch?.action === "checkOut" ? <LogOut className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
-              {nextPunch ? `পরবর্তী punch: ${nextPunch.label}` : "আজকের ৪টি punch complete"}
+              <LogIn className="w-4 h-4" /> 1. IN TIME
             </button>
             <Link
               href="/my-day"
@@ -496,6 +438,13 @@ export function DashboardView({
             >
               <Send className="w-4 h-4 text-amber-400" /> 4. Daily Update
             </Link>
+            <button
+              type="button"
+              onClick={handleQuickCheckOut}
+              className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 transition"
+            >
+              <LogOut className="w-4 h-4" /> 5. OUT TIME
+            </button>
           </div>
         </div>
 
@@ -795,82 +744,40 @@ export function DashboardView({
   // ===========================================================================
   // MANAGEMENT & OWNER DASHBOARD
   // ===========================================================================
-  const activeEmployees = allEmps.filter((employee: any) => !employee.archived);
-  const activeEmployeeIds = new Set(activeEmployees.map((employee: any) => Number(employee.id)));
-  const totalEmpCount = activeEmployees.length;
-  const activeTodayAttendance = todayAtt.filter((attendance) =>
-    activeEmployeeIds.has(Number(attendance.employeeId))
-  );
+  const totalEmpCount = allEmps.length;
 
-  const todayAttendanceByEmployee = new Map(
-    activeTodayAttendance.map((attendance) => [Number(attendance.employeeId), attendance])
+  const checkedInToday = todayAtt.filter((a) => Boolean(a.checkIn)).length;
+  const checkedOutToday = todayAtt.filter((a) => Boolean(a.checkOut)).length;
+  const presentToday = todayAtt.filter((a) =>
+    ["Present", "Late", "Early Leave", "Missing Checkout"].includes(
+      a.status || ""
+    )
+  ).length;
+  const lateToday = todayAtt.filter((a) => a.status === "Late").length;
+  const onLeaveToday = todayAtt.filter((a) => a.status === "Leave").length;
+  const absentToday = Math.max(
+    0,
+    totalEmpCount - presentToday - onLeaveToday
   );
-  const presentTodayIds = new Set(
-    activeTodayAttendance
-      .filter((attendance) =>
-        Boolean(attendance.checkIn || attendance.checkIn2) ||
-        ["Present", "Late", "Early Leave", "Missing Checkout"].includes(attendance.status || "")
-      )
-      .map((attendance) => Number(attendance.employeeId))
-  );
-  const leaveTodayIds = new Set(activeEmployees.filter((employee: any) => {
-    const id = Number(employee.id);
-    return !presentTodayIds.has(id) && (
-      todayAttendanceByEmployee.get(id)?.status === "Leave" ||
-      hasApprovedLeaveOn(leaveRequests, id, today)
-    );
-  }).map((employee: any) => Number(employee.id)));
-  const holidayTodayIds = new Set(activeTodayAttendance
-    .filter((attendance) => attendance.status === "Holiday")
-    .map((attendance) => Number(attendance.employeeId)));
-  const checkedInToday = activeTodayAttendance.filter((a) => Boolean(a.checkIn)).length;
-  const checkedOutToday = activeTodayAttendance.filter((a) => Boolean(a.checkOut2 || a.checkOut)).length;
-  const presentToday = presentTodayIds.size;
-  const lateToday = activeTodayAttendance.filter((a) => a.status === "Late").length;
-  const onLeaveToday = leaveTodayIds.size;
-  const absentToday = isWeeklyRestDate(today) || liveTime <= "09:30"
-    ? 0
-    : activeEmployees.filter((employee: any) => {
-        const id = Number(employee.id);
-        return !presentTodayIds.has(id) && !leaveTodayIds.has(id) && !holidayTodayIds.has(id);
-      }).length;
 
   const selectedDateAttendances = useMemo(
-    () => consolidateDailyAttendance(attendances.filter((a) => a.date === attendanceDate)),
+    () => attendances.filter((a) => a.date === attendanceDate),
     [attendances, attendanceDate]
   );
-  const selectedDateActiveAttendance = selectedDateAttendances.filter((attendance) =>
-    activeEmployeeIds.has(Number(attendance.employeeId))
-  );
-  const selectedDateByEmployee = new Map(
-    selectedDateActiveAttendance.map((attendance) => [Number(attendance.employeeId), attendance])
-  );
-  const selectedPresentIds = new Set(selectedDateActiveAttendance
-    .filter((attendance) =>
-      Boolean(attendance.checkIn || attendance.checkIn2) ||
-      ["Present", "Late", "Early Leave", "Missing Checkout"].includes(attendance.status || "")
+
+  const selectedDatePresent = selectedDateAttendances.filter((a) =>
+    ["Present", "Late", "Early Leave", "Missing Checkout"].includes(
+      a.status || ""
     )
-    .map((attendance) => Number(attendance.employeeId)));
-  const selectedLeaveIds = new Set(activeEmployees.filter((employee: any) => {
-    const id = Number(employee.id);
-    return !selectedPresentIds.has(id) && (
-      selectedDateByEmployee.get(id)?.status === "Leave" ||
-      hasApprovedLeaveOn(leaveRequests, id, attendanceDate)
-    );
-  }).map((employee: any) => Number(employee.id)));
-  const selectedHolidayIds = new Set(selectedDateActiveAttendance
-    .filter((attendance) => attendance.status === "Holiday")
-    .map((attendance) => Number(attendance.employeeId)));
-  const selectedDatePresent = selectedPresentIds.size;
-  const selectedDateLeave = selectedLeaveIds.size;
-  const selectedDateAbsent = attendanceDate > today || isWeeklyRestDate(attendanceDate) ||
-    (attendanceDate === today && liveTime <= "09:30")
-    ? 0
-    : activeEmployees.filter((employee: any) => {
-        const id = Number(employee.id);
-        return !selectedPresentIds.has(id) && !selectedLeaveIds.has(id) && !selectedHolidayIds.has(id);
-      }).length;
-  const selectedDateLate = selectedDateActiveAttendance.filter(
+  ).length;
+  const selectedDateLeave = selectedDateAttendances.filter(
+    (a) => a.status === "Leave"
+  ).length;
+  const selectedDateAbsent = Math.max(
+    0,
+    totalEmpCount - selectedDatePresent - selectedDateLeave
+  );
+  const selectedDateLate = selectedDateAttendances.filter(
     (a) => a.status === "Late"
   ).length;
 
@@ -894,7 +801,7 @@ export function DashboardView({
   const updatedEmpIdsToday = new Set(
     todayDailyWorks.map((d: any) => Number(d.employeeId))
   );
-  const staffWithoutDailyUpdate = activeEmployees.filter(
+  const staffWithoutDailyUpdate = allEmps.filter(
     (e: any) => !updatedEmpIdsToday.has(Number(e.id))
   );
 
@@ -1122,10 +1029,8 @@ export function DashboardView({
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
                 <th className="p-3 font-semibold">কর্মচারী</th>
                 <th className="p-3 font-semibold">পদবি</th>
-                <th className="p-3 font-semibold">সকাল IN</th>
-                <th className="p-3 font-semibold">সকাল OUT</th>
-                <th className="p-3 font-semibold">বিকাল IN</th>
-                <th className="p-3 font-semibold">বিকাল OUT</th>
+                <th className="p-3 font-semibold">ইন টাইম</th>
+                <th className="p-3 font-semibold">আউট টাইম</th>
                 <th className="p-3 font-semibold">মোট ঘণ্টা</th>
                 <th className="p-3 font-semibold">লেট</th>
                 <th className="p-3 font-semibold">ওভারটাইম</th>
@@ -1133,49 +1038,24 @@ export function DashboardView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {allEmps
-                .filter((employee: any) =>
-                  !employee.archived || selectedDateAttendances.some((a) => Number(a.employeeId) === Number(employee.id))
-                )
-                .map((emp: any) => {
+              {allEmps.map((emp: any) => {
                 // ⭐ সঠিক আইডি ম্যাচিং (নাম্বার টাইপ কাস্টিং সহ)
                 const att = selectedDateAttendances.find(
                   (a) => Number(a.employeeId) === Number(emp.id)
                 );
-                const legacyFinalOut = Boolean(
-                  att?.checkOut && !att.checkOut2 && att.checkOut >= "14:30"
-                );
-                const hasPresence = Boolean(att?.checkIn || att?.checkIn2) ||
-                  ["Present", "Late", "Early Leave", "Missing Checkout"].includes(att?.status || "");
-                const isApprovedLeave = hasApprovedLeaveOn(leaveRequests, Number(emp.id), attendanceDate);
-                const status = attendanceDate > today && !att
-                  ? "—"
-                  : hasPresence
-                  ? att?.status || "Present"
-                  : att?.status === "Leave" || isApprovedLeave
-                    ? "Leave"
-                    : att?.status === "Holiday" || isWeeklyRestDate(attendanceDate)
-                      ? "Holiday"
-                      : att?.status || "Absent";
+                const status = att?.status || (att?.checkIn ? "Present" : "Absent");
                 return (
                   <tr key={emp.id} className="hover:bg-slate-50 transition">
                     <td className="p-3">
                       <div className="font-bold text-slate-900">{emp.name}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">ID: {emp.id} • {emp.empCode}</div>
-                      {emp.archived && <div className="text-[10px] text-amber-700">Archived historical record</div>}
+                      <div className="text-[10px] text-slate-500 font-mono">{emp.empCode}</div>
                     </td>
                     <td className="p-3 text-slate-600">{emp.designation || "—"}</td>
                     <td className="p-3 font-mono font-semibold text-emerald-700">
                       {att?.checkIn || "—"}
                     </td>
                     <td className="p-3 font-mono text-blue-700">
-                      {legacyFinalOut ? "—" : att?.checkOut || (att?.checkIn ? "কার্যরত" : "—")}
-                    </td>
-                    <td className="p-3 font-mono font-semibold text-emerald-700">
-                      {att?.checkIn2 || "—"}
-                    </td>
-                    <td className="p-3 font-mono text-blue-700">
-                      {att?.checkOut2 || (legacyFinalOut ? att?.checkOut : att?.checkIn2 ? "কার্যরত" : "—")}
+                      {att?.checkOut || (att?.checkIn ? "কার্যরত" : "—")}
                     </td>
                     <td className="p-3 font-mono font-semibold">
                       {att?.workingHours ? `${att.workingHours} ঘণ্টা` : "—"}
@@ -1699,18 +1579,12 @@ export function AttendanceView({
   // Correction state
   const [corrDate, setCorrDate] = useState(today);
   const [reqIn, setReqIn] = useState("09:30");
-  const [reqOut, setReqOut] = useState("13:15");
-  const [reqIn2, setReqIn2] = useState("");
-  const [reqOut2, setReqOut2] = useState("");
+  const [reqOut, setReqOut] = useState("19:30");
   const [corrReason, setCorrReason] = useState("");
 
   const empMap = useMemo(
     () => new Map<number, any>((data.allEmployeesDirectory || []).map((e: any) => [Number(e.id), e])),
     [data.allEmployeesDirectory]
-  );
-  const registerRows = useMemo(
-    () => consolidateDailyAttendance(data.attendances || []),
-    [data.attendances]
   );
 
   const handleCheckIn = useCallback(
@@ -1720,18 +1594,22 @@ export function AttendanceView({
         action: "checkIn",
         employeeId: Number(employeeId),
         date: today,
+        checkIn: checkInTime,
         notes,
       });
     },
-    [employeeId, today, notes, onMutate]
+    [employeeId, today, checkInTime, notes, onMutate]
   );
 
   const handleCheckOut = useCallback(
-    async (attendanceId: number, targetEmployeeId: number) => {
+    async (attendanceId: number) => {
+      const currentBDTime = getNowTimeBD() || "19:30";
+      const outTime = prompt("Enter OUT TIME (HH:mm, Official End 19:30):", currentBDTime);
+      if (!outTime) return;
       await onMutate({
         action: "checkOut",
         attendanceId,
-        employeeId: targetEmployeeId,
+        checkOut: outTime,
       });
     },
     [onMutate]
@@ -1746,13 +1624,11 @@ export function AttendanceView({
         date: corrDate,
         requestedCheckIn: reqIn,
         requestedCheckOut: reqOut,
-        requestedCheckIn2: reqIn2 || null,
-        requestedCheckOut2: reqOut2 || null,
         reason: corrReason,
       });
       setCorrReason("");
     },
-    [employeeId, corrDate, reqIn, reqOut, reqIn2, reqOut2, corrReason, onMutate]
+    [employeeId, corrDate, reqIn, reqOut, corrReason, onMutate]
   );
 
   return (
@@ -1778,7 +1654,7 @@ export function AttendanceView({
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => exportToCSV("INSAF_Attendance", registerRows)}
+            onClick={() => exportToCSV("INSAF_Attendance", data.attendances || [])}
             className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700"
           >
             CSV এক্সপোর্ট
@@ -1786,7 +1662,7 @@ export function AttendanceView({
           <button
             type="button"
             onClick={() =>
-              exportToPDFPrint("হাজিরা রেজিস্টার", `As of ${today}`, registerRows)
+              exportToPDFPrint("হাজিরা রেজিস্টার", `As of ${today}`, data.attendances || [])
             }
             className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-white flex items-center gap-1"
           >
@@ -1821,12 +1697,12 @@ export function AttendanceView({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                IN TIME (Asia/Dhaka server time)
+                IN TIME (Shift 09:30)
               </label>
               <input
                 type="time"
                 value={checkInTime}
-                readOnly
+                onChange={(e) => setCheckInTime(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
               />
             </div>
@@ -1883,7 +1759,7 @@ export function AttendanceView({
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Morning OUT</label>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Requested OUT</label>
               <input
                 type="time"
                 required
@@ -1891,16 +1767,6 @@ export function AttendanceView({
                 onChange={(e) => setReqOut(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
               />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Afternoon IN (optional)</label>
-              <input type="time" value={reqIn2} onChange={(e) => setReqIn2(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Afternoon OUT (optional)</label>
-              <input type="time" value={reqOut2} onChange={(e) => setReqOut2(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
             </div>
           </div>
           <div className="flex gap-3">
@@ -1986,7 +1852,7 @@ export function AttendanceView({
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
         <div className="p-4 border-b border-slate-200 flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900">
-            হাজিরা রেজিস্টার ({registerRows.length} employee-days)
+            হাজিরা রেজিস্টার ({(data.attendances || []).length} records)
           </h3>
         </div>
         <div className="overflow-x-auto">
@@ -1995,10 +1861,8 @@ export function AttendanceView({
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
                 <th className="p-3 font-semibold">তারিখ</th>
                 <th className="p-3 font-semibold">কর্মচারী</th>
-                <th className="p-3 font-semibold">সকাল IN</th>
-                <th className="p-3 font-semibold">সকাল OUT</th>
-                <th className="p-3 font-semibold">বিকাল IN</th>
-                <th className="p-3 font-semibold">বিকাল OUT</th>
+                <th className="p-3 font-semibold">ইন</th>
+                <th className="p-3 font-semibold">আউট</th>
                 <th className="p-3 font-semibold">সকাল / বিকাল</th>
                 <th className="p-3 font-semibold">মোট ঘণ্টা</th>
                 <th className="p-3 font-semibold">লেট / আগে-বের</th>
@@ -2008,7 +1872,7 @@ export function AttendanceView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {registerRows.map((a: any) => {
+              {(data.attendances || []).map((a: any) => {
                 // ⭐ নিরাপদ আইডি লুকআপ যাতে কোনো কর্মচারীর নাম মিস না হয়
                 const emp = empMap.get(Number(a.employeeId));
                 return (
@@ -2018,13 +1882,10 @@ export function AttendanceView({
                       <div className="font-bold text-slate-900">
                         {emp?.name || `Employee #${a.employeeId}`}
                       </div>
-                      <div className="text-[11px] text-slate-400">ID: {a.employeeId} • {emp?.empCode || "Code unavailable"}</div>
-                      {emp?.archived && <div className="text-[10px] text-amber-700">Archived historical record</div>}
+                      <div className="text-[11px] text-slate-400">{emp?.empCode}</div>
                     </td>
                     <td className="p-3 font-mono font-bold text-emerald-700">{a.checkIn || "—"}</td>
                     <td className="p-3 font-mono font-bold text-slate-800">{a.checkOut || "—"}</td>
-                    <td className="p-3 font-mono font-bold text-emerald-700">{a.checkIn2 || "—"}</td>
-                    <td className="p-3 font-mono font-bold text-slate-800">{a.checkOut2 || "—"}</td>
                     <td className="p-3 font-mono text-slate-600">
                       {a.morningHours || "0.00"}h / {a.afternoonHours || "0.00"}h
                     </td>
@@ -2036,14 +1897,13 @@ export function AttendanceView({
                     <td className="p-3 text-indigo-600 font-semibold">{a.overtimeHours}h</td>
                     <td className="p-3"><StatusBadge status={a.status} /></td>
                     <td className="p-3">
-                      {a.date === today && a.status !== "Leave" && a.checkIn &&
-                        ((!a.checkOut) || (a.checkIn2 && !a.checkOut2)) && (
+                      {!a.checkOut && a.status !== "Leave" && (
                         <button
                           type="button"
-                          onClick={() => handleCheckOut(a.id, Number(a.employeeId))}
+                          onClick={() => handleCheckOut(a.id)}
                           className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold"
                         >
-                          {a.checkIn2 ? "বিকাল OUT দিন" : "সকাল OUT দিন"}
+                          আউট টাইম দিন
                         </button>
                       )}
                     </td>
@@ -2890,7 +2750,7 @@ export function MonthlyAttendanceView({
   // সাধারণ কর্মী কখনো অন্যের আইডি দেখতে পারবে না
   const [individualEmpId, setIndividualEmpId] = useState<number | null>(
     isManagement
-      ? (data.allEmployeesDirectory?.find((employee: any) => !employee.archived)?.id || data.allEmployeesDirectory?.[0]?.id || myEmpId || null)
+      ? (data.allEmployeesDirectory?.[0]?.id || myEmpId || null)
       : myEmpId
   );
   const [empSearch, setEmpSearch] = useState("");
@@ -2913,10 +2773,9 @@ export function MonthlyAttendanceView({
     [daysInMonth]
   );
 
-  const monthName = new Date(`${selectedMonth}-01T00:00:00Z`).toLocaleDateString("en-US", {
+  const monthName = new Date(selectedMonth + "-01").toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
-    timeZone: "UTC",
   });
 
     // ===== প্রতি কর্মী + প্রতি দিন = একটি রেকর্ড; দুই শিফটের চারটি punch =====
@@ -2943,18 +2802,9 @@ export function MonthlyAttendanceView({
         a.date.startsWith(`${selectedMonth}-`)
     );
 
-    const seenRows = new Set<string>();
     for (const a of rawList) {
       const employeeId = Number(a.employeeId);
       if (!Number.isInteger(employeeId) || employeeId <= 0) continue;
-
-      const signature = JSON.stringify([
-        a.checkIn, a.checkOut, a.checkIn2, a.checkOut2,
-        a.workingHours, a.morningHours, a.afternoonHours, a.overtimeHours,
-      ]);
-      const uniqueRowKey = `${employeeId}_${a.date}_${signature}`;
-      if (seenRows.has(uniqueRowKey)) continue;
-      seenRows.add(uniqueRowKey);
 
       const key = `${employeeId}_${a.date}`;
 
@@ -2988,11 +2838,11 @@ export function MonthlyAttendanceView({
         a.checkIn && a.checkIn >= "14:00" ? String(a.checkIn) : "";
 
       const morningOut =
-        a.checkOut && a.checkOut < "14:30"
+        a.checkOut && (a.checkIn2 || a.checkOut2 || a.checkOut < "15:00")
           ? String(a.checkOut)
           : "";
       const legacyEveningOut =
-        a.checkOut && !a.checkOut2 && a.checkOut >= "14:30"
+        a.checkOut && !a.checkIn2 && !a.checkOut2 && a.checkOut >= "15:00"
           ? String(a.checkOut)
           : "";
 
@@ -3062,47 +2912,29 @@ export function MonthlyAttendanceView({
     return map;
   }, [data.attendances, selectedMonth]);
 
-  const monthAttendances = useMemo(
-    () => Array.from(dailyAttendanceMap.values()),
-    [dailyAttendanceMap]
-  );
-
   // ফিল্টার করা কর্মচারী (ম্যানেজমেন্টের জন্য)
   const filteredEmployees = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const visibleEmployees = (data.allEmployeesDirectory || []).filter(
-      (employee: any) => !employee.archived || monthAttendances.some((attendance: any) => Number(attendance.employeeId) === Number(employee.id))
-    );
-    if (!q) return visibleEmployees;
-    return visibleEmployees.filter(
+    if (!q) return data.allEmployeesDirectory || [];
+    return (data.allEmployeesDirectory || []).filter(
       (e: any) =>
         (e.name || "").toLowerCase().includes(q) ||
         (e.empCode || "").toLowerCase().includes(q)
     );
-  }, [data.allEmployeesDirectory, search, monthAttendances]);
+  }, [data.allEmployeesDirectory, search]);
 
   const individualEmpChoices = useMemo(() => {
     const q = empSearch.trim().toLowerCase();
-    const all = (data.allEmployeesDirectory || []).filter(
-      (employee: any) => !employee.archived || monthAttendances.some((attendance: any) => Number(attendance.employeeId) === Number(employee.id))
-    );
+    const all = data.allEmployeesDirectory || [];
     if (!q) return all;
     return all.filter(
       (e: any) =>
         (e.name || "").toLowerCase().includes(q) ||
         (e.empCode || "").toLowerCase().includes(q)
     );
-  }, [data.allEmployeesDirectory, empSearch, monthAttendances]);
+  }, [data.allEmployeesDirectory, empSearch]);
 
-  const reportToday = getTodayLocal();
-  const reportCurrentMonth = reportToday.slice(0, 7);
-  const elapsedMonthDayCount = selectedMonth < reportCurrentMonth
-    ? daysInMonth
-    : selectedMonth > reportCurrentMonth
-      ? 0
-      : Number(reportToday.slice(8, 10)) - (getNowTimeBD() > "09:30" ? 0 : 1);
-
-  // Monthly totals count elapsed workdays, once per employee/date.
+  // মাসিক সারাংশ (১ দিনে ১টি উপস্থিতি কাউন্ট)
   const empMonthlySummary = useMemo(() => {
     const map = new Map<
       number,
@@ -3113,107 +2945,65 @@ export function MonthlyAttendanceView({
       }
     >();
 
-    const employees = data.allEmployeesDirectory || [];
-    for (const employee of employees) {
-      const employeeId = Number(employee.id);
-      if (!Number.isInteger(employeeId) || employeeId <= 0) continue;
-      const summary = {
-        present: 0, late: 0, leave: 0, absent: 0,
-        totalHours: 0, totalOT: 0, totalLateMin: 0,
-        firstIn: "99:99", lastOut: "00:00",
-      };
-
-      for (let day = 1; day <= elapsedMonthDayCount; day++) {
-        const date = `${selectedMonth}-${String(day).padStart(2, "0")}`;
-        const attendance = dailyAttendanceMap.get(`${employeeId}_${date}`);
-        const hasPunch = Boolean(attendance?.morningIn || attendance?.afternoonIn);
-        const present = hasPunch || ["Present", "Late", "Early Leave", "Missing Checkout"].includes(attendance?.status || "");
-        const leave = attendance?.status === "Leave" ||
-          hasApprovedLeaveOn(data.leaveRequests || [], employeeId, date);
-
-        if (attendance?.status === "Holiday") continue;
-        if (isWeeklyRestDate(date) && !hasPunch) continue;
-        if (leave && !hasPunch) {
-          summary.leave++;
-          continue;
-        }
-        if (present) {
-          summary.present++;
-          if (attendance?.status === "Late") summary.late++;
-          summary.totalHours += Number(attendance?.workingHours || 0);
-          summary.totalOT += Number(attendance?.overtimeHours || 0);
-          summary.totalLateMin += Number(attendance?.lateMinutes || 0);
-          const dayIn = attendance?.morningIn || attendance?.afternoonIn;
-          const dayOut = attendance?.eveningOut || attendance?.morningOut;
-          if (dayIn && dayIn < summary.firstIn) summary.firstIn = dayIn;
-          if (dayOut && dayOut > summary.lastOut) summary.lastOut = dayOut;
-        } else {
-          summary.absent++;
-        }
+    monthAttendances.forEach((a: any) => {
+      const empIdNum = Number(a.employeeId);
+      if (!map.has(empIdNum)) {
+        map.set(empIdNum, {
+          present: 0, late: 0, leave: 0, absent: 0,
+          totalHours: 0, totalOT: 0, totalLateMin: 0,
+          firstIn: "99:99", lastOut: "00:00",
+        });
       }
-      map.set(employeeId, summary);
-    }
+      const s = map.get(empIdNum)!;
+      const isPresent = Boolean(a.morningIn || a.afternoonIn || a.status === "Present" || a.status === "Late");
+
+      if (a.status === "Late") {
+        s.late += 1;
+        s.present += 1;
+      } else if (a.status === "Leave") {
+        s.leave += 1;
+      } else if (isPresent) {
+        s.present += 1;
+      } else {
+        s.absent += 1;
+      }
+
+      s.totalHours += Number(a.workingHours || 0);
+      s.totalOT += Number(a.overtimeHours || 0);
+      s.totalLateMin += Number(a.lateMinutes || 0);
+
+      const dayIn = a.morningIn || a.afternoonIn;
+      const dayOut = a.eveningOut || a.morningOut;
+
+      if (dayIn && dayIn < s.firstIn) s.firstIn = dayIn;
+      if (dayOut && dayOut > s.lastOut) s.lastOut = dayOut;
+    });
 
     return map;
-  }, [data.allEmployeesDirectory, data.leaveRequests, dailyAttendanceMap, elapsedMonthDayCount, selectedMonth]);
+  }, [monthAttendances]);
 
   const getDayAtt = (empId: number, day: number) => {
     const dateStr = `${selectedMonth}-${String(day).padStart(2, "0")}`;
     return dailyAttendanceMap.get(`${Number(empId)}_${dateStr}`);
   };
 
-  const getDayAttendanceState = useCallback((employeeId: number, day: number) => {
-    const date = `${selectedMonth}-${String(day).padStart(2, "0")}`;
-    const attendance = dailyAttendanceMap.get(`${Number(employeeId)}_${date}`);
-    const hasPunch = Boolean(attendance?.morningIn || attendance?.afternoonIn);
-    const isPresent = hasPunch || ["Present", "Late", "Early Leave", "Missing Checkout"].includes(attendance?.status || "");
-    const isHoliday = !isPresent && attendance?.status === "Holiday";
-    const isWeeklyRest = !isPresent && !isHoliday && isWeeklyRestDate(date);
-    const isLeave = !isPresent && !isHoliday && !isWeeklyRest && (
-      attendance?.status === "Leave" ||
-      hasApprovedLeaveOn(data.leaveRequests || [], Number(employeeId), date)
-    );
-    const isAbsent = !isPresent && !isHoliday && !isWeeklyRest && !isLeave && day <= elapsedMonthDayCount;
-    const morning = attendance?.morningIn || attendance?.morningOut
-      ? `১ম ${attendance.morningIn || "?"}-${attendance.morningOut || "?"}`
-      : "";
-    const afternoon = attendance?.afternoonIn || attendance?.eveningOut
-      ? `২য় ${attendance.afternoonIn || "?"}-${attendance.eveningOut || "?"}`
-      : "";
-    const punchDetails = [morning, afternoon].filter(Boolean).join("\n");
-    const text = isLeave
-      ? "LV"
-      : isHoliday
-        ? "H"
-        : isWeeklyRest
-          ? "W"
-          : isAbsent
-            ? "A"
-            : `${attendance?.status === "Late" ? "L\n" : ""}${punchDetails || (attendance?.status === "Present" ? "P" : "")}`;
-    return { attendance, isPresent, isLate: attendance?.status === "Late", isLeave, isHoliday, isWeeklyRest, isAbsent, text };
-  }, [data.leaveRequests, dailyAttendanceMap, elapsedMonthDayCount, selectedMonth]);
-
   // নির্বাচিত কর্মচারীর ১ থেকে ৩০ দিনের পূর্ণাঙ্গ দিনভিত্তিক রেকর্ড
   const individualDays = useMemo(() => {
     if (!activeEmpId) return [];
     return daysArray.map((day) => {
       const dateStr = `${selectedMonth}-${String(day).padStart(2, "0")}`;
-      const dateObj = new Date(`${dateStr}T00:00:00Z`);
-      const state = getDayAttendanceState(Number(activeEmpId), day);
+      const dateObj = new Date(dateStr);
       return {
         day,
         date: dateStr,
-        weekday: dateObj.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }),
-        weekdayBn: ["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"][dateObj.getUTCDay()],
-        isFriday: state.isWeeklyRest,
-        isSunday: dateObj.getUTCDay() === 0,
-        isApprovedLeave: state.isLeave,
-        isHoliday: state.isHoliday,
-        isAbsent: state.isAbsent,
-        att: state.attendance,
+        weekday: dateObj.toLocaleDateString("en-US", { weekday: "short" }),
+        weekdayBn: ["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"][dateObj.getDay()],
+        isFriday: dateObj.getDay() === 5,
+        isSunday: dateObj.getDay() === 0,
+        att: dailyAttendanceMap.get(`${Number(activeEmpId)}_${dateStr}`),
       };
     });
-  }, [activeEmpId, daysArray, selectedMonth, getDayAttendanceState]);
+  }, [activeEmpId, daysArray, selectedMonth, dailyAttendanceMap]);
 
   // ব্যক্তিগত সারাংশ
   const individualStats = useMemo(() => {
@@ -3234,25 +3024,36 @@ export function MonthlyAttendanceView({
 
   // CSV Exports
   const exportMonthlyCSV = () => {
-    const headers = ["Employee", "Employee ID", "Code", ...daysArray.map((d) => `Day ${d}`), "Present", "Late", "Leave", "Total Hrs", "OT Hrs"];
+    const headers = ["Employee", "Code", ...daysArray.map((d) => `Day ${d}`), "Present", "Late", "Leave", "Total Hrs", "OT Hrs"];
     const rows = filteredEmployees.map((emp: any) => {
       const s = empMonthlySummary.get(Number(emp.id));
       const dayCells = daysArray.map((d) => {
-        return getDayAttendanceState(Number(emp.id), d).text;
-      });
+        const att = getDayAtt(Number(emp.id), d);
+        if (!att) return "";
+       if (att.status === "Leave") return "LV";
+
+const morning = att.morningIn
+  ? `1st ${att.morningIn}-${att.morningOut || "?"}`
+  : "";
+
+const afternoon = att.afternoonIn
+  ? `2nd ${att.afternoonIn}-${att.eveningOut || "?"}`
+  : "";
+
+return [morning, afternoon].filter(Boolean).join(" | ") || att.status || "A";
       return [
-        emp.name, emp.id, emp.empCode, ...dayCells,
+        emp.name, emp.empCode, ...dayCells,
         s?.present || 0, s?.late || 0, s?.leave || 0,
         (s?.totalHours || 0).toFixed(2), (s?.totalOT || 0).toFixed(2),
       ];
     });
     const csv = [headers, ...rows]
-      .map((r) =>
-        r
-          .map((c: unknown) => `"${String(c ?? "").replace(/"/g, '""')}"`)
-          .join(",")
-      )
-      .join("\n");
+  .map((r) =>
+    r
+      .map((c: unknown) => `"${String(c ?? "").replace(/"/g, '""')}"`)
+      .join(",")
+  )
+  .join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -3274,7 +3075,7 @@ export function MonthlyAttendanceView({
         (att?.workingHours || 0).toFixed(2),
         (att?.overtimeHours || 0).toFixed(2),
         att?.lateMinutes || 0,
-        att?.status || (d.isApprovedLeave ? "LV" : d.isHoliday ? "Holiday" : d.isFriday ? "Weekly Rest" : d.isAbsent ? "A" : d.isSunday ? "Sunday" : "No Record"),
+        att?.status || (d.isFriday ? "Friday" : d.isSunday ? "Sunday" : "No Record"),
         att?.notes || "",
       ];
     });
@@ -3288,7 +3089,7 @@ export function MonthlyAttendanceView({
       `P:${individualStats?.present} L:${individualStats?.late} LV:${individualStats?.leave} A:${individualStats?.absent}`,
       "",
     ];
-        const csv = [headers, ...rows, totalsRow]
+        const csv = [headers, ...rows]
       .map((r) =>
         r
           .map((c: unknown) => `"${String(c ?? "").replace(/"/g, '""')}"`)
@@ -3307,18 +3108,22 @@ export function MonthlyAttendanceView({
 
   const monthStats = useMemo(() => {
     let present = 0, late = 0, leave = 0, absent = 0, ot = 0, hours = 0;
-    filteredEmployees.forEach((employee: any) => {
-      const summary = empMonthlySummary.get(Number(employee.id));
-      if (!summary) return;
-      present += summary.present;
-      late += summary.late;
-      leave += summary.leave;
-      absent += summary.absent;
-      ot += summary.totalOT;
-      hours += summary.totalHours;
+    monthAttendances.forEach((a: any) => {
+      if (a.status === "Leave") {
+        leave += 1;
+      } else if (a.status === "Late") {
+        late += 1;
+        present += 1;
+      } else if (a.morningIn || a.afternoonIn || a.status === "Present") {
+        present += 1;
+      } else {
+        absent += 1;
+      }
+      ot += Number(a.overtimeHours || 0);
+      hours += Number(a.workingHours || 0);
     });
     return { present, late, leave, absent, ot, hours, records: monthAttendances.length };
-  }, [filteredEmployees, empMonthlySummary, monthAttendances.length]);
+  }, [monthAttendances]);
 
   return (
     <div className="space-y-5">
@@ -3461,7 +3266,7 @@ export function MonthlyAttendanceView({
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                 <div className="bg-white rounded-xl p-3 border border-emerald-200">
                   <p className="text-[10px] text-slate-500 uppercase font-bold">উপস্থিত</p>
-                  <p className="text-xl font-bold text-emerald-600">{individualStats.present}<span className="text-xs text-slate-400">/{individualStats.present + individualStats.absent + individualStats.leave}</span></p>
+                  <p className="text-xl font-bold text-emerald-600">{individualStats.present}<span className="text-xs text-slate-400">/{daysInMonth}</span></p>
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-amber-200">
                   <p className="text-[10px] text-slate-500 uppercase font-bold">দেরি</p>
@@ -3530,54 +3335,51 @@ export function MonthlyAttendanceView({
                       {wd}
                     </div>
                   ))}
-                  {Array.from({ length: new Date(`${selectedMonth}-01T00:00:00Z`).getUTCDay() }, (_, i) => (
+                  {Array.from({ length: new Date(selectedMonth + "-01").getDay() }, (_, i) => (
                     <div key={`empty-${i}`} />
                   ))}
                   {individualDays.map((d) => {
                     const att = d.att;
-                    const state = getDayAttendanceState(Number(activeEmpId), d.day);
                     let bg = "bg-slate-50 border-slate-200";
                     let content = (
                       <div className="text-slate-300 text-lg font-bold">{d.day}</div>
                     );
 
-                    if (state.isLeave) {
+                    if (att?.status === "Leave") {
                       bg = "bg-blue-50 border-blue-300";
                       content = (
                         <div>
                           <div className="text-blue-800 text-sm font-bold">{d.day}</div>
-                          <div className="text-blue-600 text-[10px] font-bold">LV</div>
+                          <div className="text-blue-600 text-[10px] font-bold">ছুটি</div>
                         </div>
                       );
-                    } else if (state.isHoliday) {
-                      bg = "bg-slate-100 border-slate-300";
-                      content = <div className="text-slate-600 text-sm font-bold">{d.day}<div className="text-[10px]">H</div></div>;
-                    } else if (state.isPresent) {
-                      bg = state.isLate ? "bg-amber-50 border-amber-300" : "bg-emerald-50 border-emerald-300";
+                    } else if (att?.morningIn || att?.afternoonIn) {
+                      const isLate = att.status === "Late";
+                      bg = isLate ? "bg-amber-50 border-amber-300" : "bg-emerald-50 border-emerald-300";
                       content = (
                         <div className="text-[10px] leading-tight">
-                          <div className={`font-bold ${state.isLate ? "text-amber-800" : "text-emerald-800"}`}>
-                            {d.day} {state.isLate && "L"}
+                          <div className={`font-bold ${isLate ? "text-amber-800" : "text-emerald-800"}`}>
+                            {d.day} {isLate && "⏰"}
                           </div>
-                          {att?.morningIn && <div className="font-mono text-emerald-700">১ম: {att.morningIn}-{att.morningOut || "?"}</div>}
-                          {att?.afternoonIn && <div className="font-mono text-blue-700">২য়: {att.afternoonIn}-{att.eveningOut || "?"}</div>}
-                          {Number(att?.overtimeHours) > 0 && (
-                            <div className="text-[9px] font-bold text-indigo-600">+{att?.overtimeHours}h OT</div>
+                          {att.morningIn && <div className="font-mono text-emerald-700">১ম: {att.morningIn}-{att.morningOut || "?"}</div>}
+                          {att.afternoonIn && <div className="font-mono text-blue-700">২য়: {att.afternoonIn}-{att.eveningOut || "?"}</div>}
+                          {Number(att.overtimeHours) > 0 && (
+                            <div className="text-[9px] font-bold text-indigo-600">+{att.overtimeHours}h OT</div>
                           )}
                         </div>
                       );
-                    } else if (state.isWeeklyRest) {
+                    } else if (d.isFriday) {
                       bg = "bg-purple-50/50 border-purple-200";
                       content = (
                         <div>
                           <div className="text-purple-800 text-sm font-bold">{d.day}</div>
-                          <div className="text-[9px] text-purple-600 font-semibold">W</div>
+                          <div className="text-[9px] text-purple-600 font-semibold">শুক্রবার</div>
                         </div>
                       );
-                    } else if (state.isAbsent) {
-                      bg = "bg-rose-50 border-rose-200";
+                    } else if (d.isSunday) {
+                      bg = "bg-slate-100 border-slate-200";
                       content = (
-                        <div className="text-rose-700 text-sm font-bold">{d.day}<div className="text-[10px]">A</div></div>
+                        <div className="text-slate-400 text-sm font-bold">{d.day}*</div>
                       );
                     }
 
@@ -3620,7 +3422,6 @@ export function MonthlyAttendanceView({
                     <tbody className="divide-y divide-slate-100">
                       {individualDays.map((d) => {
                         const att = d.att;
-                        const state = getDayAttendanceState(Number(activeEmpId), d.day);
 
                         return (
                           <tr
@@ -3673,15 +3474,22 @@ export function MonthlyAttendanceView({
 
                             {/* স্ট্যাটাস */}
                             <td className="p-2.5 text-center">
-                              {state.isPresent && att ? <StatusBadge status={att.status || "Present"} />
-                                : state.isLeave ? <span className="text-blue-700 font-bold">LV</span>
-                                  : state.isHoliday ? <span className="text-slate-600 font-bold">H</span>
-                                    : state.isWeeklyRest ? <span className="text-purple-700 font-bold">W</span>
-                                      : state.isAbsent ? <span className="text-rose-700 font-bold">A</span>
-                                        : <span className="text-slate-400">—</span>}
+                              {att ? (
+                                <StatusBadge status={att.status} />
+                              ) : d.isFriday ? (
+                                <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold text-[11px]">
+                                  শুক্রবার
+                                </span>
+                              ) : d.isSunday ? (
+                                <span className="text-slate-400 text-[11px]">রবিবার</span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold text-[11px]">
+                                  রেকর্ড নেই
+                                </span>
+                              )}
                             </td>
                             <td className="p-2.5 text-slate-500 text-[11px] max-w-40 truncate">
-                              {fixBanglaEncoding(att?.notes) || (state.isLeave ? "অনুমোদিত ছুটি" : state.isHoliday ? "ছুটি" : state.isWeeklyRest ? "সাপ্তাহিক ছুটি" : "—")}
+                              {fixBanglaEncoding(att?.notes) || (d.isFriday ? "সাপ্তাহিক ছুটি" : "—")}
                             </td>
                           </tr>
                         );
@@ -3869,7 +3677,7 @@ export function MonthlyAttendanceView({
                       <th key={d} className="p-1 border border-slate-200 min-w-[100px] text-center">
                         {d}
                         <div className="text-[8px] text-slate-400 font-normal">
-                          {new Date(`${selectedMonth}-${String(d).padStart(2, "0")}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })}
+                          {new Date(`${selectedMonth}-${String(d).padStart(2, "0")}`).toLocaleDateString("en-US", { weekday: "short" })}
                         </div>
                       </th>
                     ))}
@@ -3899,29 +3707,52 @@ export function MonthlyAttendanceView({
                           <div className="text-[9px] text-slate-400 font-mono">{emp.empCode}</div>
                         </td>
                         {daysArray.map((d) => {
-                          const state = getDayAttendanceState(Number(emp.id), d);
-                          const cellContent = state.text || "—";
+                          const att = getDayAtt(Number(emp.id), d);
+                          const isFriday =
+                            new Date(`${selectedMonth}-${String(d).padStart(2, "0")}`).getDay() === 5;
+                          const isSunday =
+                            new Date(`${selectedMonth}-${String(d).padStart(2, "0")}`).getDay() === 0;
+                          let cellContent = "—";
                           let cellClass = "text-slate-300";
-                          if (state.isLeave) {
-                            cellClass = "text-blue-600 font-bold bg-blue-50";
-                          } else if (state.isHoliday) {
-                            cellClass = "text-slate-600 font-bold bg-slate-100";
-                          } else if (state.isWeeklyRest) {
+
+                          if (att) {
+  if (att.status === "Leave") {
+    cellContent = "LV";
+    cellClass = "text-blue-600 font-bold bg-blue-50";
+  } else if (att.morningIn || att.afternoonIn) {
+    const morningShift = att.morningIn
+      ? `১ম ${att.morningIn}-${att.morningOut || "?"}`
+      : "১ম —";
+
+    const afternoonShift = att.afternoonIn
+      ? `২য় ${att.afternoonIn}-${att.eveningOut || "?"}`
+      : "২য় —";
+
+    cellContent = `${morningShift}\n${afternoonShift}`;
+
+    const completedBothShifts = Boolean(
+      att.morningIn &&
+      att.morningOut &&
+      att.afternoonIn &&
+      att.eveningOut
+    );
+
+    cellClass =
+      att.status === "Late"
+        ? "text-amber-700 font-semibold bg-amber-50"
+        : completedBothShifts
+          ? "text-emerald-700 font-semibold bg-emerald-50"
+          : "text-purple-700 font-semibold bg-purple-50";
+  } else {
+    cellContent = "A";
+    cellClass = "text-rose-600 font-bold bg-rose-50";
+  }
+
+                          } else if (isFriday) {
+                            cellContent = "W";
                             cellClass = "bg-purple-100 text-purple-700 font-bold";
-                          } else if (state.isAbsent) {
-                            cellClass = "text-rose-600 font-bold bg-rose-50";
-                          } else if (state.isPresent) {
-                            const completedBothShifts = Boolean(
-                              state.attendance?.morningIn &&
-                              state.attendance?.morningOut &&
-                              state.attendance?.afternoonIn &&
-                              state.attendance?.eveningOut
-                            );
-                            cellClass = state.isLate
-                              ? "text-amber-700 font-semibold bg-amber-50"
-                              : completedBothShifts
-                                ? "text-emerald-700 font-semibold bg-emerald-50"
-                                : "text-purple-700 font-semibold bg-purple-50";
+                          } else if (isSunday) {
+                            cellClass = "bg-slate-100 text-slate-300";
                           }
 
                           return (
