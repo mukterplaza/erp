@@ -933,6 +933,109 @@ export function DashboardView({
     ? allEmps.find((e: any) => Number(e.id) === Number(selectedStaffTimelineId))
     : null;
 
+  const staffTimelinePanel = inspectedStaff ? (
+<div className="bg-white rounded-2xl border-2 border-emerald-500 p-5 space-y-3 shadow-md">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div>
+                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                    8. কর্মচারী কার্যক্রম টাইমলাইন
+                  </span>
+                  <h3 className="text-base font-bold text-slate-900 mt-1">
+                    {inspectedStaff.name} ({inspectedStaff.empCode})
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStaffTimelineId(null)}
+                  className="text-xs text-slate-400 hover:text-slate-800"
+                >
+                  ✕ Close
+                </button>
+              </div>
+
+              <div className="space-y-2.5 border-l-2 border-emerald-500 pl-3 text-xs max-h-80 overflow-y-auto">
+                <div>
+                  <strong className="text-emerald-700 block">
+                    ১. আজকের হাজিরা:
+                  </strong>
+                  {(() => {
+                    const att = todayAtt.find(
+                      (a) => Number(a.employeeId) === Number(inspectedStaff.id)
+                    );
+                    return att
+                      ? `IN: ${formatTime(att.checkIn)} | OUT: ${formatTime(att.checkOut) || "Active"}`
+                      : "No attendance recorded today";
+                  })()}
+                </div>
+                <div>
+                  <strong className="text-indigo-700 block">
+                    2. আজকের কাজের পরিকল্পনা:
+                  </strong>
+                  {(
+                    todayWorkPlans.find(
+                      (p) => Number(p.employeeId) === Number(inspectedStaff.id)
+                    )?.items || []
+                  ).map((it: any) => (
+                    <div key={it.id} className="text-slate-600">
+                      • {fixBanglaEncoding(it.title)} — <strong>{it.status}</strong> (
+                      {it.completionPercent}%)
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <strong className="text-slate-800 block">
+                    ৩. দৈনিক সারাংশ:
+                  </strong>
+                  {dailyWorks
+                    .filter((d: any) => Number(d.employeeId) === Number(inspectedStaff.id))
+                    .slice(0, 2)
+                    .map((d: any) => (
+                      <div key={d.id} className="text-slate-600">
+                        • [{d.date}] {fixBanglaEncoding(d.workSummary)} ({d.progressPercent}%)
+                      </div>
+                    ))}
+                </div>
+                <div>
+                  <strong className="text-amber-700 block">
+                    4. অ্যাসাইনকৃত টাস্ক:
+                  </strong>
+                  {tasks
+                    .filter((t) => Number(t.assignedTo) === Number(inspectedStaff.id))
+                    .map((t) => (
+                      <div key={t.id} className="text-slate-600">
+                        • {t.taskCode}: {fixBanglaEncoding(t.title)} ({t.status} -{" "}
+                        {t.progressPercent}%)
+                      </div>
+                    ))}
+                </div>
+                <div>
+                  <strong className="text-purple-700 block">
+                    5. Leave & Performance:
+                  </strong>
+                  Leaves:{" "}
+                  {
+                    (data.leaveRequests || []).filter(
+                      (l: any) => Number(l.employeeId) === Number(inspectedStaff.id)
+                    ).length
+                  }{" "}
+                  • Score:{" "}
+                  {(data.performanceReviews || []).find(
+                    (r: any) => Number(r.employeeId) === Number(inspectedStaff.id)
+                  )?.totalPoints || 90}
+                  /100
+                </div>
+              </div>
+
+              <Link
+                href={`/employees/${inspectedStaff.id}/daily`}
+                className="block text-center py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold"
+              >
+                Open Full 360° Profile →
+              </Link>
+            </div>
+  ) : null;
+
+
   return (
     <div className="space-y-6">
       {/* ROLE-SPECIFIC QUICK ACTIONS BAR */}
@@ -1084,8 +1187,162 @@ export function DashboardView({
           <StatPill label="অনুপস্থিত" value={selectedDateAbsent} color="rose" />
           <StatPill label="ছুটিতে" value={selectedDateLeave} color="amber" />
         </div>
+        {/* Mobile: একজন কর্মীর সম্পূর্ণ হাজিরা, তারপর পরের কর্মী */}
+        <div className="space-y-3 p-3 lg:hidden">
+          {activeEmployees.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-500">
+              কোনো সক্রিয় কর্মী পাওয়া যায়নি।
+            </p>
+          ) : (
+            activeEmployees.map((emp: any) => {
+              const employeeId = Number(emp.id);
+              const att = selectedDateByEmployee.get(employeeId);
 
-        <div className="overflow-x-auto">
+              const hasPresence =
+                Boolean(att?.checkIn || att?.checkIn2) ||
+                ["Present", "Late", "Early Leave", "Missing Checkout"].includes(
+                  att?.status || ""
+                );
+
+              const approvedLeave = hasApprovedLeaveOn(
+                leaveRequests,
+                employeeId,
+                attendanceDate
+              );
+
+              const beforeCheckInDeadline =
+                attendanceDate === today && liveTime <= "09:30";
+
+              const isFutureDate = attendanceDate > today;
+
+              let displayStatus = "অনুপস্থিত";
+              let statusClass = "bg-rose-100 text-rose-700";
+
+              if (hasPresence) {
+                displayStatus =
+                  att?.status === "Late"
+                    ? "দেরিতে উপস্থিত"
+                    : att?.status === "Early Leave"
+                      ? "আগে বের হয়েছেন"
+                      : att?.status === "Missing Checkout"
+                        ? "OUT বাকি"
+                        : "উপস্থিত";
+                statusClass =
+                  att?.status === "Late"
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-emerald-100 text-emerald-800";
+              } else if (att?.status === "Leave" || approvedLeave) {
+                displayStatus = "ছুটিতে";
+                statusClass = "bg-blue-100 text-blue-700";
+              } else if (
+                att?.status === "Holiday" ||
+                isWeeklyRestDate(attendanceDate)
+              ) {
+                displayStatus = "সাপ্তাহিক/সরকারি ছুটি";
+                statusClass = "bg-purple-100 text-purple-700";
+              } else if (isFutureDate || beforeCheckInDeadline) {
+                displayStatus = "হাজিরার অপেক্ষায়";
+                statusClass = "bg-slate-100 text-slate-700";
+              }
+
+              const legacyFinalOut = Boolean(
+                att?.checkOut &&
+                  !att.checkOut2 &&
+                  att.checkOut >= "14:30"
+              );
+
+              return (
+                <article
+                  key={employeeId}
+                  className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex min-w-0 items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="break-words text-sm font-bold text-slate-900">
+                        {fixBanglaEncoding(emp.name)}
+                      </h3>
+                      <p className="mt-0.5 break-words text-[11px] text-slate-500">
+                        {fixBanglaEncoding(emp.designation || "—")}
+                      </p>
+                      <p className="mt-1 font-mono text-[10px] text-slate-500">
+                        ID: {emp.id} • {emp.empCode}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${statusClass}`}
+                    >
+                      {displayStatus}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="min-w-0 rounded-xl bg-emerald-50 p-2.5">
+                      <p className="text-[10px] font-semibold text-emerald-800">
+                        সকাল IN
+                      </p>
+                      <p className="mt-1 font-mono text-sm font-bold text-slate-900">
+                        {att?.checkIn || "—"}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0 rounded-xl bg-emerald-50 p-2.5">
+                      <p className="text-[10px] font-semibold text-emerald-800">
+                        সকাল OUT
+                      </p>
+                      <p className="mt-1 font-mono text-sm font-bold text-slate-900">
+                        {legacyFinalOut ? "—" : att?.checkOut || "—"}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0 rounded-xl bg-blue-50 p-2.5">
+                      <p className="text-[10px] font-semibold text-blue-800">
+                        বিকাল IN
+                      </p>
+                      <p className="mt-1 font-mono text-sm font-bold text-slate-900">
+                        {att?.checkIn2 || "—"}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0 rounded-xl bg-blue-50 p-2.5">
+                      <p className="text-[10px] font-semibold text-blue-800">
+                        বিকাল OUT
+                      </p>
+                      <p className="mt-1 font-mono text-sm font-bold text-slate-900">
+                        {att?.checkOut2 ||
+                          (legacyFinalOut ? att?.checkOut : null) ||
+                          "—"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-center">
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-500">মোট ঘণ্টা</p>
+                      <p className="font-mono text-xs font-bold text-slate-900">
+                        {num(att?.workingHours).toFixed(2)}h
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-500">দেরি</p>
+                      <p className="font-mono text-xs font-bold text-amber-700">
+                        {num(att?.lateMinutes)}m
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-500">ওভারটাইম</p>
+                      <p className="font-mono text-xs font-bold text-indigo-700">
+                        {num(att?.overtimeHours).toFixed(2)}h
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
@@ -1102,11 +1359,7 @@ export function DashboardView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {allEmps
-                .filter((employee: any) =>
-                  !employee.archived || selectedDateAttendances.some((a) => Number(a.employeeId) === Number(employee.id))
-                )
-                .map((emp: any) => {
+              {activeEmployees.map((emp: any) => {
                 // ⭐ সঠিক আইডি ম্যাচিং (নাম্বার টাইপ কাস্টিং সহ)
                 const att = selectedDateAttendances.find(
                   (a) => Number(a.employeeId) === Number(emp.id)
@@ -1194,7 +1447,177 @@ export function DashboardView({
               </p>
             </div>
           </div>
-          <div className="overflow-x-auto">
+
+                    {/* Mobile: প্রত্যেক কর্মীর কাজের তথ্য আলাদা card */}
+          <div className="space-y-3 p-3 lg:hidden">
+            {activeEmployees.map((emp: any) => {
+              const employeeId = Number(emp.id);
+              const att = todayAttendanceByEmployee.get(employeeId);
+
+              const plan = todayWorkPlans.find(
+                (p) => Number(p.employeeId) === employeeId
+              );
+
+              const dw = todayDailyWorks.find(
+                (item: any) => Number(item.employeeId) === employeeId
+              );
+
+              const totalItems = (plan?.items || []).length;
+              const doneCount = (plan?.items || []).filter(
+                (item: any) => item.status === "Completed"
+              ).length;
+
+              const effectivePct =
+                plan?.manualOverridePercent ??
+                plan?.autoProgressPercent ??
+                dw?.progressPercent ??
+                0;
+
+              const hasPresence =
+                Boolean(att?.checkIn || att?.checkIn2) ||
+                ["Present", "Late", "Early Leave", "Missing Checkout"].includes(
+                  att?.status || ""
+                );
+
+              const onApprovedLeave =
+                att?.status === "Leave" ||
+                hasApprovedLeaveOn(leaveRequests, employeeId, today);
+
+              const attendanceLabel = hasPresence
+                ? "উপস্থিত"
+                : onApprovedLeave
+                  ? "ছুটিতে"
+                  : isWeeklyRestDate(today)
+                    ? "সাপ্তাহিক ছুটি"
+                    : liveTime <= "09:30"
+                      ? "হাজিরার অপেক্ষায়"
+                      : "অনুপস্থিত";
+
+              return (
+                  <React.Fragment key={employeeId}>
+                    <article
+                  className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="min-w-0 border-b border-slate-100 pb-3">
+                    <h3 className="break-words text-sm font-bold text-slate-900">
+                      {fixBanglaEncoding(emp.name)}
+                    </h3>
+                    <p className="mt-0.5 break-words text-[11px] text-slate-500">
+                      {fixBanglaEncoding(emp.designation || "—")}
+                      {" • "}
+                      {emp.empCode}
+                    </p>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="min-w-0 rounded-xl bg-slate-50 p-2.5">
+                      <p className="text-[10px] text-slate-500">হাজিরা</p>
+                      <p className="mt-1 font-bold text-slate-900">
+                        {attendanceLabel}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0 rounded-xl bg-indigo-50 p-2.5">
+                      <p className="text-[10px] text-indigo-700">
+                        কাজের পরিকল্পনা
+                      </p>
+                      <p className="mt-1 font-bold text-indigo-900">
+                        {plan
+                          ? `${doneCount}/${totalItems} সম্পন্ন`
+                          : "পরিকল্পনা নেই"}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0 rounded-xl bg-emerald-50 p-2.5">
+                      <p className="text-[10px] text-emerald-700">
+                        দৈনিক সারাংশ
+                      </p>
+                      <p className="mt-1 font-bold text-emerald-900">
+                        {dw ? "জমা হয়েছে" : "এখনো জমা হয়নি"}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0 rounded-xl bg-amber-50 p-2.5">
+                      <p className="text-[10px] text-amber-800">
+                        সম্পন্ন %
+                      </p>
+                      <p className="mt-1 font-bold text-amber-900">
+                        {effectivePct}%
+                        {plan?.manualOverridePercent != null
+                          ? " • Override"
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+                    <p>
+                      সকাল: {att?.checkIn || "—"} → {att?.checkOut || "—"}
+                    </p>
+                    <p>
+                      বিকাল: {att?.checkIn2 || "—"} →{" "}
+                      {att?.checkOut2 || "—"}
+                    </p>
+                  </div>
+
+                  <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStaffTimelineId(employeeId)}
+                      className="min-h-[44px] flex-1 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white"
+                    >
+                      বিস্তারিত টাইমলাইন দেখুন
+                    </button>
+
+                    {plan && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const value = prompt(
+                            `${emp.name}-এর Work Plan অগ্রগতি % পরিবর্তন করুন (Auto: ${plan.autoProgressPercent}%):`,
+                            String(effectivePct)
+                          );
+
+                          if (value === null) return;
+
+                          const percent = Number(value);
+
+                          if (
+                            !Number.isFinite(percent) ||
+                            percent < 0 ||
+                            percent > 100
+                          ) {
+                            alert("০ থেকে ১০০-এর মধ্যে একটি সংখ্যা দিন।");
+                            return;
+                          }
+
+                          const reason =
+                            prompt(
+                              "পরিবর্তনের কারণ লিখুন (Audit Trail-এ থাকবে):",
+                              "Manager evaluation"
+                            ) || "Manager evaluation";
+
+                          onMutate({
+                            action: "overrideWorkPlanProgress",
+                            planId: plan.id,
+                            manualOverridePercent: percent,
+                            overrideReason: reason,
+                          });
+                        }}
+                        className="min-h-[44px] flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800"
+                      >
+                        অগ্রগতি Override
+                      </button>
+                    )}
+                  </div>
+                </article>
+                    {selectedStaffTimelineId === employeeId && staffTimelinePanel}
+                  </React.Fragment>
+              );
+            })}
+          </div>
+
+          <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
@@ -1207,7 +1630,7 @@ export function DashboardView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {allEmps.map((emp: any) => {
+                {activeEmployees.map((emp: any) => {
                   const att = todayAtt.find((a) => Number(a.employeeId) === Number(emp.id));
                   const plan = todayWorkPlans.find(
                     (p) => Number(p.employeeId) === Number(emp.id)
@@ -1341,107 +1764,9 @@ export function DashboardView({
         </div>
 
         {/* Right: Broadcast / Staff Timeline */}
-        <div className="lg:col-span-4 space-y-6">
+        <div className={inspectedStaff ? "hidden lg:block lg:col-span-4 space-y-6" : "lg:col-span-4 space-y-6"}>
           {inspectedStaff ? (
-            <div className="bg-white rounded-2xl border-2 border-emerald-500 p-5 space-y-3 shadow-md">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <div>
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                    8. কর্মচারী কার্যক্রম টাইমলাইন
-                  </span>
-                  <h3 className="text-base font-bold text-slate-900 mt-1">
-                    {inspectedStaff.name} ({inspectedStaff.empCode})
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedStaffTimelineId(null)}
-                  className="text-xs text-slate-400 hover:text-slate-800"
-                >
-                  ✕ Close
-                </button>
-              </div>
-
-              <div className="space-y-2.5 border-l-2 border-emerald-500 pl-3 text-xs max-h-80 overflow-y-auto">
-                <div>
-                  <strong className="text-emerald-700 block">
-                    ১. আজকের হাজিরা:
-                  </strong>
-                  {(() => {
-                    const att = todayAtt.find(
-                      (a) => Number(a.employeeId) === Number(inspectedStaff.id)
-                    );
-                    return att
-                      ? `IN: ${formatTime(att.checkIn)} | OUT: ${formatTime(att.checkOut) || "Active"}`
-                      : "No attendance recorded today";
-                  })()}
-                </div>
-                <div>
-                  <strong className="text-indigo-700 block">
-                    2. আজকের কাজের পরিকল্পনা:
-                  </strong>
-                  {(
-                    todayWorkPlans.find(
-                      (p) => Number(p.employeeId) === Number(inspectedStaff.id)
-                    )?.items || []
-                  ).map((it: any) => (
-                    <div key={it.id} className="text-slate-600">
-                      • {fixBanglaEncoding(it.title)} — <strong>{it.status}</strong> (
-                      {it.completionPercent}%)
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <strong className="text-slate-800 block">
-                    ৩. দৈনিক সারাংশ:
-                  </strong>
-                  {dailyWorks
-                    .filter((d: any) => Number(d.employeeId) === Number(inspectedStaff.id))
-                    .slice(0, 2)
-                    .map((d: any) => (
-                      <div key={d.id} className="text-slate-600">
-                        • [{d.date}] {fixBanglaEncoding(d.workSummary)} ({d.progressPercent}%)
-                      </div>
-                    ))}
-                </div>
-                <div>
-                  <strong className="text-amber-700 block">
-                    4. অ্যাসাইনকৃত টাস্ক:
-                  </strong>
-                  {tasks
-                    .filter((t) => Number(t.assignedTo) === Number(inspectedStaff.id))
-                    .map((t) => (
-                      <div key={t.id} className="text-slate-600">
-                        • {t.taskCode}: {fixBanglaEncoding(t.title)} ({t.status} -{" "}
-                        {t.progressPercent}%)
-                      </div>
-                    ))}
-                </div>
-                <div>
-                  <strong className="text-purple-700 block">
-                    5. Leave & Performance:
-                  </strong>
-                  Leaves:{" "}
-                  {
-                    (data.leaveRequests || []).filter(
-                      (l: any) => Number(l.employeeId) === Number(inspectedStaff.id)
-                    ).length
-                  }{" "}
-                  • Score:{" "}
-                  {(data.performanceReviews || []).find(
-                    (r: any) => Number(r.employeeId) === Number(inspectedStaff.id)
-                  )?.totalPoints || 90}
-                  /100
-                </div>
-              </div>
-
-              <Link
-                href={`/employees/${inspectedStaff.id}/daily`}
-                className="block text-center py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold"
-              >
-                Open Full 360° Profile →
-              </Link>
-            </div>
+            staffTimelinePanel
           ) : (
             <form
               onSubmit={async (e) => {
@@ -1664,7 +1989,7 @@ export function AttendanceView({
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
                 IN TIME (Asia/Dhaka server time)
@@ -1749,7 +2074,7 @@ export function AttendanceView({
               <input type="time" value={reqOut2} onChange={(e) => setReqOut2(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm" />
             </div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
               required
@@ -1835,7 +2160,86 @@ export function AttendanceView({
             হাজিরা রেজিস্টার ({registerRows.length} employee-days)
           </h3>
         </div>
-        <div className="overflow-x-auto">
+        {/* মোবাইলে হাজিরার কার্ড; desktop table নিচে অপরিবর্তিত থাকবে */}
+        <div className="space-y-3 p-3 md:hidden">
+          {registerRows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-500">
+              কোনো হাজিরার রেকর্ড নেই
+            </p>
+          ) : (
+            registerRows.map((a: Attendance) => {
+              const emp = empMap.get(Number(a.employeeId));
+              const canCheckOut =
+                a.date === today &&
+                a.status !== "Leave" &&
+                Boolean(a.checkIn) &&
+                (!a.checkOut || (Boolean(a.checkIn2) && !a.checkOut2));
+
+              return (
+                <article
+                  key={`${a.employeeId}-${a.date}`}
+                  className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
+                >
+                  <div className="flex min-w-0 items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-bold text-slate-900">
+                        {emp?.name || `Employee #${a.employeeId}`}
+                      </p>
+                      <p className="break-words text-[11px] text-slate-500">
+                        {emp?.designation ? `${emp.designation} • ` : ""}
+                        ID: {a.employeeId}
+                        {emp?.empCode ? ` • ${emp.empCode}` : ""}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-600">{a.date}</p>
+                    </div>
+                    <div className="shrink-0">
+                      <StatusBadge status={a.status} />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="min-w-0 rounded-xl bg-emerald-50 p-2">
+                      <p className="text-[10px] text-emerald-800">সকাল IN</p>
+                      <p className="font-mono font-bold">{a.checkIn || "—"}</p>
+                    </div>
+                    <div className="min-w-0 rounded-xl bg-emerald-50 p-2">
+                      <p className="text-[10px] text-emerald-800">সকাল OUT</p>
+                      <p className="font-mono font-bold">{a.checkOut || "—"}</p>
+                    </div>
+                    <div className="min-w-0 rounded-xl bg-blue-50 p-2">
+                      <p className="text-[10px] text-blue-800">বিকাল IN</p>
+                      <p className="font-mono font-bold">{a.checkIn2 || "—"}</p>
+                    </div>
+                    <div className="min-w-0 rounded-xl bg-blue-50 p-2">
+                      <p className="text-[10px] text-blue-800">বিকাল OUT</p>
+                      <p className="font-mono font-bold">{a.checkOut2 || "—"}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+                    <span>সকাল: {a.morningHours || "0.00"}h</span>
+                    <span>বিকাল: {a.afternoonHours || "0.00"}h</span>
+                    <span>মোট: {a.workingHours || "0.00"}h</span>
+                    <span>OT: {a.overtimeHours || "0.00"}h</span>
+                    <span>লেট: {a.lateMinutes || 0} মিনিট</span>
+                    <span>আগে বের: {a.earlyLeaveMinutes || 0} মিনিট</span>
+                  </div>
+
+                  {canCheckOut && (
+                    <button
+                      type="button"
+                      onClick={() => handleCheckOut(a.id, Number(a.employeeId))}
+                      className="mt-3 min-h-[44px] w-full rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white"
+                    >
+                      {a.checkIn2 ? "বিকাল OUT দিন" : "সকাল OUT দিন"}
+                    </button>
+                  )}
+                </article>
+              );
+            })
+          )}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
@@ -2740,6 +3144,7 @@ export function MonthlyAttendanceView({
       : myEmpId
   );
   const [empSearch, setEmpSearch] = useState("");
+  const [mobileGridDay, setMobileGridDay] = useState(() => Number(getTodayLocal().slice(8, 10)));
 
   const activeEmpId = isManagement ? individualEmpId : myEmpId;
 
@@ -3189,7 +3594,10 @@ export function MonthlyAttendanceView({
             <input
               type="month"
               value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
+              onChange={(e) => {
+                setSelectedMonth(e.target.value);
+                setMobileGridDay(1);
+              }}
               className="px-3 py-2.5 rounded-xl bg-white/95 text-slate-800 text-sm font-bold focus:ring-2 focus:ring-white"
             />
 
@@ -3370,14 +3778,14 @@ export function MonthlyAttendanceView({
                   </h3>
                   <p className="text-[11px] text-slate-500">প্রতিটি ঘরে সেই দিনের সকাল ও বিকালের IN / OUT টাইম</p>
                 </div>
-                <div className="p-4 grid grid-cols-7 gap-2">
+                <div className="p-2 sm:p-4 grid grid-cols-2 sm:grid-cols-7 gap-2">
                   {["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"].map((wd) => (
-                    <div key={wd} className="text-center text-[10px] font-bold text-slate-500 uppercase pb-1">
+                    <div key={wd} className="hidden sm:block text-center text-[10px] font-bold text-slate-500 uppercase pb-1">
                       {wd}
                     </div>
                   ))}
                   {Array.from({ length: new Date(`${selectedMonth}-01T00:00:00Z`).getUTCDay() }, (_, i) => (
-                    <div key={`empty-${i}`} />
+                    <div key={`empty-${i}`} className="hidden sm:block" />
                   ))}
                   {individualDays.map((d) => {
                     const att = d.att;
@@ -3429,6 +3837,7 @@ export function MonthlyAttendanceView({
 
                     return (
                       <div key={d.day} className={`min-h-[70px] p-1.5 rounded-lg border ${bg} transition hover:shadow-sm`}>
+                        <span className="block text-[10px] font-semibold text-slate-500 sm:hidden">{d.weekdayBn}</span>
                         {content}
                       </div>
                     );
@@ -3446,7 +3855,65 @@ export function MonthlyAttendanceView({
                     শিফট ১: ০৯:৩০–০১:১৫ | বিরতি | শিফট ২: ০২:৩০–০৭:৩০
                   </span>
                 </div>
-                <div className="overflow-x-auto">
+                {/* মোবাইলে ব্যক্তিগত দৈনিক কার্ড; desktop table অক্ষত */}
+                <div className="space-y-2 p-3 md:hidden">
+                  {individualDays.map((d) => {
+                    const att = d.att;
+                    const state = getDayAttendanceState(Number(activeEmpId), d.day);
+
+                    return (
+                      <article
+                        key={d.date}
+                        className="min-w-0 rounded-xl border border-slate-200 bg-white p-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-slate-900">
+                            {d.date} • {d.weekdayBn}
+                          </span>
+                          <span className="text-xs font-bold text-slate-600">
+                            {state.isLeave
+                              ? "LV"
+                              : state.isWeeklyRest
+                                ? "W"
+                                : state.isHoliday
+                                  ? "H"
+                                  : state.isAbsent
+                                    ? "A"
+                                    : state.isLate
+                                      ? "L"
+                                      : state.isPresent
+                                        ? "উপস্থিত"
+                                        : "—"}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                          <div className="min-w-0 rounded-lg bg-emerald-50 p-2">
+                            ১ম শিফট
+                            <p className="font-mono font-bold">
+                              {att?.morningIn || "—"} – {att?.morningOut || "—"}
+                            </p>
+                          </div>
+                          <div className="min-w-0 rounded-lg bg-blue-50 p-2">
+                            ২য় শিফট
+                            <p className="font-mono font-bold">
+                              {att?.afternoonIn || "—"} – {att?.eveningOut || "—"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {att && (
+                          <p className="mt-2 break-words text-[11px] text-slate-600">
+                            কাজ: {Number(att.workingHours || 0).toFixed(1)}h
+                            {" • "}OT: {Number(att.overtimeHours || 0).toFixed(1)}h
+                            {" • "}লেট: {att.lateMinutes || 0}m
+                          </p>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left text-xs min-w-[850px]">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
@@ -3583,7 +4050,36 @@ export function MonthlyAttendanceView({
                 📊 {monthName} — কর্মচারী সারাংশ (নামে ক্লিক করলে ব্যক্তিগত ভিউ)
               </h3>
             </div>
-            <div className="overflow-x-auto">
+            {/* মোবাইলে কর্মচারী সারাংশ; desktop table অক্ষত */}
+            <div className="space-y-2 p-3 md:hidden">
+              {filteredEmployees.map((emp: any) => {
+                const s = empMonthlySummary.get(Number(emp.id));
+
+                return (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => {
+                      setIndividualEmpId(Number(emp.id));
+                      setViewMode("individual");
+                    }}
+                    className="min-h-[44px] w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left"
+                  >
+                    <span className="block break-words text-sm font-bold text-slate-900">
+                      {fixBanglaEncoding(emp.name)}
+                    </span>
+                    <span className="block break-words text-[11px] text-slate-500">
+                      {fixBanglaEncoding(emp.designation)} • {emp.empCode}
+                    </span>
+                    <span className="mt-2 block text-xs text-slate-700">
+                      উপস্থিত {s?.present || 0} • দেরি {s?.late || 0} •
+                      ছুটি {s?.leave || 0} • OT {(s?.totalOT || 0).toFixed(1)}h
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
@@ -3704,7 +4200,81 @@ export function MonthlyAttendanceView({
                 প্রতিটি সেল = সেই দিনের IN-OUT • L=দেরি, A=অনুপস্থিত, LV=ছুটি
               </p>
             </div>
-            <div className="overflow-x-auto">
+            {/* মোবাইলে দিন নির্বাচন করে কর্মীদের দুই শিফট দেখাবে */}
+            <div className="space-y-3 p-3 md:hidden">
+              <label className="block text-xs font-bold text-slate-700">
+                দিন নির্বাচন করুন
+                <select
+                  value={mobileGridDay}
+                  onChange={(e) => setMobileGridDay(Number(e.target.value))}
+                  className="mt-1 min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
+                >
+                  {daysArray.map((day) => (
+                    <option key={day} value={day}>
+                      {selectedMonth}-{String(day).padStart(2, "0")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {filteredEmployees.map((emp: any) => {
+                const state = getDayAttendanceState(Number(emp.id), mobileGridDay);
+                const att = state.attendance;
+
+                return (
+                  <article
+                    key={emp.id}
+                    className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIndividualEmpId(Number(emp.id));
+                        setViewMode("individual");
+                      }}
+                      className="min-h-[44px] w-full break-words text-left text-sm font-bold text-indigo-700"
+                    >
+                      {fixBanglaEncoding(emp.name)}
+                    </button>
+                    <p className="break-words text-[11px] text-slate-500">
+                      {emp.designation} • {emp.empCode}
+                    </p>
+
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="min-w-0 rounded-lg bg-emerald-50 p-2">
+                        ১ম শিফট
+                        <p className="font-mono font-bold">
+                          {att?.morningIn || "—"} – {att?.morningOut || "—"}
+                        </p>
+                      </div>
+                      <div className="min-w-0 rounded-lg bg-blue-50 p-2">
+                        ২য় শিফট
+                        <p className="font-mono font-bold">
+                          {att?.afternoonIn || "—"} – {att?.eveningOut || "—"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="mt-2 text-xs font-semibold text-slate-700">
+                      {state.isLeave
+                        ? "ছুটি (LV)"
+                        : state.isWeeklyRest
+                          ? "সাপ্তাহিক ছুটি (W)"
+                          : state.isHoliday
+                            ? "ছুটি (H)"
+                            : state.isAbsent
+                              ? "অনুপস্থিত (A)"
+                              : state.isLate
+                                ? "দেরিতে (L)"
+                                : state.isPresent
+                                  ? "উপস্থিত"
+                                  : "এখনো রেকর্ড নেই"}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
               <table className="text-[10px] border-collapse">
                 <thead>
                   <tr className="bg-indigo-50">

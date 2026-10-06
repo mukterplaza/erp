@@ -1,5 +1,7 @@
 "use client";
 
+import { Fragment } from "react";
+
 import React, { useMemo, useState } from "react";
 import {
   Users,
@@ -238,29 +240,29 @@ export function EmployeeDirectoryView({
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="নাম, আইডি, পদবি, ফোন খুঁজুন"
                 className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-sm" />
             </div>
-            <select value={company} onChange={(e) => setCompany(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs">
+            <select value={company} onChange={(e) => setCompany(e.target.value)} className="w-full min-w-0 sm:w-auto px-3 py-2 rounded-xl border border-slate-300 text-xs">
               <option value="All">সব কোম্পানি</option>
               <option value="INSAF">INSAF</option>
               <option value="IBDC">INSAF BUILDING DESIGN</option>
               <option value="IREL">INSAF REAL ESTATE</option>
             </select>
-            <select value={department} onChange={(e) => setDepartment(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs">
+            <select value={department} onChange={(e) => setDepartment(e.target.value)} className="w-full min-w-0 sm:w-auto px-3 py-2 rounded-xl border border-slate-300 text-xs">
               <option value="All">সব বিভাগ</option>
               {departments.map((d) => <option key={d}>{d}</option>)}
             </select>
-            <select value={workFilter} onChange={(e) => setWorkFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs">
+            <select value={workFilter} onChange={(e) => setWorkFilter(e.target.value)} className="w-full min-w-0 sm:w-auto px-3 py-2 rounded-xl border border-slate-300 text-xs">
               <option value="All">সব কাজের অবস্থা</option>
               <option value="Overdue">ওভারডিউ আছে</option>
               <option value="Pending">পেন্ডিং আছে</option>
               <option value="Review">রিভিউর অপেক্ষায়</option>
               <option value="NoUpdate">আজ আপডেট দেয়নি</option>
             </select>
-            <select value={attFilter} onChange={(e) => setAttFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs">
+            <select value={attFilter} onChange={(e) => setAttFilter(e.target.value)} className="w-full min-w-0 sm:w-auto px-3 py-2 rounded-xl border border-slate-300 text-xs">
               <option value="All">সব হাজিরা</option>
               <option value="Present">আজ উপস্থিত</option>
               <option value="Absent">আজ অনুপস্থিত</option>
             </select>
-            <select value={perfFilter} onChange={(e) => setPerfFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs">
+            <select value={perfFilter} onChange={(e) => setPerfFilter(e.target.value)} className="w-full min-w-0 sm:w-auto px-3 py-2 rounded-xl border border-slate-300 text-xs">
               <option value="All">সব পারফরম্যান্স</option>
               <option value="High">৮০+</option>
               <option value="Mid">৬০–৭৯</option>
@@ -268,7 +270,7 @@ export function EmployeeDirectoryView({
             </select>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
@@ -316,7 +318,8 @@ export function EmployeeDirectoryView({
           const att = w?.today.attendance;
           const site = e.assignedSite || (projects.find((p) => (p.assignedStaffIds || []).includes(e.id))?.name ?? "");
           return (
-            <button key={e.id} type="button" onClick={() => setOpenId(e.id)}
+            <Fragment key={e.id}>
+            <button type="button" onClick={() => setOpenId(e.id)}
               className={`text-left bg-white p-4 rounded-2xl border-2 transition ${openId === e.id ? "border-emerald-500" : "border-slate-200 hover:border-slate-300"}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -347,12 +350,31 @@ export function EmployeeDirectoryView({
               <p className="mt-2 text-[11px] text-slate-600 truncate">আজকের আপডেট: {w?.today.dailyUpdate || <span className="text-slate-400">দেওয়া হয়নি</span>}</p>
               <p className="text-[10px] text-slate-400 truncate">সর্বশেষ কার্যক্রম: {w?.lastActivity ? `${w.lastActivity.text} • ${fmtDateTime(w.lastActivity.at)}` : "—"}</p>
             </button>
+              {/* mobile-inline-employee-360 */}
+              {openEmp && Number(openEmp.id) === Number(e.id) && (
+                <div className="min-w-0 w-full md:hidden">
+<Employee360
+          key={openEmp.id}
+          emp={openEmp}
+          work={workMap.get(openEmp.id)}
+          data={data}
+          isMgmt={isMgmt}
+          isSelf={openEmp.id === me?.employeeId}
+          onClose={isMgmt ? () => setOpenId(null) : undefined}
+          onMutate={onMutate}
+          projects={projects}
+          sites={sites}
+        />
+                </div>
+              )}
+            </Fragment>
           );
         })}
         {filtered.length === 0 && <p className="text-sm text-slate-400">কোনো কর্মী পাওয়া যায়নি।</p>}
       </div>
 
-      {openEmp && (
+      <div className="hidden md:block">
+        {openEmp && (
         <Employee360
           key={openEmp.id}
           emp={openEmp}
@@ -366,6 +388,7 @@ export function EmployeeDirectoryView({
           sites={sites}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -483,7 +506,7 @@ function Employee360({
         )}
 
         {tab === "attendance" && (
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead><tr className="bg-slate-50 border-b text-slate-600">
                 <th className="p-2">তারিখ</th><th className="p-2">ইন</th><th className="p-2">আউট</th><th className="p-2">কাজের ঘণ্টা</th><th className="p-2">লেট (মি.)</th><th className="p-2">ওভারটাইম</th><th className="p-2">স্ট্যাটাস</th>
