@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { WorkCenterView } from "./modules/WorkCenterView";
 import {
   Building2,
   LayoutDashboard,
@@ -41,8 +42,6 @@ import {
 import {
   DashboardView,
   AttendanceView,
-  MyDayAndDailyWorksView,
-  TasksView,
   MonthlyAttendanceView,
 } from "./modules/OperationsViews";
 import {
@@ -58,7 +57,6 @@ import {
 } from "./modules/CrmProjectsViews";
 import { LeadsView } from "./modules/LeadsCrmView";
 import { EmployeeDirectoryView } from "./modules/EmployeeDirectoryView";
-import { TeamTaskMonitorView } from "./modules/TeamTaskMonitorView";
 import {
   MaterialsAndInventoryView,
   ProcurementAndSuppliersView,
@@ -88,15 +86,8 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
       { label: "ড্যাশবোর্ড", href: "/dashboard", icon: LayoutDashboard },
       { label: "হাজিরা", href: "/attendance", icon: Clock },
       { label: "মাসিক হাজিরা", href: "/monthly-attendance", icon: Calendar },
-      { label: "আমার দিন", href: "/my-day", icon: ClipboardCheck },
-      { label: "দৈনিক কাজ", href: "/daily-works", icon: ClipboardCheck },
+      { label: "কাজ ও কার্যক্রম", href: "/work-center", icon: Briefcase },
       { label: "দৈনিক জমা-খরচ", href: "/expenses", icon: CreditCard },
-      { label: "টাস্ক", href: "/tasks", icon: CheckSquare },
-      {
-        label: "টিম টাস্ক মনিটরিং / আমার টাস্ক",
-        href: "/team-tasks",
-        icon: ClipboardCheck,
-      },
       { label: "সাইট রিপোর্ট", href: "/site-reports", icon: MapPin },
     ],
   },
@@ -202,7 +193,7 @@ export default function ErpAppShell({
       const json = await res.json();
       setData(json);
     } catch {
-      // বিদ্যমান আচরণ অপরিবর্তিত রাখা হয়েছে।
+      // বিদ্যমান আচরণ অপরিবর্তিত রাখা হয়েছে।
     } finally {
       setLoading(false);
     }
@@ -212,7 +203,7 @@ export default function ErpAppShell({
     loadData();
   }, [loadData]);
 
-  // মোবাইল মেনু খোলা অবস্থায় Escape চাপলে বন্ধ হবে।
+  // মোবাইল মেনু খোলা অবস্থায় Escape চাপলে বন্ধ হবে।
   useEffect(() => {
     if (!mobileMenuOpen) return;
 
@@ -266,7 +257,7 @@ export default function ErpAppShell({
         body: JSON.stringify({ action: "logout" }),
       });
     } catch {
-      // বিদ্যমান আচরণ অপরিবর্তিত রাখা হয়েছে।
+      // বিদ্যমান আচরণ অপরিবর্তিত রাখা হয়েছে।
     }
 
     router.push("/login");
@@ -326,7 +317,7 @@ export default function ErpAppShell({
   };
 
   function renderMainContent() {
-    // Permission check আগেই রাখা হয়েছে; কোনো permission logic বাদ দেওয়া হয়নি।
+    // Permission check আগেই রাখা হয়েছে; কোনো permission logic বাদ দেওয়া হয়নি।
     if (
       noLeadAccess &&
       (activeRoute === "/leads" ||
@@ -374,7 +365,7 @@ export default function ErpAppShell({
             href="/dashboard"
             className="inline-block px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-semibold min-h-[44px]"
           >
-            আমার দিনে ফিরুন
+            ড্যাশবোর্ডে ফিরুন
           </Link>
         </div>
       );
@@ -388,32 +379,16 @@ export default function ErpAppShell({
       return <MonthlyAttendanceView data={data} onMutate={handleMutate} />;
     }
 
-    if (activeRoute === "/my-day" || activeRoute === "/daily-works") {
-      return <MyDayAndDailyWorksView data={data} onMutate={handleMutate} />;
-    }
-
-    if (activeRoute === "/team-tasks") {
-      return <TeamTaskMonitorView data={data} onMutate={handleMutate} />;
-    }
-
-    if (activeRoute.startsWith("/tasks/") && entityId) {
-      return (
-        <TeamTaskMonitorView
-          data={data}
-          onMutate={handleMutate}
-          focusedTaskId={entityId}
-        />
-      );
-    }
-
-    if (activeRoute.startsWith("/tasks")) {
-      return (
-        <TasksView
-          data={data}
-          onMutate={handleMutate}
-          focusedTaskId={entityId}
-        />
-      );
+    // ✅ নতুন: কাজ ও কার্যক্রম কেন্দ্র
+    // পুরোনো ৪টি route-ও এখানে চলে আসবে (backward compatibility)
+    if (
+      activeRoute === "/work-center" ||
+      activeRoute === "/my-day" ||
+      activeRoute === "/daily-works" ||
+      activeRoute.startsWith("/tasks") ||
+      activeRoute === "/team-tasks"
+    ) {
+      return <WorkCenterView data={data} onMutate={handleMutate} />;
     }
 
     if (activeRoute.startsWith("/employees")) {
@@ -801,7 +776,7 @@ export default function ErpAppShell({
           <div className="lg:hidden fixed inset-0 z-40">
             <button
               type="button"
-              aria-label="মেনুর বাইরে চাপ দিয়ে বন্ধ করুন"
+              aria-label="মেনুর বাইরে চাপ দিয়ে বন্ধ করুন"
               onClick={() => setMobileMenuOpen(false)}
               className="absolute inset-0 bg-slate-950/60"
             />
@@ -980,14 +955,9 @@ export default function ErpAppShell({
             icon: Clock,
           },
           {
-            label: "আমার দিন",
-            href: "/my-day",
-            icon: ClipboardCheck,
-          },
-          {
-            label: "টাস্ক",
-            href: "/team-tasks",
-            icon: CheckSquare,
+            label: "কাজ",
+            href: "/work-center",
+            icon: Briefcase,
           },
           {
             label: "বার্তা",
@@ -996,7 +966,13 @@ export default function ErpAppShell({
           },
         ].map((m) => {
           const Icon = m.icon;
-          const active = pathname === m.href;
+          const active =
+            pathname === m.href ||
+            (m.href === "/work-center" &&
+              (pathname === "/my-day" ||
+                pathname === "/daily-works" ||
+                pathname.startsWith("/tasks") ||
+                pathname === "/team-tasks"));
 
           return (
             <Link
