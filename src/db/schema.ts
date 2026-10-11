@@ -124,12 +124,12 @@ export const attendances = pgTable(
       .notNull()
       .references(() => employees.id, { onDelete: "cascade" }),
     date: text("date").notNull(), // YYYY-MM-DD
-    // ? Shift-1 (????): 09:30 – 13:15
-    checkIn: text("check_in"), // HH:mm — ???? ???? IN
-    checkOut: text("check_out"), // HH:mm — ???? ???? OUT
-    // ? NEW Shift-2 (?????): 14:30 – 19:30
-    checkIn2: text("check_in2"), // HH:mm — ????? ???? IN
-    checkOut2: text("check_out2"), // HH:mm — ????? ???? OUT
+    // ? Shift-1 (????): 09:30 ï¿½ 13:15
+    checkIn: text("check_in"), // HH:mm ï¿½ ???? ???? IN
+    checkOut: text("check_out"), // HH:mm ï¿½ ???? ???? OUT
+    // ? NEW Shift-2 (?????): 14:30 ï¿½ 19:30
+    checkIn2: text("check_in2"), // HH:mm ï¿½ ????? ???? IN
+    checkOut2: text("check_out2"), // HH:mm ï¿½ ????? ???? OUT
     status: text("status").notNull().default("Present"), // Present, Late, Early Leave, Missing Checkout, Absent, Leave, Holiday
     lateMinutes: integer("late_minutes").notNull().default(0),
     earlyLeaveMinutes: integer("early_leave_minutes").notNull().default(0),
@@ -319,7 +319,7 @@ export const FOLLOW_UP_OUTCOMES = [
   "Other",
 ] as const;
 
-// Outcomes that do NOT close a lead — a new follow-up must be scheduled.
+// Outcomes that do NOT close a lead ï¿½ a new follow-up must be scheduled.
 export const OPEN_OUTCOMES = [
   "No Response",
   "Contacted",
@@ -342,7 +342,7 @@ export const leadFollowups = pgTable(
     leadId: integer("lead_id")
       .notNull()
       .references(() => leads.id, { onDelete: "cascade" }),
-    // Follow-up Number (1, 2, 3 ... unlimited) — never reused or overwritten
+    // Follow-up Number (1, 2, 3 ... unlimited) ï¿½ never reused or overwritten
     followUpNumber: integer("follow_up_number").notNull().default(1),
     staffId: integer("staff_id").references(() => employees.id, { onDelete: "set null" }),
     staffName: text("staff_name").notNull(),
@@ -539,8 +539,6 @@ export const tasks = pgTable(
     deadlineReminderSentAt: timestamp("deadline_reminder_sent_at"),
     overdueNotifiedAt: timestamp("overdue_notified_at"),
         // Work-tracking extensions (Option B)
-    declineReason: text("decline_reason"),
-    rating: text("rating"), // Best, Better, Good, Needs Improvement, Poor
     category: text("category").notNull().default("General"),
     startDate: text("start_date"),
     nextAction: text("next_action").notNull().default(""),
