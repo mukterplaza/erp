@@ -3,10 +3,35 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { db, tasks, employees, taskComments } from "@/db";
 import { desc, eq, inArray, or } from "drizzle-orm";
-import { getCurrentUser } from "@/lib/auth";
+import {
+  getCurrentUser,
+  canViewAllEmployeeProfiles,
+  isManagementRole,
+} from "@/lib/auth";
 
-const APPROVER_ROLES = ["Owner", "Chairman", "MD", "Admin", "Manager", "HR"];
-const isApprover = (role?: string | null) => APPROVER_ROLES.includes(role || "");
+const APPROVER_ROLES = [
+  "Owner",
+  "Chairman",
+  "MD",
+  "Admin",
+  "Manager",
+  "HR",
+  "Project Manager",
+];
+
+function canMonitorAllWork(role?: string | null) {
+  if (!role) return false;
+
+  return (
+    APPROVER_ROLES.includes(role) ||
+    isManagementRole(role) ||
+    canViewAllEmployeeProfiles(role)
+  );
+}
+
+function canApproveWork(role?: string | null) {
+  return APPROVER_ROLES.includes(role || "");
+}
 const RATINGS = ["Best", "Better", "Good", "Needs Improvement", "Penalty"];
 
 function dhakaToday() {
@@ -25,18 +50,28 @@ export async function GET() {
   if (!me) return bad("Unauthorized", 401);
 
   const myEmp = me.employeeId ? Number(me.employeeId) : null;
-  const approver = isApprover(me.role);
+  const canMonitorAll = canMonitorAllWork(me.role);
+const approver = canApproveWork(me.role);
 
-  const rows = approver
-    ? await db.select().from(tasks).orderBy(desc(tasks.id)).limit(600)
-    : myEmp
-      ? await db
-          .select()
-          .from(tasks)
-          .where(or(eq(tasks.assignedTo, myEmp), eq(tasks.assignedByEmployeeId, myEmp)))
-          .orderBy(desc(tasks.id))
-          .limit(300)
-      : [];
+  const rows = canMonitorAll
+  ? await db
+      .select()
+      .from(tasks)
+      .orderBy(desc(tasks.lastUpdateAt), desc(tasks.id))
+      .limit(600)
+  : myEmp
+    ? await db
+        .select()
+        .from(tasks)
+        .where(
+          or(
+            eq(tasks.assignedTo, myEmp),
+            eq(tasks.assignedByEmployeeId, myEmp)
+          )
+        )
+        .orderBy(desc(tasks.lastUpdateAt), desc(tasks.id))
+        .limit(300)
+    : [];
 
   const ids = rows.map((r) => r.id);
   const history = ids.length
@@ -69,6 +104,7 @@ export async function GET() {
   return NextResponse.json({
     me: { id: me.id, name: me.name, role: me.role, employeeId: myEmp },
     isApprover: approver,
+    canMonitorAll,
     today: dhakaToday(),
     tasks: rows,
     history,
@@ -84,7 +120,9 @@ export async function POST(req: NextRequest) {
   if (!me) return bad("Unauthorized", 401);
 
   const myEmp = me.employeeId ? Number(me.employeeId) : null;
-  const approver = isApprover(me.role);
+  
+const approver = canApproveWork(me.role);
+const canMonitorAll = approver;
 
   let body: any;
   try {

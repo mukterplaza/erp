@@ -43,7 +43,7 @@ import {
   announcementReads,
   workFiles,
 } from "@/db";
-import { eq, desc, and, isNull, sql } from "drizzle-orm";
+import { eq, desc, and, isNull, sql, gte } from "drizzle-orm";
 import {
   getCurrentUser,
   hasPermission,
@@ -66,6 +66,9 @@ import {
   recordStockMovementTx,
   postDoubleEntryJournalTx,
   computeExactMaterialStock,
+  isLateDeductible,
+  workShortfallHours,
+  STANDARD_WORK_HOURS,
 } from "@/lib/erp-engine";
 import { computeEmployeeWork } from "@/lib/work-tracking";
 import { randomBytes } from "crypto";
@@ -101,6 +104,13 @@ function getDhakaDateTime(now = new Date()) {
   };
 }
 
+// ইতিহাস কত দিন পেছন পর্যন্ত API-তে যাবে (মাসিক হাজিরা ৬ মাস কভার করে)
+function historyCutoffDate(days = 365): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
+}
+
 function validateFourPunches(punches: {
   checkIn?: string | null;
   checkOut?: string | null;
@@ -109,29 +119,34 @@ function validateFourPunches(punches: {
   overrideStatus?: string;
 }) {
   const values = [punches.checkIn, punches.checkOut, punches.checkIn2, punches.checkOut2];
+  
+  // Time format validation
   if (values.some((value) => value && !/^([01]\d|2[0-3]):[0-5]\d$/.test(value))) {
     throw new AttendanceRequestError("Attendance times must use HH:mm format.");
   }
+
+  // Order validation: IN1 < OUT1 < IN2 < OUT2
+  if (punches.checkOut && punches.checkIn && punches.checkOut <= punches.checkIn) {
+    throw new AttendanceRequestError("Morning OUT must be after morning IN.");
+  }
+  if (punches.checkIn2 && punches.checkOut && punches.checkIn2 <= punches.checkOut) {
+    throw new AttendanceRequestError("Afternoon IN must be after morning OUT.");
+  }
+  if (punches.checkOut2 && punches.checkIn2 && punches.checkOut2 <= punches.checkIn2) {
+    throw new AttendanceRequestError("Afternoon OUT must be after afternoon IN.");
+  }
+
+  // Dependency validation
   if (punches.checkOut && !punches.checkIn) {
     throw new AttendanceRequestError("Morning OUT requires morning IN.");
   }
-  if (punches.checkIn2 && (!punches.checkIn || !punches.checkOut)) {
-    throw new AttendanceRequestError("Afternoon IN requires both morning punches.");
+  if (punches.checkIn2 && !punches.checkOut) {
+    throw new AttendanceRequestError("Afternoon IN requires morning OUT.");
   }
   if (punches.checkOut2 && !punches.checkIn2) {
     throw new AttendanceRequestError("Afternoon OUT requires afternoon IN.");
   }
-  if (punches.checkOut && punches.checkOut >= "14:30") {
-    throw new AttendanceRequestError("Morning OUT must be before the afternoon shift.");
-  }
-  if (punches.checkIn2 && punches.checkIn2 < "14:30") {
-    throw new AttendanceRequestError("Afternoon IN cannot be before 14:30.");
-  }
-  for (let index = 1; index < values.length; index++) {
-    if (values[index - 1] && values[index] && values[index]! <= values[index - 1]!) {
-      throw new AttendanceRequestError("Attendance punches must follow IN, OUT, IN, OUT order.");
-    }
-  }
+
   return calculateFourPunchAttendanceMetrics(punches);
 }
 
@@ -152,7 +167,7 @@ export async function GET(req: NextRequest) {
     leadCompanyAccess(currentUser) === "NONE"
   ) {
     return NextResponse.json(
-      { error: "à¦²à¦¿à¦¡/CRM à¦¦à§‡à¦–à¦¾à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤ Access Denied." },
+      { error: "লিড/CRM দেখার অনুমতি নেই। Access Denied." },
       { status: 403 }
     );
   }
@@ -170,6 +185,8 @@ export async function GET(req: NextRequest) {
       { status: 403 }
     );
   }
+
+  const cutoff = historyCutoffDate();
 
   const [
     allUsers,
@@ -210,6 +227,7 @@ export async function GET(req: NextRequest) {
     allReminderSettings,
     allAnnouncements,
     allAnnouncementReads,
+    workFileRows,
   ] = await Promise.all([
     db.select({
       id: users.id,
@@ -222,26 +240,35 @@ export async function GET(req: NextRequest) {
       createdAt: users.createdAt,
     }).from(users).orderBy(users.id),
     db.select().from(employees).orderBy(employees.id),
-    db.select().from(attendances).orderBy(desc(attendances.date), desc(attendances.id)),
-    db.select().from(attendanceCorrections).orderBy(desc(attendanceCorrections.id)),
+    // শুধু শেষ ১৯০ দিনের হাজিরা — মাসিক রিপোর্ট ৬ মাস পর্যন্ত কাজ করবে
+    db.select().from(attendances)
+      .where(gte(attendances.date, cutoff))
+      .orderBy(desc(attendances.date), desc(attendances.id)),
+    db.select().from(attendanceCorrections).orderBy(desc(attendanceCorrections.id)).limit(300),
     db.select().from(leads).orderBy(desc(leads.id)),
     db.select().from(leadFollowups).orderBy(desc(leadFollowups.id)),
     db.select().from(clients).orderBy(desc(clients.id)),
     db.select().from(projects).orderBy(projects.id),
     db.select().from(sites).orderBy(sites.id),
-    db.select().from(siteReports).orderBy(desc(siteReports.id)),
+    db.select().from(siteReports).orderBy(desc(siteReports.id)).limit(300),
     db.select().from(quotations).orderBy(desc(quotations.id)),
     db.select().from(tasks).orderBy(desc(tasks.id)),
-    db.select().from(taskComments).orderBy(desc(taskComments.id)),
-    db.select().from(dailyWorks).orderBy(desc(dailyWorks.date), desc(dailyWorks.id)),
+    // Comments শুধু display-এ লাগে
+    db.select().from(taskComments).orderBy(desc(taskComments.id)).limit(800),
+    // শেষ ১৯০ দিনের দৈনিক কাজ
+    db.select().from(dailyWorks)
+      .where(gte(dailyWorks.date, cutoff))
+      .orderBy(desc(dailyWorks.date), desc(dailyWorks.id)),
     db.select().from(materials).orderBy(materials.id),
-    db.select().from(stockMovements).orderBy(desc(stockMovements.id)),
+    // Stock movement তালিকা display-only (স্টক হিসাব materials টেবিল থেকে হয়)
+    db.select().from(stockMovements).orderBy(desc(stockMovements.id)).limit(400),
     db.select().from(suppliers).orderBy(suppliers.id),
     db.select().from(purchaseRequests).orderBy(desc(purchaseRequests.id)),
     db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.id)),
     db.select().from(supplierBills).orderBy(desc(supplierBills.id)),
     db.select().from(labours).orderBy(labours.id),
     db.select().from(contractors).orderBy(contractors.id),
+    // ⚠️ আর্থিক টেবিলে limit নেই — টাকার হিসাব সম্পূর্ণ থাকতে হবে
     db.select().from(expenses).orderBy(desc(expenses.id)),
     db.select().from(accounts).orderBy(accounts.code),
     db.select().from(journalEntries).orderBy(desc(journalEntries.id)),
@@ -251,16 +278,30 @@ export async function GET(req: NextRequest) {
     db.select().from(payrolls).orderBy(desc(payrolls.id)),
     db.select().from(leaveRequests).orderBy(desc(leaveRequests.id)),
     db.select().from(performanceReviews).orderBy(desc(performanceReviews.id)),
-    db.select().from(documents).orderBy(desc(documents.id)),
-    db.select().from(notifications).orderBy(desc(notifications.id)),
+    db.select().from(documents).orderBy(desc(documents.id)).limit(300),
+    db.select().from(notifications).orderBy(desc(notifications.id)).limit(150),
     db.select().from(auditLogs).orderBy(desc(auditLogs.id)).limit(150),
-    db.select().from(dailyWorkPlans).orderBy(desc(dailyWorkPlans.date), desc(dailyWorkPlans.id)),
+    // শেষ ১৯০ দিনের কাজের পরিকল্পনা
+    db.select().from(dailyWorkPlans)
+      .where(gte(dailyWorkPlans.date, cutoff))
+      .orderBy(desc(dailyWorkPlans.date), desc(dailyWorkPlans.id)),
     db.select().from(reminderSettings).orderBy(reminderSettings.id),
     db.select().from(announcements).orderBy(desc(announcements.id)),
     db.select().from(announcementReads),
+    db.select({
+      id: workFiles.id,
+      taskId: workFiles.taskId,
+      employeeId: workFiles.employeeId,
+      uploadedByName: workFiles.uploadedByName,
+      uploadedByUserId: workFiles.uploadedByUserId,
+      fileName: workFiles.fileName,
+      mimeType: workFiles.mimeType,
+      sizeBytes: workFiles.sizeBytes,
+      createdAt: workFiles.createdAt,
+    }).from(workFiles).orderBy(desc(workFiles.id)).limit(400),
   ]);
 
-    // =========================================================================
+  // =========================================================================
   // GRANULAR SERVER-SIDE DATA SCOPING & STAFF PRIVACY ENFORCEMENT
   // =========================================================================
   const isFullAccess =
@@ -280,7 +321,6 @@ export async function GET(req: NextRequest) {
 
   const myEmpId = currentUser.employeeId;
 
-  // ফিন্যান্সিয়াল ম্যানেজমেন্ট রোল (যারা সবার জমা-খরচ অডিট করতে পারবে)
   const canSeeAllFinancials = isFullAccess || isAccounts || isHR;
 
   const scopedAttendances =
@@ -330,8 +370,6 @@ export async function GET(req: NextRequest) {
             s.engineerId === myEmpId
         );
 
-  // ⭐ খরচের কঠোর প্রাইভেসি (Scoped Expenses):
-  // সাধারণ স্টাফ শুধুমাত্র তার নিজের ভাউচার পাবে, অন্য কোনো স্টাফের খরচ সার্ভার থেকে আসবেই না
   const scopedExpenses = canSeeAllFinancials
     ? allExpenses
     : isPM
@@ -342,8 +380,6 @@ export async function GET(req: NextRequest) {
       )
     : allExpenses.filter((e) => e.employeeId === myEmpId);
 
-  // ⭐ জমার কঠোর প্রাইভেসি (Scoped Payments):
-  // সাধারণ স্টাফ শুধুমাত্র তাকে দেওয়া জমা/অগ্রিম রসিদ দেখতে পাবে
   const scopedPayments = canSeeAllFinancials
     ? allPayments
     : isPM
@@ -382,100 +418,55 @@ export async function GET(req: NextRequest) {
   });
 
   const attendanceEmployeeIds = new Set(allAttendances.map((attendance) => attendance.employeeId));
+  const directoryShape = (employee: (typeof allEmployees)[number]) => ({
+    id: employee.id,
+    empCode: employee.empCode,
+    name: employee.name,
+    department: employee.department,
+    designation: employee.designation,
+    companyId: employee.companyId,
+    assignedSite: employee.assignedSite,
+    archived: employee.archived,
+  });
   const scopedDirectory =
     isFullAccess || isHR
       ? allEmployees
           .filter((employee) => !employee.archived || attendanceEmployeeIds.has(employee.id))
-          .map((employee) => ({
-            id: employee.id,
-            empCode: employee.empCode,
-            name: employee.name,
-            department: employee.department,
-            designation: employee.designation,
-            companyId: employee.companyId,
-            assignedSite: employee.assignedSite,
-            archived: employee.archived,
-          }))
+          .map(directoryShape)
       : isPM || isAccounts
-        ? allEmployees
-            .filter((employee) => !employee.archived)
-            .map((employee) => ({
-              id: employee.id,
-              empCode: employee.empCode,
-              name: employee.name,
-              department: employee.department,
-              designation: employee.designation,
-              companyId: employee.companyId,
-              assignedSite: employee.assignedSite,
-              archived: employee.archived,
-            }))
-        : allEmployees
-            .filter((employee) => employee.id === myEmpId)
-            .map((employee) => ({
-              id: employee.id,
-              empCode: employee.empCode,
-              name: employee.name,
-              department: employee.department,
-              designation: employee.designation,
-              companyId: employee.companyId,
-              assignedSite: employee.assignedSite,
-              archived: employee.archived,
-            }));
-  // Enrich Projects with Real Dynamic Calculations (Budget vs Actual Cost vs Revenue vs Profit/Loss)
+        ? allEmployees.filter((employee) => !employee.archived).map(directoryShape)
+        : allEmployees.filter((employee) => employee.id === myEmpId).map(directoryShape);
+
+  // Enrich Projects (Budget vs Actual vs Revenue vs P/L)
   const enrichedProjects = scopedProjects.map((proj) => {
     const projExpenses = allExpenses.filter(
-      (e) =>
-        e.projectId === proj.id &&
-        e.approvalStatus === "Approved"
+      (e) => e.projectId === proj.id && e.approvalStatus === "Approved"
     );
-    const actualCost = projExpenses.reduce(
-      (sum, e) => sum + Number(e.amount || 0),
-      0
-    );
-    const materialCost = projExpenses
-      .filter((e) => e.category === "Material")
-      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const labourCost = projExpenses
-      .filter((e) => e.category === "Labour")
-      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const contractorCost = projExpenses
-      .filter((e) => e.category === "Contractor")
-      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const transportCost = projExpenses
-      .filter((e) => e.category === "Transport")
-      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const siteExpenseCost = projExpenses
-      .filter((e) => e.category === "Site Expense")
-      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-
+    const sumBy = (cat?: string) =>
+      projExpenses
+        .filter((e) => !cat || e.category === cat)
+        .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const actualCost = sumBy();
     const projInvoices = allInvoices.filter(
       (inv) => inv.projectId === proj.id && inv.status !== "Void"
     );
-    const totalRevenue = projInvoices.reduce(
-      (sum, inv) => sum + Number(inv.totalAmount || 0),
-      0
-    );
-    const collectedRevenue = projInvoices.reduce(
-      (sum, inv) => sum + Number(inv.paidAmount || 0),
-      0
-    );
-    const profitLoss = totalRevenue - actualCost;
+    const totalRevenue = projInvoices.reduce((s, inv) => s + Number(inv.totalAmount || 0), 0);
+    const collectedRevenue = projInvoices.reduce((s, inv) => s + Number(inv.paidAmount || 0), 0);
 
     return {
       ...proj,
       actualCost: Number(actualCost.toFixed(2)),
-      materialCost: Number(materialCost.toFixed(2)),
-      labourCost: Number(labourCost.toFixed(2)),
-      contractorCost: Number(contractorCost.toFixed(2)),
-      transportCost: Number(transportCost.toFixed(2)),
-      siteExpenseCost: Number(siteExpenseCost.toFixed(2)),
+      materialCost: Number(sumBy("Material").toFixed(2)),
+      labourCost: Number(sumBy("Labour").toFixed(2)),
+      contractorCost: Number(sumBy("Contractor").toFixed(2)),
+      transportCost: Number(sumBy("Transport").toFixed(2)),
+      siteExpenseCost: Number(sumBy("Site Expense").toFixed(2)),
       totalRevenue: Number(totalRevenue.toFixed(2)),
       collectedRevenue: Number(collectedRevenue.toFixed(2)),
-      profitLoss: Number(profitLoss.toFixed(2)),
+      profitLoss: Number((totalRevenue - actualCost).toFixed(2)),
     };
   });
 
-  // Enrich Materials with verified Stock Formula & Valuation
   const enrichedMaterials = allMaterials.map((m) => {
     const calculatedStock = computeExactMaterialStock(m);
     const stockValuation = Number((calculatedStock * Number(m.unitCost || 0)).toFixed(2));
@@ -487,16 +478,16 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  void section;
-
   // =========================================================================
-  // FOLLOW-UP ANALYTICS BOARD (Today / Overdue / Upcoming / Staff Performance)
+  // FOLLOW-UP ANALYTICS BOARD
   // =========================================================================
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getDhakaDateTime().date; // ⭐ বাংলাদেশ তারিখ (আগে UTC ছিল)
   const dayMs = 86400000;
-  const tomorrowStr = new Date(Date.now() + dayMs).toISOString().split("T")[0];
-  const in3DaysStr = new Date(Date.now() + 3 * dayMs).toISOString().split("T")[0];
-  const in7DaysStr = new Date(Date.now() + 7 * dayMs).toISOString().split("T")[0];
+  const dayOffset = (n: number) =>
+    new Date(Date.now() + n * dayMs).toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
+  const tomorrowStr = dayOffset(1);
+  const in3DaysStr = dayOffset(3);
+  const in7DaysStr = dayOffset(7);
 
   const empDirMap = new Map(allEmployees.map((e) => [e.id, e.name]));
   const allLeadRowsForBoard = allLeads;
@@ -590,7 +581,6 @@ export async function GET(req: NextRequest) {
         r.lastOutcome || ""
       )
     ),
-    // Dashboard KPIs (all dynamic)
     summary: {
       activeLeads: activeLeadRows.length,
       totalLeads: allLeadRowsForBoard.length,
@@ -603,8 +593,8 @@ export async function GET(req: NextRequest) {
       followUpsCompletedToday: allFollowups.filter((f) => f.date === todayStr).length,
       leadsWithoutNextFollowUp: bucketOf("No Next Follow-up").length,
       leadsNeverFollowedUp: followUpBoardRows.filter((r) => r.totalFollowUps === 0).length,
-      leadsWithNoResponse: 0, // filled below
-      leadsAwaitingClientResponse: 0, // filled below
+      leadsWithNoResponse: 0,
+      leadsAwaitingClientResponse: 0,
       onHoldLeads: allLeadRowsForBoard.filter((l) => l.status === "On Hold").length,
     },
     staffPerformance: Array.from(
@@ -634,9 +624,8 @@ export async function GET(req: NextRequest) {
     followUpBoard.awaitingClientResponse.length;
 
   // =========================================================================
-  // OPTION B â€” EMPLOYEE WORK TRACKING (same task data, no duplicate system)
+  // EMPLOYEE WORK TRACKING
   // =========================================================================
-  const workTodayStr = new Date().toISOString().split("T")[0];
   const canSeeTeamWork = isFullAccess || isHR;
   const workScopeEmployees = allEmployees.filter(
     (e) => !e.archived && (canSeeTeamWork || e.id === myEmpId)
@@ -650,7 +639,7 @@ export async function GET(req: NextRequest) {
       leads: allLeads,
       reviews: allPerformance,
       comments: allTaskComments,
-      today: workTodayStr,
+      today: todayStr,
     })
   );
   const workOverview = {
@@ -666,30 +655,15 @@ export async function GET(req: NextRequest) {
     dailyUpdatesToday: employeeWork.reduce((s, w) => s + w.today.dailyUpdates, 0),
   };
   const visibleTaskIds = new Set<number>();
-  // tasks visible to this user (reuse existing scoping)
   for (const t of allTasks) {
     if (canSeeTeamWork || isPM || t.assignedTo === myEmpId || t.isCompanyWide) visibleTaskIds.add(t.id);
   }
-  const workFileRows = await db
-    .select({
-      id: workFiles.id,
-      taskId: workFiles.taskId,
-      employeeId: workFiles.employeeId,
-      uploadedByName: workFiles.uploadedByName,
-      uploadedByUserId: workFiles.uploadedByUserId,
-      fileName: workFiles.fileName,
-      mimeType: workFiles.mimeType,
-      sizeBytes: workFiles.sizeBytes,
-      createdAt: workFiles.createdAt,
-    })
-    .from(workFiles)
-    .orderBy(desc(workFiles.id));
   const scopedWorkFiles = workFileRows.filter(
     (f) =>
       canSeeTeamWork ||
       f.employeeId === myEmpId ||
       f.uploadedByUserId === currentUser.id ||
-      (f.taskId !== null && visibleTaskIds.has(f.taskId) && (isPM || false))
+      (f.taskId !== null && visibleTaskIds.has(f.taskId) && isPM)
   );
 
   return NextResponse.json({
@@ -740,7 +714,7 @@ export async function GET(req: NextRequest) {
       const ids = new Set(scopedTasks.map((t) => t.id));
       return allTaskComments.filter((c) => ids.has(c.taskId));
     })(),
-        dailyWorks: scopedDailyWorks,
+    dailyWorks: scopedDailyWorks,
     dailyWorkPlans: scopedDailyWorkPlans,
     materials: enrichedMaterials,
     stockMovements: allStockMovements,
@@ -750,26 +724,19 @@ export async function GET(req: NextRequest) {
     supplierBills: isStaffOnly ? [] : allSupplierBills,
     labours: allLabours,
     contractors: isStaffOnly ? [] : allContractors,
-
-    // ⭐ খরচ: সাধারণ স্টাফ শুধু নিজের ভাউচার পাবে, ম্যানেজমেন্ট সবারটা পাবে
     expenses: scopedExpenses,
-
     accounts: isFullAccess || isAccounts ? allAccounts : [],
     journalEntries: isFullAccess || isAccounts ? allJournals : [],
     journalLines: isFullAccess || isAccounts ? allJournalLines : [],
     invoices: isStaffOnly ? [] : allInvoices,
-
-    // ⭐ জমা: স্টাফরা যেন নিজের জমা/অগ্রিম রসিদ দেখতে পায় (আগে [] পাঠানো হচ্ছিল)
     payments: scopedPayments,
-
     payrolls: scopedPayrolls,
     leaveRequests: scopedLeaves,
     performanceReviews: scopedPerformance,
     documents: scopedDocuments,
     notifications: allNotifications.filter((n) => {
-      if (n.userId !== null) return n.userId === currentUser.id; // personal delivery only
-      // legacy / broadcast rows (no recipient)
-      if (n.type === "Announcement" || n.type === "ANNOUNCEMENT") return true; // GLOBAL company announcement
+      if (n.userId !== null) return n.userId === currentUser.id;
+      if (n.type === "Announcement" || n.type === "ANNOUNCEMENT") return true;
       if (n.type === "Work Plan Reminder" || n.type === "Daily Work Reminder") return true;
       return isFullAccess || isHR;
     }),
@@ -806,7 +773,7 @@ export async function POST(req: NextRequest) {
     ];
     if (LEAD_ACTIONS.includes(action) && leadCompanyAccess(currentUser) === "NONE") {
       return NextResponse.json(
-        { error: "à¦²à¦¿à¦¡/CRM API à¦¬à§à¦¯à¦¬à¦¹à¦¾à¦°à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤ à§ªà§¦à§© Forbidden." },
+        { error: "লিড/CRM API ব্যবহারের অনুমতি নেই। 403 Forbidden." },
         { status: 403 }
       );
     }
@@ -814,13 +781,13 @@ export async function POST(req: NextRequest) {
     if (action === "createAnnouncement") {
       if (!canCreateAnnouncement(currentUser.role)) {
         return NextResponse.json(
-          { error: "à¦˜à§‹à¦·à¦£à¦¾ à¦¤à§ˆà¦°à¦¿à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" },
+          { error: "ঘোষণা তৈরির অনুমতি নেই।" },
           { status: 403 }
         );
       }
       const { title, message, attachmentUrl } = body;
       if (!title || !message) {
-        return NextResponse.json({ error: "à¦¶à¦¿à¦°à§‹à¦¨à¦¾à¦® à¦“ à¦¬à¦¾à¦°à§à¦¤à¦¾ à¦†à¦¬à¦¶à§à¦¯à¦•" }, { status: 400 });
+        return NextResponse.json({ error: "শিরোনাম ও বার্তা আবশ্যক" }, { status: 400 });
       }
       const [ann] = await db
         .insert(announcements)
@@ -837,7 +804,7 @@ export async function POST(req: NextRequest) {
         targetRole: "All",
         type: "ANNOUNCEMENT",
         category: "Announcement",
-        title: `à¦˜à§‹à¦·à¦£à¦¾: ${title}`,
+        title: `ঘোষণা: ${title}`,
         message,
         createdBy: currentUser.name,
         relatedUrl: "/dashboard",
@@ -926,13 +893,13 @@ export async function POST(req: NextRequest) {
         currentUser.role !== "Manager"
       ) {
         return NextResponse.json(
-          { error: "à¦­à§‚à¦®à¦¿à¦•à¦¾/à¦…à¦¨à§à¦®à¦¤à¦¿ à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" },
+          { error: "ভূমিকা/অনুমতি পরিবর্তনের অনুমতি নেই।" },
           { status: 403 }
         );
       }
       if (Number(body.userId) === currentUser.id && body.role && body.role !== currentUser.role) {
         return NextResponse.json(
-          { error: "à¦¨à¦¿à¦œà§‡à¦° à¦­à§‚à¦®à¦¿à¦•à¦¾ à¦¨à¦¿à¦œà§‡ à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨ à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼ à¦¨à¦¾à¥¤" },
+          { error: "নিজের ভূমিকা নিজে পরিবর্তন করা যায় না।" },
           { status: 403 }
         );
       }
@@ -956,7 +923,6 @@ export async function POST(req: NextRequest) {
         })
         .where(eq(users.id, Number(userId)));
 
-      // If user is made Inactive, immediately revoke all active sessions
       if (status === "Inactive") {
         await db.delete(sessions).where(eq(sessions.userId, Number(userId)));
       }
@@ -1127,8 +1093,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // =========================================================================
-    // 3. ATTENDANCE & CORRECTION WORKFLOW (Auto-Approved on IN/OUT)
+        // =========================================================================
+    // 3. ATTENDANCE & CORRECTION WORKFLOW (Option B: যেকোনো সময় IN/OUT)
     // =========================================================================
     if (action === "checkIn" || action === "checkOut") {
       const canManageOthers = canViewAllEmployeeProfiles(currentUser.role);
@@ -1137,7 +1103,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Employee ID required" }, { status: 400 });
       }
       if (!canManageOthers && employeeId !== currentUser.employeeId) {
-        return NextResponse.json({ error: "Staff can only record their own attendance." }, { status: 403 });
+        return NextResponse.json({ error: "নিজের হাজিরাই শুধু দেওয়া যাবে।" }, { status: 403 });
       }
 
       const { date, time } = getDhakaDateTime();
@@ -1151,7 +1117,7 @@ export async function POST(req: NextRequest) {
           .where(eq(employees.id, employeeId))
           .limit(1);
         if (!employee || employee.archived || employee.employmentStatus !== "Active") {
-          throw new AttendanceRequestError("Only active, non-archived employees can punch.", 404);
+          throw new AttendanceRequestError("শুধু সক্রিয় কর্মী হাজিরা দিতে পারবেন।", 404);
         }
 
         const rows = await tx
@@ -1160,19 +1126,11 @@ export async function POST(req: NextRequest) {
           .where(and(eq(attendances.employeeId, employeeId), eq(attendances.date, date)))
           .limit(2);
         if (rows.length > 1) {
-          throw new AttendanceRequestError("Multiple records exist for this employee and date; ask management to review them.", 409);
+          throw new AttendanceRequestError("এই তারিখে একাধিক রেকর্ড আছে; ম্যানেজমেন্টকে জানান।", 409);
         }
         const existing = rows[0];
-        if (existing) {
-          validateFourPunches({
-            checkIn: existing.checkIn,
-            checkOut: existing.checkOut,
-            checkIn2: existing.checkIn2,
-            checkOut2: existing.checkOut2,
-          });
-        }
         if (body.attendanceId && Number(body.attendanceId) !== existing?.id) {
-          throw new AttendanceRequestError("Attendance record does not match today's employee record.", 409);
+          throw new AttendanceRequestError("হাজিরা রেকর্ড মিলছে না।", 409);
         }
 
         const nextSlot = !existing
@@ -1185,37 +1143,36 @@ export async function POST(req: NextRequest) {
                 ? "checkOut2"
                 : null;
         if (!nextSlot) {
-          throw new AttendanceRequestError("All four attendance punches are already recorded.", 409);
+          throw new AttendanceRequestError("আজকের চারটি punch সম্পন্ন হয়েছে।", 409);
         }
-        if ((action === "checkIn" && nextSlot !== "checkIn" && nextSlot !== "checkIn2") ||
-            (action === "checkOut" && nextSlot !== "checkOut" && nextSlot !== "checkOut2")) {
-          throw new AttendanceRequestError(`Next required punch is ${nextSlot}.`, 409);
-        }
-        if (nextSlot === "checkIn" && time >= "14:30") {
-          throw new AttendanceRequestError("Morning IN has passed; submit an attendance correction request.", 409);
-        }
-        if (nextSlot === "checkOut" && time >= "14:30") {
-          throw new AttendanceRequestError("Morning OUT window has passed; submit an attendance correction request.", 409);
-        }
-        if (nextSlot === "checkIn2" && time < "14:30") {
-          throw new AttendanceRequestError("Afternoon IN is available from 14:30 Bangladesh time.", 409);
+        if (
+          (action === "checkIn" && nextSlot !== "checkIn" && nextSlot !== "checkIn2") ||
+          (action === "checkOut" && nextSlot !== "checkOut" && nextSlot !== "checkOut2")
+        ) {
+          throw new AttendanceRequestError(
+            nextSlot === "checkOut" || nextSlot === "checkOut2"
+              ? "এখন OUT দেওয়ার সময়।"
+              : "এখন IN দেওয়ার সময়।",
+            409
+          );
         }
 
+        // ⭐ ১৪:৩০ cutoff সরানো — শুধু আগের punch-এর পরে হতে হবে
         const priorTime =
           nextSlot === "checkOut" ? existing?.checkIn :
           nextSlot === "checkIn2" ? existing?.checkOut :
           nextSlot === "checkOut2" ? existing?.checkIn2 : null;
         if (priorTime && time <= priorTime) {
-          throw new AttendanceRequestError("Punch time must be later than the previous punch.", 409);
+          throw new AttendanceRequestError("আগের punch-এর পরের সময় হতে হবে।", 409);
         }
 
         const punches = {
-          checkIn: nextSlot === "checkIn" ? time : existing?.checkIn,
-          checkOut: nextSlot === "checkOut" ? time : existing?.checkOut,
-          checkIn2: nextSlot === "checkIn2" ? time : existing?.checkIn2,
-          checkOut2: nextSlot === "checkOut2" ? time : existing?.checkOut2,
+          checkIn: nextSlot === "checkIn" ? time : existing?.checkIn ?? null,
+          checkOut: nextSlot === "checkOut" ? time : existing?.checkOut ?? null,
+          checkIn2: nextSlot === "checkIn2" ? time : existing?.checkIn2 ?? null,
+          checkOut2: nextSlot === "checkOut2" ? time : existing?.checkOut2 ?? null,
         };
-        const metrics = calculateFourPunchAttendanceMetrics(punches);
+        const metrics = validateFourPunches(punches);
         const note = typeof body.notes === "string" ? body.notes.trim().slice(0, 500) : "";
         const updateValues = {
           ...punches,
@@ -1247,12 +1204,12 @@ export async function POST(req: NextRequest) {
         beforeData: result.before,
         afterData: { attendance: result.attendance, punch: result.slot },
       });
-      if (result.slot === "checkIn" && result.attendance.lateMinutes > 0) {
+      if (result.slot === "checkIn" && Number(result.attendance.lateMinutes) > 0) {
         await createNotification({
           targetRole: "Manager",
           type: "Attendance Correction",
-          title: `Late IN TIME: ${result.employeeName}`,
-          message: `${result.employeeName} checked in at ${time} on ${date}.`,
+          title: `দেরিতে IN: ${result.employeeName}`,
+          message: `${result.employeeName} ${date} তারিখে ${time}-এ IN দিয়েছেন (${result.attendance.lateMinutes} মিনিট দেরি)।`,
           createdBy: currentUser.name,
           relatedUrl: "/attendance",
           relatedEntityCode: `EMP-${String(employeeId).padStart(4, "0")}`,
@@ -1264,10 +1221,7 @@ export async function POST(req: NextRequest) {
     if (action === "editApprovedAttendance") {
       if (!canViewAllEmployeeProfiles(currentUser.role)) {
         return NextResponse.json(
-          {
-            error:
-              "Forbidden: Staff cannot directly edit approved attendance. Please submit an Attendance Correction Request.",
-          },
+          { error: "সরাসরি হাজিরা পরিবর্তন করা যাবে না। Correction Request দিন।" },
           { status: 403 }
         );
       }
@@ -1276,11 +1230,7 @@ export async function POST(req: NextRequest) {
       if (!Number.isInteger(id) || id <= 0) {
         return NextResponse.json({ error: "Attendance ID is required." }, { status: 400 });
       }
-      const [existing] = await db
-        .select()
-        .from(attendances)
-        .where(eq(attendances.id, id))
-        .limit(1);
+      const [existing] = await db.select().from(attendances).where(eq(attendances.id, id)).limit(1);
       if (!existing) {
         return NextResponse.json({ error: "Attendance record not found." }, { status: 404 });
       }
@@ -1293,10 +1243,7 @@ export async function POST(req: NextRequest) {
       const metrics = validateFourPunches({ ...punches, overrideStatus: status });
       const [updated] = await db
         .update(attendances)
-        .set({
-          ...punches,
-          ...metrics,
-        })
+        .set({ ...punches, ...metrics })
         .where(eq(attendances.id, id))
         .returning();
 
@@ -1320,7 +1267,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Employee ID required." }, { status: 400 });
       }
       if (!canManageCorrections && employeeId !== currentUser.employeeId) {
-        return NextResponse.json({ error: "Staff can request corrections only for their own attendance." }, { status: 403 });
+        return NextResponse.json({ error: "শুধু নিজের হাজিরার সংশোধন চাওয়া যাবে।" }, { status: 403 });
       }
       const {
         attendanceId,
@@ -1337,7 +1284,7 @@ export async function POST(req: NextRequest) {
         !requestedCheckOut ||
         !String(reason || "").trim()
       ) {
-        return NextResponse.json({ error: "All correction fields are required" }, { status: 400 });
+        return NextResponse.json({ error: "সব তথ্য দিন (তারিখ, IN, OUT, কারণ)।" }, { status: 400 });
       }
       validateFourPunches({
         checkIn: requestedCheckIn,
@@ -1352,7 +1299,7 @@ export async function POST(req: NextRequest) {
           .where(eq(attendances.id, Number(attendanceId)))
           .limit(1);
         if (!record || record.employeeId !== employeeId || record.date !== date) {
-          return NextResponse.json({ error: "Attendance record does not match the correction request." }, { status: 404 });
+          return NextResponse.json({ error: "হাজিরা রেকর্ড মিলছে না।" }, { status: 404 });
         }
       }
 
@@ -1374,8 +1321,8 @@ export async function POST(req: NextRequest) {
       await createNotification({
         targetRole: "HR",
         type: "Attendance Correction",
-        title: `Attendance Correction Request from ${currentUser.name}`,
-        message: `Date: ${date} (${requestedCheckIn} - ${requestedCheckOut}). Reason: ${reason}`,
+        title: `হাজিরা সংশোধনের অনুরোধ: ${currentUser.name}`,
+        message: `তারিখ: ${date} (${requestedCheckIn} - ${requestedCheckOut}${requestedCheckIn2 ? `, ${requestedCheckIn2} - ${requestedCheckOut2 || "?"}` : ""})। কারণ: ${reason}`,
         relatedUrl: "/attendance",
         relatedEntityCode: `CORR-${corr.id}`,
       });
@@ -1400,7 +1347,7 @@ export async function POST(req: NextRequest) {
           .limit(1);
         if (!corr) throw new AttendanceRequestError("Correction request not found.", 404);
         if (corr.status !== "Pending") {
-          throw new AttendanceRequestError("Correction request has already been reviewed.", 409);
+          throw new AttendanceRequestError("এই অনুরোধ আগেই রিভিউ হয়েছে।", 409);
         }
 
         let beforeAttendance: typeof attendances.$inferSelect | undefined;
@@ -1416,47 +1363,29 @@ export async function POST(req: NextRequest) {
               .where(eq(attendances.id, corr.attendanceId))
               .limit(1);
             if (!linked || linked.employeeId !== corr.employeeId || linked.date !== corr.date) {
-              throw new AttendanceRequestError("Correction no longer matches its attendance record.", 409);
+              throw new AttendanceRequestError("সংশোধন আর হাজিরা রেকর্ডের সাথে মিলছে না।", 409);
             }
             beforeAttendance = linked;
           } else {
             const rows = await tx
               .select()
               .from(attendances)
-              .where(and(
-                eq(attendances.employeeId, corr.employeeId),
-                eq(attendances.date, corr.date)
-              ))
+              .where(and(eq(attendances.employeeId, corr.employeeId), eq(attendances.date, corr.date)))
               .limit(2);
             if (rows.length > 1) {
-              throw new AttendanceRequestError("Multiple attendance rows exist for this date; management review is required.", 409);
+              throw new AttendanceRequestError("এই তারিখে একাধিক রেকর্ড আছে; ম্যানেজমেন্ট রিভিউ দরকার।", 409);
             }
             beforeAttendance = rows[0];
           }
 
-          const punches: {
-            checkIn: string | null;
-            checkOut: string | null;
-            checkIn2: string | null;
-            checkOut2: string | null;
-          } = {
+          // ⭐ Option B: legacy ১৪:৩০ ভাগাভাগি নেই — অনুরোধ যেমন, তেমনই চার punch
+          const punches = {
             checkIn: corr.requestedCheckIn,
             checkOut: corr.requestedCheckOut,
-            checkIn2: corr.requestedCheckIn2 ?? beforeAttendance?.checkIn2 ?? null,
-            checkOut2: corr.requestedCheckOut2 ?? beforeAttendance?.checkOut2 ?? null,
+            checkIn2: corr.requestedCheckIn2 ?? null,
+            checkOut2: corr.requestedCheckOut2 ?? null,
           };
-          const legacyFinalOut =
-            !corr.requestedCheckIn2 &&
-            !corr.requestedCheckOut2 &&
-            corr.requestedCheckOut >= "14:30";
-          const hasAfternoonIn = Boolean(punches.checkIn2);
-          if (legacyFinalOut && hasAfternoonIn) {
-            punches.checkOut = beforeAttendance?.checkOut ?? null;
-            punches.checkOut2 = corr.requestedCheckOut;
-          }
-          const metrics = legacyFinalOut && !hasAfternoonIn
-            ? calculateAttendanceMetrics(corr.requestedCheckIn, corr.requestedCheckOut)
-            : validateFourPunches(punches);
+          const metrics = validateFourPunches(punches);
           const values = {
             ...punches,
             ...metrics,
@@ -1528,7 +1457,14 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const employeeId = Number(body.employeeId || currentUser.employeeId || 1);
+      // ⭐ fallback "|| 1" সরানো — লগইনে কর্মী লিংক না থাকলে ভুল কর্মীর নামে সেভ হতো
+      const employeeId = Number(body.employeeId || currentUser.employeeId);
+      if (!Number.isInteger(employeeId) || employeeId <= 0) {
+        return NextResponse.json(
+          { error: "আপনার লগইন কোনো কর্মী প্রোফাইলের সাথে যুক্ত নয়। HR-কে জানান।" },
+          { status: 400 }
+        );
+      }
       const {
         date,
         arrivalTime,
@@ -1564,7 +1500,7 @@ export async function POST(req: NextRequest) {
         if (!chk) return NextResponse.json({ error: "Task not found" }, { status: 404 });
         if (!isDwMgmt && chk.assignedTo !== employeeId && !chk.isCompanyWide) {
           return NextResponse.json(
-            { error: "à¦¨à¦¿à¦œà§‡à¦° à¦¨à¦¯à¦¼ à¦à¦®à¦¨ à¦Ÿà¦¾à¦¸à§à¦•à§‡ à¦¦à§ˆà¦¨à¦¿à¦• à¦•à¦¾à¦œ à¦¯à§à¦•à§à¦¤ à¦•à¦°à¦¾ à¦¯à¦¾à¦¬à§‡ à¦¨à¦¾à¥¤" },
+            { error: "নিজের নয় এমন টাস্কে দৈনিক কাজ যুক্ত করা যাবে না।" },
             { status: 403 }
           );
         }
@@ -1633,7 +1569,7 @@ export async function POST(req: NextRequest) {
             authorName: currentUser.name,
             actorEmployeeId: currentUser.employeeId,
             actorDesignation: currentUser.designation,
-            comment: `à¦¦à§ˆà¦¨à¦¿à¦• à¦•à¦¾à¦œ (${prog}%): ${workSummary}`,
+            comment: `দৈনিক কাজ (${prog}%): ${workSummary}`,
             actionType: newStatus === "Review" ? "SubmittedForReview" : dwFileIds.length ? "ProofSubmitted" : "ProgressUpdate",
             eventType:
               newStatus === "Review"
@@ -1681,8 +1617,8 @@ export async function POST(req: NextRequest) {
           actor: { id: currentUser.id, name: currentUser.name },
           category: "Daily Work",
           eventType: "DAILY_WORK_SUBMITTED",
-          title: `à¦¦à§ˆà¦¨à¦¿à¦• à¦†à¦ªà¦¡à§‡à¦Ÿ: ${empRow?.name || currentUser.name}`,
-          message: `${String(workSummary).slice(0, 200)}${linked ? `\nà¦Ÿà¦¾à¦¸à§à¦•: ${linked.taskCode} â€” ${linked.title} (${prog}%)` : ""}${problems ? `\nà¦¸à¦®à¦¸à§à¦¯à¦¾: ${problems}` : ""}`,
+          title: `দৈনিক আপডেট: ${empRow?.name || currentUser.name}`,
+          message: `${String(workSummary).slice(0, 200)}${linked ? `\nটাস্ক: ${linked.taskCode} — ${linked.title} (${prog}%)` : ""}${problems ? `\nসমস্যা: ${problems}` : ""}`,
           task: linked || null,
           relatedEmployeeId: employeeId,
           relatedUrl: linked ? `/tasks/${linked.id}` : `/employees/${employeeId}/daily`,
@@ -1704,7 +1640,14 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const employeeId = Number(body.employeeId || currentUser.employeeId || 1);
+      // ⭐ fallback "|| 1" সরানো
+      const employeeId = Number(body.employeeId || currentUser.employeeId);
+      if (!Number.isInteger(employeeId) || employeeId <= 0) {
+        return NextResponse.json(
+          { error: "আপনার লগইন কোনো কর্মী প্রোফাইলের সাথে যুক্ত নয়। HR-কে জানান।" },
+          { status: 400 }
+        );
+      }
       const planDate = body.date || today;
       const items = Array.isArray(body.items) ? body.items : [];
       if (items.length === 0) {
@@ -1738,11 +1681,13 @@ export async function POST(req: NextRequest) {
 
       const autoProgressPercent = calculateWorkPlanProgress(formattedItems);
 
+      // ⭐ ডুপ্লিকেট প্ল্যান থাকলে সর্বশেষটা আপডেট হবে
       const existingPlans = await db
         .select()
         .from(dailyWorkPlans)
-        .where(eq(dailyWorkPlans.employeeId, employeeId));
-      const existingToday = existingPlans.find((p) => p.date === planDate);
+        .where(and(eq(dailyWorkPlans.employeeId, employeeId), eq(dailyWorkPlans.date, planDate)))
+        .orderBy(desc(dailyWorkPlans.id));
+      const existingToday = existingPlans[0];
 
       if (existingToday) {
         const [updated] = await db
@@ -1884,97 +1829,124 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const existingTasks = await db.select().from(tasks);
-      const taskCode = `TSK-${String(existingTasks.length + 1).padStart(4, "0")}`;
       const canAssignOthers =
         canViewAllEmployeeProfiles(currentUser.role) || currentUser.role === "Project Manager";
       if (!canAssignOthers) {
-        // Only Founder/CEO, Chairman, MD/Admin, General Manager, HR and Project Manager may create/assign tasks
         return NextResponse.json(
-          { error: "à¦Ÿà¦¾à¦¸à§à¦• à¦¤à§ˆà¦°à¦¿/à¦¬à¦£à§à¦Ÿà¦¨à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" },
+          { error: "টাস্ক তৈরি/বণ্টনের অনুমতি নেই।" },
           { status: 403 }
         );
       }
-      const allEmps = await db.select().from(employees);
-      const targetEmp = allEmps.find((e) => e.id === Number(assignedTo || currentUser.employeeId));
-      if (!assignToAllStaff && (!targetEmp || targetEmp.archived || targetEmp.employmentStatus !== "Active")) {
-        return NextResponse.json({ error: "à¦¸à¦•à§à¦°à¦¿à¦¯à¦¼ à¦•à¦°à§à¦®à§€ à¦¨à¦¿à¦°à§à¦¬à¦¾à¦šà¦¨ à¦•à¦°à§à¦¨" }, { status: 400 });
-      }
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate))) {
-        return NextResponse.json({ error: "à¦¸à¦ à¦¿à¦• à¦¡à§‡à¦¡à¦²à¦¾à¦‡à¦¨ à¦¤à¦¾à¦°à¦¿à¦– à¦¦à¦¿à¦¨" }, { status: 400 });
-      }
-      const dueTimeVal = body.dueTime && /^\d{2}:\d{2}$/.test(String(body.dueTime)) ? String(body.dueTime) : null;
-      const assigner = allEmps.find((e) => e.id === currentUser.employeeId);
-      const assignedLabel = assignToAllStaff ? "à¦¸à¦•à¦² à¦¸à§à¦Ÿà¦¾à¦«" : targetEmp!.name;
-      const assigneeEmp = targetEmp || assigner;
 
-      const [created] = await db
-        .insert(tasks)
-        .values({
-          taskCode,
-          title,
-          description: description || "",
-          assignedTo: Number(assigneeEmp!.id),
-          managerId: managerId ? Number(managerId) : currentUser.employeeId,
-          projectId: projectId ? Number(projectId) : null,
-          siteId: siteId ? Number(siteId) : null,
-          clientId: clientId ? Number(clientId) : null,
-          priority: priority || "Medium",
-          dueDate,
-          dueTime: dueTimeVal,
-          status: "Todo",
+      // ⭐ advisory lock দিয়ে taskCode রেস-কন্ডিশন ঠেকানো
+      const created = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('task-code-allocation', 0))`
+        );
+        const codeRows = await tx.select({ taskCode: tasks.taskCode }).from(tasks);
+        const usedCodes = new Set(codeRows.map((r) => r.taskCode));
+        const maxNum = codeRows.reduce((max, r) => {
+          const m = /^TSK-(\d+)$/.exec(r.taskCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let taskCode = `TSK-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(taskCode)) {
+          nextNum++;
+          taskCode = `TSK-${String(nextNum).padStart(4, "0")}`;
+        }
+
+        const allEmps = await tx.select().from(employees);
+        const targetEmp = allEmps.find((e) => e.id === Number(assignedTo || currentUser.employeeId));
+        if (!assignToAllStaff && (!targetEmp || targetEmp.archived || targetEmp.employmentStatus !== "Active")) {
+          throw new AttendanceRequestError("সক্রিয় কর্মী নির্বাচন করুন", 400);
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate))) {
+          throw new AttendanceRequestError("সঠিক ডেডলাইন তারিখ দিন", 400);
+        }
+        const dueTimeVal = body.dueTime && /^\d{2}:\d{2}$/.test(String(body.dueTime)) ? String(body.dueTime) : null;
+        const assigner = allEmps.find((e) => e.id === currentUser.employeeId);
+        const assigneeEmp = targetEmp || assigner;
+        if (!assigneeEmp) {
+          throw new AttendanceRequestError("কর্মী প্রোফাইল পাওয়া যায়নি", 400);
+        }
+        const assignedLabel = assignToAllStaff ? "সকল স্টাফ" : targetEmp!.name;
+
+        const [createdRow] = await tx
+          .insert(tasks)
+          .values({
+            taskCode,
+            title,
+            description: description || "",
+            assignedTo: Number(assigneeEmp.id),
+            managerId: managerId ? Number(managerId) : currentUser.employeeId,
+            projectId: projectId ? Number(projectId) : null,
+            siteId: siteId ? Number(siteId) : null,
+            clientId: clientId ? Number(clientId) : null,
+            priority: priority || "Medium",
+            dueDate,
+            dueTime: dueTimeVal,
+            status: "Todo",
+            progressPercent: 0,
+            requiresReview: Boolean(requiresReview),
+            createdBy: currentUser.name,
+            assignedByUserId: currentUser.id,
+            assignedByEmployeeId: assigner?.id ?? null,
+            assignedByName: assigner?.name || currentUser.name,
+            assignedByDesignation: assigner?.designation || currentUser.role,
+            assignedToName: assignToAllStaff ? "সকল স্টাফ" : targetEmp!.name,
+            assignedToDesignation: assignToAllStaff ? "" : targetEmp!.designation,
+            attachmentUrl: attachmentUrl || null,
+            isCompanyWide: Boolean(assignToAllStaff) || body.visibility === "Everyone",
+            visibility: body.visibility || (assignToAllStaff ? "Everyone" : "Assigned"),
+            category: body.category || "General",
+            lastUpdateAt: new Date(),
+          })
+          .returning();
+
+        await tx.insert(taskComments).values({
+          taskId: createdRow.id,
+          userId: currentUser.id,
+          authorName: currentUser.name,
+          actorEmployeeId: currentUser.employeeId,
+          actorDesignation: currentUser.designation,
+          comment: `${createdRow.assignedByName} → ${assignedLabel}-কে টাস্ক দিয়েছেন • ডেডলাইন ${dueDate}${dueTimeVal ? ` ${dueTimeVal}` : ""}`,
+          actionType: "Assigned",
+          eventType: "TASK_ASSIGNED",
+          oldStatus: null,
+          newStatus: "Todo",
           progressPercent: 0,
-          requiresReview: Boolean(requiresReview),
-          createdBy: currentUser.name,
-          assignedByUserId: currentUser.id,
-          assignedByEmployeeId: assigner?.id ?? null,
-          assignedByName: assigner?.name || currentUser.name,
-          assignedByDesignation: assigner?.designation || currentUser.role,
-          assignedToName: assignToAllStaff ? "à¦¸à¦•à¦² à¦¸à§à¦Ÿà¦¾à¦«" : targetEmp!.name,
-          assignedToDesignation: assignToAllStaff ? "" : targetEmp!.designation,
-          attachmentUrl: attachmentUrl || null,
-          isCompanyWide: Boolean(assignToAllStaff) || body.visibility === "Everyone",
-          visibility: body.visibility || (assignToAllStaff ? "Everyone" : "Assigned"),
-          category: body.category || "General",
-          lastUpdateAt: new Date(),
-        })
-        .returning();
+        });
 
-      await db.insert(taskComments).values({
-        taskId: created.id,
-        userId: currentUser.id,
-        authorName: currentUser.name,
-        actorEmployeeId: currentUser.employeeId,
-        actorDesignation: currentUser.designation,
-        comment: `${created.assignedByName} â†’ ${assignedLabel}-à¦•à§‡ à¦Ÿà¦¾à¦¸à§à¦• à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨ â€¢ à¦¡à§‡à¦¡à¦²à¦¾à¦‡à¦¨ ${dueDate}${dueTimeVal ? ` ${dueTimeVal}` : ""}`,
-        actionType: "Assigned",
-        eventType: "TASK_ASSIGNED",
-        oldStatus: null,
-        newStatus: "Todo",
-        progressPercent: 0,
+        return createdRow;
       });
 
       const allUserRows = await db.select().from(users);
+      const [targetEmpRow] = assignedTo
+        ? await db.select().from(employees).where(eq(employees.id, Number(assignedTo)))
+        : [undefined];
       const recipientIds = assignToAllStaff
         ? allUserRows.filter((u) => u.status === "Active").map((u) => u.id)
-        : [targetEmp!.userId];
+        : targetEmpRow?.userId
+          ? [targetEmpRow.userId]
+          : [];
       const project = projectId ? (await db.select().from(projects).where(eq(projects.id, Number(projectId))))[0] : null;
       const site = siteId ? (await db.select().from(sites).where(eq(sites.id, Number(siteId))))[0] : null;
-      const priorityBn: Record<string, string> = { Critical: "à¦…à¦¤à¦¿ à¦œà¦°à§à¦°à¦¿", High: "à¦œà¦°à§à¦°à¦¿", Medium: "à¦®à¦¾à¦à¦¾à¦°à¦¿", Low: "à¦¸à¦¾à¦§à¦¾à¦°à¦£" };
+      const priorityBn: Record<string, string> = { Critical: "অতি জরুরি", High: "জরুরি", Medium: "মাঝারি", Low: "সাধারণ" };
       await notifyUsers({
         recipientUserIds: recipientIds,
         actor: { id: currentUser.id, name: currentUser.name },
         category: "Task Assigned",
         eventType: "TASK_ASSIGNED",
-        title: `à¦¨à¦¤à§à¦¨ à¦¦à¦¾à¦¯à¦¼à¦¿à¦¤à§à¦¬ à¦¦à§‡à¦“à¦¯à¦¼à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${title}`,
+        title: `নতুন দায়িত্ব দেওয়া হয়েছে: ${created.title}`,
         message:
-          `à¦•à¦¾à¦œ: ${title}\n` +
-          `à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨: ${created.assignedByName}${created.assignedByDesignation ? ` (${created.assignedByDesignation})` : ""}\n` +
-          `à¦¦à§‡à¦“à¦¯à¦¼à¦¾à¦° à¦¸à¦®à¦¯à¦¼: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}\n` +
-          `à¦¡à§‡à¦¡à¦²à¦¾à¦‡à¦¨: ${dueDate}${dueTimeVal ? ` ${dueTimeVal}` : ""}\n` +
-          `à¦…à¦—à§à¦°à¦¾à¦§à¦¿à¦•à¦¾à¦°: ${priorityBn[created.priority] || created.priority}` +
-          (project ? `\nà¦ªà§à¦°à¦œà§‡à¦•à§à¦Ÿ: ${project.name}` : "") +
-          (site ? `\nà¦¸à¦¾à¦‡à¦Ÿ: ${site.name}` : ""),
+          `কাজ: ${created.title}\n` +
+          `দিয়েছেন: ${created.assignedByName}${created.assignedByDesignation ? ` (${created.assignedByDesignation})` : ""}\n` +
+          `দেওয়ার সময়: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}\n` +
+          `ডেডলাইন: ${created.dueDate}${created.dueTime ? ` ${created.dueTime}` : ""}\n` +
+          `অগ্রাধিকার: ${priorityBn[created.priority] || created.priority}` +
+          (project ? `\nপ্রজেক্ট: ${project.name}` : "") +
+          (site ? `\nসাইট: ${site.name}` : ""),
         task: created,
       });
 
@@ -1988,8 +1960,8 @@ export async function POST(req: NextRequest) {
         afterData: {
           assignedBy: created.assignedByName,
           assignedTo: created.assignedToName,
-          dueDate,
-          dueTime: dueTimeVal,
+          dueDate: created.dueDate,
+          dueTime: created.dueTime,
           priority: created.priority,
         },
       });
@@ -2051,31 +2023,36 @@ export async function POST(req: NextRequest) {
       const isOwnTask = task.assignedTo === currentUser.employeeId;
       if (!isTaskMgmt && !isOwnTask && !task.isCompanyWide) {
         return NextResponse.json(
-          { error: "à¦…à¦¨à§à¦¯à§‡à¦° à¦Ÿà¦¾à¦¸à§à¦• à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" },
+          { error: "অন্যের টাস্ক পরিবর্তনের অনুমতি নেই।" },
           { status: 403 }
         );
       }
 
       let finalStatus = status || task.status;
-      // No self-approval: "Completed" from a non-manager, or from anyone (except top management) on their OWN task, becomes "Review"
       const topMgmt = ["Owner", "Chairman", "MD", "Admin"].includes(currentUser.role);
       if (finalStatus === "Completed" && (!isTaskMgmt || (isOwnTask && !topMgmt))) {
         finalStatus = "Review";
       }
       if (!isTaskMgmt && (finalStatus === "Cancelled" || finalStatus === "Reopened")) {
         return NextResponse.json(
-          { error: "à¦à¦‡ à¦¸à§à¦Ÿà§à¦¯à¦¾à¦Ÿà¦¾à¦¸ à¦¶à§à¦§à§ à¦®à§à¦¯à¦¾à¦¨à§‡à¦œà¦®à§‡à¦¨à§à¦Ÿ à¦¦à¦¿à¦¤à§‡ à¦ªà¦¾à¦°à§‡à¥¤" },
+          { error: "এই স্ট্যাটাস শুধু ম্যানেজমেন্ট দিতে পারে।" },
           { status: 403 }
         );
       }
-      // Progress only changes when the employee reports it; status changes never invent a %.
+
+      // ⭐ ফিক্স: স্ট্যাটাস বদলালেই ভুলভাবে ১০০% হয়ে যাওয়া ঠেকানো
+      // Accepted → 0%, In Progress → সর্বোচ্চ ৯৯% (জমা ১০০% আলাদাভাবে), Review/Completed → ১০০%
       let finalProgress =
         progressPercent !== undefined
           ? Math.min(100, Math.max(0, Number(progressPercent)))
           : task.progressPercent;
 
       if (finalStatus === "Completed" || finalStatus === "Review") {
-        finalProgress = 100; // submitted/approved as done
+        finalProgress = 100;
+      } else if (finalStatus === "Accepted" && progressPercent === undefined) {
+        finalProgress = 0;
+      } else if (finalStatus === "In Progress" && progressPercent === undefined) {
+        finalProgress = Math.min(finalProgress, 99);
       }
 
       const newEvidence = Array.isArray(evidenceAttachments)
@@ -2103,7 +2080,7 @@ export async function POST(req: NextRequest) {
               : task.reviewStatus,
           startDate:
             !task.startDate && (finalStatus === "In Progress" || finalStatus === "Accepted")
-              ? new Date().toISOString().split("T")[0]
+              ? today
               : task.startDate,
           lastUpdateAt: new Date(),
         })
@@ -2158,31 +2135,29 @@ export async function POST(req: NextRequest) {
         const reviewer = { name: currentUser.name };
         if (statusEvent === "TASK_ACCEPTED" && task.status !== "Accepted") {
           await notifyUsers({ recipientUserIds: watchers, actor, category: "Task Update", eventType: "TASK_ACCEPTED",
-            title: `à¦Ÿà¦¾à¦¸à§à¦• à¦—à§à¦°à¦¹à¦£ à¦•à¦°à§‡à¦›à§‡à¦¨: ${task.title}`, message: `${who} à¦Ÿà¦¾à¦¸à§à¦•à¦Ÿà¦¿ à¦—à§à¦°à¦¹à¦£ à¦•à¦°à§‡à¦›à§‡à¦¨ (${task.taskCode})à¥¤`, task: updated });
+            title: `টাস্ক গ্রহণ করেছেন: ${task.title}`, message: `${who} টাস্কটি গ্রহণ করেছেন (${task.taskCode})।`, task: updated });
         } else if (statusEvent === "TASK_STARTED" && task.status !== "In Progress") {
           await notifyUsers({ recipientUserIds: watchers, actor, category: "Task Update", eventType: "TASK_STARTED",
-            title: `à¦•à¦¾à¦œ à¦¶à§à¦°à§ à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${task.title}`, message: `${who} à¦•à¦¾à¦œ à¦¶à§à¦°à§ à¦•à¦°à§‡à¦›à§‡à¦¨ (${task.taskCode}) â€¢ à¦…à¦—à§à¦°à¦—à¦¤à¦¿ ${finalProgress}%`, task: updated });
+            title: `কাজ শুরু হয়েছে: ${task.title}`, message: `${who} কাজ শুরু করেছেন (${task.taskCode}) • অগ্রগতি ${finalProgress}%`, task: updated });
         } else if (statusEvent === "TASK_COMPLETED" || statusEvent === "TASK_RESUBMITTED") {
           await notifyUsers({ recipientUserIds: watchers, actor, category: "Approval", eventType: statusEvent,
-            title: statusEvent === "TASK_RESUBMITTED" ? `à¦¸à¦‚à¦¶à§‹à¦§à¦¨à§‡à¦° à¦ªà¦° à¦ªà§à¦¨à¦°à¦¾à¦¯à¦¼ à¦œà¦®à¦¾: ${task.title}` : `à¦•à¦¾à¦œ à¦¸à¦®à§à¦ªà¦¨à§à¦¨ â€” à¦…à¦¨à§à¦®à§‹à¦¦à¦¨ à¦ªà§à¦°à¦¯à¦¼à§‹à¦œà¦¨: ${task.title}`,
-            message: `${who} ${statusEvent === "TASK_RESUBMITTED" ? "à¦¸à¦‚à¦¶à§‹à¦§à¦¨ à¦•à¦°à§‡ à¦†à¦¬à¦¾à¦° à¦œà¦®à¦¾ à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨" : "à¦•à¦¾à¦œà¦Ÿà¦¿ à¦¸à¦®à§à¦ªà¦¨à§à¦¨ à¦¹à¦¿à¦¸à§‡à¦¬à§‡ à¦œà¦®à¦¾ à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨"} (${task.taskCode})à¥¤ à¦…à¦¨à§à¦®à§‹à¦¦à¦¨ à¦¬à¦¾ à¦¸à¦‚à¦¶à§‹à¦§à¦¨ à¦¦à¦¿à¦¨à¥¤${completionNote ? ` à¦¨à§‹à¦Ÿ: ${completionNote}` : ""}`,
+            title: statusEvent === "TASK_RESUBMITTED" ? `সংশোধনের পর পুনরায় জমা: ${task.title}` : `কাজ সম্পন্ন — অনুমোদন প্রয়োজন: ${task.title}`,
+            message: `${who} ${statusEvent === "TASK_RESUBMITTED" ? "সংশোধন করে আবার জমা দিয়েছেন" : "কাজটি সম্পন্ন হিসেবে জমা দিয়েছেন"} (${task.taskCode})। অনুমোদন বা সংশোধন দিন।${completionNote ? ` নোট: ${completionNote}` : ""}`,
             task: updated });
-        } else if (statusEvent === "TASK_APPROVED") {
-          // management completed directly â†’ assignee only
+        } else if (statusEvent === "TASK_APPROVED" && assigneeUid) {
           await notifyUsers({ recipientUserIds: [assigneeUid], actor, category: "Approval", eventType: "TASK_APPROVED",
-            title: `à¦Ÿà¦¾à¦¸à§à¦• à¦…à¦¨à§à¦®à§‹à¦¦à¦¿à¦¤: ${task.title}`,
-            message: `à¦Ÿà¦¾à¦¸à§à¦•: ${task.title} (${task.taskCode})\nà¦…à¦¨à§à¦®à§‹à¦¦à¦¨ à¦•à¦°à§‡à¦›à§‡à¦¨: ${reviewer.name}\nà¦…à¦¨à§à¦®à§‹à¦¦à¦¨à§‡à¦° à¦¸à¦®à¦¯à¦¼: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}`,
+            title: `টাস্ক অনুমোদিত: ${task.title}`,
+            message: `টাস্ক: ${task.title} (${task.taskCode})\nঅনুমোদন করেছেন: ${reviewer.name}\nঅনুমোদনের সময়: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}`,
             task: updated });
         } else if (statusEvent === "TASK_PROBLEM_REPORTED") {
           await notifyUsers({ recipientUserIds: watchers, actor, category: "Task Update", eventType: "TASK_PROBLEM_REPORTED",
-            title: `à¦¸à¦®à¦¸à§à¦¯à¦¾/à¦†à¦Ÿà¦•à§‡ à¦†à¦›à§‡: ${task.title}`, message: `${who} â€¢ ${task.taskCode}${comment ? ` â€” ${comment}` : ""}`, task: updated });
+            title: `সমস্যা/আটকে আছে: ${task.title}`, message: `${who} • ${task.taskCode}${comment ? ` — ${comment}` : ""}`, task: updated });
         } else if ((finalStatus === "Reopened" || finalStatus === "Cancelled") && assigneeUid) {
           await notifyUsers({ recipientUserIds: [assigneeUid], actor, category: "Task Update", eventType: "TASK_STATUS_CHANGED",
-            title: `à¦Ÿà¦¾à¦¸à§à¦• ${finalStatus === "Cancelled" ? "à¦¬à¦¾à¦¤à¦¿à¦²" : "à¦ªà§à¦¨à¦°à¦¾à¦¯à¦¼ à¦–à§‹à¦²à¦¾"} à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${task.title}`,
-            message: `${task.taskCode} â€” ${currentUser.name}`, task: updated });
+            title: `টাস্ক ${finalStatus === "Cancelled" ? "বাতিল" : "পুনরায় খোলা"} হয়েছে: ${task.title}`,
+            message: `${task.taskCode} — ${currentUser.name}`, task: updated });
         }
       }
-
 
       return NextResponse.json({ success: true, task: updated });
     }
@@ -2227,14 +2202,14 @@ export async function POST(req: NextRequest) {
       if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
       const isTaskMgmt = canViewAllEmployeeProfiles(currentUser.role) || currentUser.role === "Project Manager";
       if (!isTaskMgmt && task.assignedTo !== currentUser.employeeId) {
-        return NextResponse.json({ error: "à¦…à¦¨à§à¦¯à§‡à¦° à¦Ÿà¦¾à¦¸à§à¦• à¦†à¦ªà¦¡à§‡à¦Ÿà§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
+        return NextResponse.json({ error: "অন্যের টাস্ক আপডেটের অনুমতি নেই।" }, { status: 403 });
       }
       if (task.status === "Completed" || task.status === "Cancelled") {
-        return NextResponse.json({ error: "à¦¸à¦®à§à¦ªà¦¨à§à¦¨/à¦¬à¦¾à¦¤à¦¿à¦² à¦Ÿà¦¾à¦¸à§à¦• à¦†à¦ªà¦¡à§‡à¦Ÿ à¦•à¦°à¦¾ à¦¯à¦¾à¦¯à¦¼ à¦¨à¦¾à¥¤" }, { status: 400 });
+        return NextResponse.json({ error: "সম্পন্ন/বাতিল টাস্ক আপডেট করা যায় না।" }, { status: 400 });
       }
       const pct = Math.min(100, Math.max(0, Number(progressPercent ?? task.progressPercent)));
       if (!note || !String(note).trim()) {
-        return NextResponse.json({ error: "à¦†à¦ªà¦¡à§‡à¦Ÿ à¦¨à§‹à¦Ÿ à¦²à¦¿à¦–à§à¦¨" }, { status: 400 });
+        return NextResponse.json({ error: "আপডেট নোট লিখুন" }, { status: 400 });
       }
 
       // Validate proof files belong to this task
@@ -2243,7 +2218,7 @@ export async function POST(req: NextRequest) {
         const owned = await db.select().from(workFiles).where(eq(workFiles.taskId, task.id));
         const ownedIds = new Set(owned.map((f) => f.id));
         if (!ids.every((i) => ownedIds.has(i))) {
-          return NextResponse.json({ error: "à¦…à¦¬à§ˆà¦§ à¦«à¦¾à¦‡à¦² à¦¸à¦‚à¦¯à§à¦•à§à¦¤à¦¿" }, { status: 400 });
+          return NextResponse.json({ error: "অবৈধ ফাইল সংযুক্তি" }, { status: 400 });
         }
       }
 
@@ -2260,7 +2235,7 @@ export async function POST(req: NextRequest) {
           status: newStatus,
           nextAction: nextAction !== undefined ? String(nextAction) : task.nextAction,
           delayReason: delayReason !== undefined ? String(delayReason) : task.delayReason,
-          startDate: task.startDate || (pct > 0 ? new Date().toISOString().split("T")[0] : null),
+          startDate: task.startDate || (pct > 0 ? today : null),
           lastUpdateAt: new Date(),
         })
         .where(eq(tasks.id, task.id))
@@ -2282,7 +2257,7 @@ export async function POST(req: NextRequest) {
       // 1) progress
       await db.insert(taskComments).values({
         ...baseHistory,
-        comment: `${String(note)}${remaining ? `\nà¦¬à¦¾à¦•à¦¿ à¦•à¦¾à¦œ: ${String(remaining)}` : ""}${nextAction ? `\nà¦ªà¦°à¦¬à¦°à§à¦¤à§€: ${String(nextAction)}` : ""}`,
+        comment: `${String(note)}${remaining ? `\nবাকি কাজ: ${String(remaining)}` : ""}${nextAction ? `\nপরবর্তী: ${String(nextAction)}` : ""}`,
         actionType: "ProgressUpdate",
         eventType: "TASK_PROGRESS_UPDATED",
       });
@@ -2290,7 +2265,7 @@ export async function POST(req: NextRequest) {
       if (ids.length) {
         await db.insert(taskComments).values({
           ...baseHistory,
-          comment: `${ids.length}à¦Ÿà¦¿ à¦«à¦¾à¦‡à¦²/à¦ªà§à¦°à¦®à¦¾à¦£ à¦œà¦®à¦¾`,
+          comment: `${ids.length}টি ফাইল/প্রমাণ জমা`,
           actionType: "ProofSubmitted",
           eventType: "TASK_ATTACHMENT_ADDED",
           fileIds: ids,
@@ -2300,7 +2275,7 @@ export async function POST(req: NextRequest) {
       if (problemReported) {
         await db.insert(taskComments).values({
           ...baseHistory,
-          comment: `à¦¸à¦®à¦¸à§à¦¯à¦¾: ${problemText || "à¦•à¦¾à¦œ à¦†à¦Ÿà¦•à§‡ à¦†à¦›à§‡"}`,
+          comment: `সমস্যা: ${problemText || "কাজ আটকে আছে"}`,
           actionType: "StatusChange",
           eventType: "TASK_PROBLEM_REPORTED",
         });
@@ -2314,8 +2289,8 @@ export async function POST(req: NextRequest) {
           actor,
           category: "Task Update",
           eventType: "TASK_PROGRESS_UPDATED",
-          title: `à¦…à¦—à§à¦°à¦—à¦¤à¦¿ ${pct}%: ${task.title}`,
-          message: `${progressWho} â€¢ ${task.taskCode} â€¢ ${task.progressPercent}% â†’ ${pct}%\n${String(note)}${remaining ? `\nà¦¬à¦¾à¦•à¦¿: ${String(remaining)}` : ""}`,
+          title: `অগ্রগতি ${pct}%: ${task.title}`,
+          message: `${progressWho} • ${task.taskCode} • ${task.progressPercent}% → ${pct}%\n${String(note)}${remaining ? `\nবাকি: ${String(remaining)}` : ""}`,
           task: updated,
         });
         if (ids.length) {
@@ -2324,8 +2299,8 @@ export async function POST(req: NextRequest) {
             actor,
             category: "Task Update",
             eventType: "TASK_ATTACHMENT_ADDED",
-            title: `à¦ªà§à¦°à¦®à¦¾à¦£/à¦«à¦¾à¦‡à¦² à¦œà¦®à¦¾: ${task.title}`,
-            message: `${progressWho} ${ids.length}à¦Ÿà¦¿ à¦«à¦¾à¦‡à¦² à¦œà¦®à¦¾ à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨ (${task.taskCode})à¥¤`,
+            title: `প্রমাণ/ফাইল জমা: ${task.title}`,
+            message: `${progressWho} ${ids.length}টি ফাইল জমা দিয়েছেন (${task.taskCode})।`,
             task: updated,
           });
         }
@@ -2335,8 +2310,8 @@ export async function POST(req: NextRequest) {
             actor,
             category: "Task Update",
             eventType: "TASK_PROBLEM_REPORTED",
-            title: `à¦¸à¦®à¦¸à§à¦¯à¦¾ à¦°à¦¿à¦ªà§‹à¦°à§à¦Ÿ: ${task.title}`,
-            message: `${progressWho} â€¢ ${task.taskCode}\nà¦¸à¦®à¦¸à§à¦¯à¦¾: ${problemText || "à¦•à¦¾à¦œ à¦†à¦Ÿà¦•à§‡ à¦†à¦›à§‡"}`,
+            title: `সমস্যা রিপোর্ট: ${task.title}`,
+            message: `${progressWho} • ${task.taskCode}\nসমস্যা: ${problemText || "কাজ আটকে আছে"}`,
             task: updated,
           });
         }
@@ -2365,22 +2340,25 @@ export async function POST(req: NextRequest) {
         authorName: currentUser.name,
         actorEmployeeId: currentUser.employeeId,
         actorDesignation: currentUser.designation,
-        comment: `${currentUser.name} à¦Ÿà¦¾à¦¸à§à¦•à¦Ÿà¦¿ à¦¦à§‡à¦–à§‡à¦›à§‡à¦¨`,
+        comment: `${currentUser.name} টাস্কটি দেখেছেন`,
         actionType: "Viewed",
         eventType: "TASK_VIEWED",
         oldStatus: task.status,
         newStatus: task.status,
         progressPercent: task.progressPercent,
       });
-      await notifyUsers({
-        recipientUserIds: [task.assignedByUserId],
-        actor: { id: currentUser.id, name: currentUser.name },
-        category: "Task Update",
-        eventType: "TASK_VIEWED",
-        title: `à¦Ÿà¦¾à¦¸à§à¦• à¦¦à§‡à¦–à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡: ${task.title}`,
-        message: `${currentUser.name} ${task.taskCode} à¦Ÿà¦¾à¦¸à§à¦•à¦Ÿà¦¿ à¦¦à§‡à¦–à§‡à¦›à§‡à¦¨à¥¤`,
-        task: claimed[0],
-      });
+      // ⭐ null check — assignedByUserId না থাকলে notify crash হতো
+      if (task.assignedByUserId) {
+        await notifyUsers({
+          recipientUserIds: [task.assignedByUserId],
+          actor: { id: currentUser.id, name: currentUser.name },
+          category: "Task Update",
+          eventType: "TASK_VIEWED",
+          title: `টাস্ক দেখা হয়েছে: ${task.title}`,
+          message: `${currentUser.name} ${task.taskCode} টাস্কটি দেখেছেন।`,
+          task: claimed[0],
+        });
+      }
       return NextResponse.json({ success: true, recorded: true });
     }
 
@@ -2388,7 +2366,7 @@ export async function POST(req: NextRequest) {
       // Management: Approve or Correction Required (reason mandatory)
       const isTaskMgmt = canViewAllEmployeeProfiles(currentUser.role) || currentUser.role === "Project Manager";
       if (!isTaskMgmt) {
-        return NextResponse.json({ error: "à¦°à¦¿à¦­à¦¿à¦‰ à¦•à¦°à¦¾à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
+        return NextResponse.json({ error: "রিভিউ করার অনুমতি নেই।" }, { status: 403 });
       }
       const { taskId, decision, reason } = body;
       const [task] = await db.select().from(tasks).where(eq(tasks.id, Number(taskId)));
@@ -2397,13 +2375,13 @@ export async function POST(req: NextRequest) {
         task.assignedTo === currentUser.employeeId &&
         !["Owner", "Chairman", "MD", "Admin"].includes(currentUser.role)
       ) {
-        return NextResponse.json({ error: "à¦¨à¦¿à¦œà§‡à¦° à¦•à¦¾à¦œ à¦¨à¦¿à¦œà§‡ à¦…à¦¨à§à¦®à§‹à¦¦à¦¨ à¦•à¦°à¦¾ à¦¯à¦¾à¦¬à§‡ à¦¨à¦¾à¥¤" }, { status: 403 });
+        return NextResponse.json({ error: "নিজের কাজ নিজে অনুমোদন করা যাবে না।" }, { status: 403 });
       }
       if (decision !== "Approve" && decision !== "Correction") {
         return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
       }
       if (decision === "Correction" && (!reason || !String(reason).trim())) {
-        return NextResponse.json({ error: "à¦¸à¦‚à¦¶à§‹à¦§à¦¨à§‡à¦° à¦•à¦¾à¦°à¦£ à¦²à¦¿à¦–à¦¤à§‡ à¦¹à¦¬à§‡" }, { status: 400 });
+        return NextResponse.json({ error: "সংশোধনের কারণ লিখতে হবে" }, { status: 400 });
       }
 
       const approve = decision === "Approve";
@@ -2442,7 +2420,7 @@ export async function POST(req: NextRequest) {
         authorName: currentUser.name,
         actorEmployeeId: currentUser.employeeId,
         actorDesignation: currentUser.designation,
-        comment: approve ? `à¦…à¦¨à§à¦®à§‹à¦¦à¦¿à¦¤${reason ? `: ${reason}` : ""}` : `à¦¸à¦‚à¦¶à§‹à¦§à¦¨ à¦ªà§à¦°à¦¯à¦¼à§‹à¦œà¦¨: ${reason}`,
+        comment: approve ? `অনুমোদিত${reason ? `: ${reason}` : ""}` : `সংশোধন প্রয়োজন: ${reason}`,
         actionType: approve ? "ReviewApproved" : "CorrectionRequired",
         eventType: approve ? "TASK_APPROVED" : "TASK_CORRECTION_REQUIRED",
         oldStatus: task.status,
@@ -2451,15 +2429,16 @@ export async function POST(req: NextRequest) {
       });
 
       const reviewedAtBd = new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
+      const assigneeUid = await assigneeUserId(task);
       await notifyUsers({
-        recipientUserIds: [await assigneeUserId(task)], // assigned employee ONLY
+        recipientUserIds: assigneeUid ? [assigneeUid] : [],
         actor: { id: currentUser.id, name: currentUser.name },
         category: approve ? "Approval" : "Correction",
         eventType: approve ? "TASK_APPROVED" : "TASK_CORRECTION_REQUIRED",
-        title: approve ? `à¦Ÿà¦¾à¦¸à§à¦• à¦…à¦¨à§à¦®à§‹à¦¦à¦¿à¦¤: ${task.title}` : `à¦¸à¦‚à¦¶à§‹à¦§à¦¨ à¦ªà§à¦°à¦¯à¦¼à§‹à¦œà¦¨: ${task.title}`,
+        title: approve ? `টাস্ক অনুমোদিত: ${task.title}` : `সংশোধন প্রয়োজন: ${task.title}`,
         message: approve
-          ? `à¦Ÿà¦¾à¦¸à§à¦•: ${task.title} (${task.taskCode})\nà¦…à¦¨à§à¦®à§‹à¦¦à¦¨ à¦•à¦°à§‡à¦›à§‡à¦¨: ${currentUser.name}${currentUser.designation ? ` (${currentUser.designation})` : ""}\nà¦…à¦¨à§à¦®à§‹à¦¦à¦¨à§‡à¦° à¦¸à¦®à¦¯à¦¼: ${reviewedAtBd}${reason ? `\nà¦®à¦¨à§à¦¤à¦¬à§à¦¯: ${reason}` : ""}`
-          : `à¦Ÿà¦¾à¦¸à§à¦•: ${task.title} (${task.taskCode})\nà¦•à¦¾à¦°à¦£: ${reason}\nà¦°à¦¿à¦­à¦¿à¦‰ à¦•à¦°à§‡à¦›à§‡à¦¨: ${currentUser.name}${currentUser.designation ? ` (${currentUser.designation})` : ""}\nà¦¸à¦®à¦¯à¦¼: ${reviewedAtBd}`,
+          ? `টাস্ক: ${task.title} (${task.taskCode})\nঅনুমোদন করেছেন: ${currentUser.name}${currentUser.designation ? ` (${currentUser.designation})` : ""}\nঅনুমোদনের সময়: ${reviewedAtBd}${reason ? `\nমন্তব্য: ${reason}` : ""}`
+          : `টাস্ক: ${task.title} (${task.taskCode})\nকারণ: ${reason}\nরিভিউ করেছেন: ${currentUser.name}${currentUser.designation ? ` (${currentUser.designation})` : ""}\nসময়: ${reviewedAtBd}`,
         task: updated,
       });
 
@@ -2481,7 +2460,7 @@ export async function POST(req: NextRequest) {
       // Management: reassign / change deadline / priority
       const isTaskMgmt = canViewAllEmployeeProfiles(currentUser.role) || currentUser.role === "Project Manager";
       if (!isTaskMgmt) {
-        return NextResponse.json({ error: "à¦Ÿà¦¾à¦¸à§à¦• à¦ªà§à¦¨à¦ƒà¦¬à¦£à§à¦Ÿà¦¨à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
+        return NextResponse.json({ error: "টাস্ক পুনঃবণ্টনের অনুমতি নেই।" }, { status: 403 });
       }
       const { taskId, assignedTo, dueDate, priority } = body;
       const [task] = await db.select().from(tasks).where(eq(tasks.id, Number(taskId)));
@@ -2514,30 +2493,38 @@ export async function POST(req: NextRequest) {
         .returning();
 
       const changes: string[] = [];
-      if (newAssignee !== task.assignedTo) changes.push("à¦•à¦°à§à¦®à§€ à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨");
-      if (dueDate && dueDate !== task.dueDate) changes.push(`à¦¡à§‡à¦¡à¦²à¦¾à¦‡à¦¨ ${task.dueDate} â†’ ${dueDate}`);
-      if (priority && priority !== task.priority) changes.push(`à¦…à¦—à§à¦°à¦¾à¦§à¦¿à¦•à¦¾à¦° ${task.priority} â†’ ${priority}`);
+      if (newAssignee !== task.assignedTo) changes.push("কর্মী পরিবর্তন");
+      if (dueDate && dueDate !== task.dueDate) changes.push(`ডেডলাইন ${task.dueDate} → ${dueDate}`);
+      if (priority && priority !== task.priority) changes.push(`অগ্রাধিকার ${task.priority} → ${priority}`);
       await db.insert(taskComments).values({
         taskId: task.id,
         userId: currentUser.id,
         authorName: currentUser.name,
         actorEmployeeId: currentUser.employeeId,
         actorDesignation: currentUser.designation,
-        comment: changes.join(", ") || "à¦•à§‹à¦¨à§‹ à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨ à¦¨à§‡à¦‡",
+        comment: changes.join(", ") || "কোনো পরিবর্তন নেই",
         actionType: newAssignee !== task.assignedTo ? "Reassigned" : "DeadlineChanged",
         eventType: newAssignee !== task.assignedTo ? "TASK_REASSIGNED" : "TASK_DEADLINE_CHANGED",
         oldStatus: task.status,
         newStatus: updated.status,
       });
-      await notifyUsers({
-        recipientUserIds: newEmpRow ? [newEmpRow.userId, await assigneeUserId(task)] : [await assigneeUserId(task)],
-        actor: { id: currentUser.id, name: currentUser.name },
-        category: newEmpRow ? "Task Assigned" : "Deadline",
-        eventType: newEmpRow ? "TASK_REASSIGNED" : "TASK_DEADLINE_CHANGED",
-        title: newEmpRow ? `à¦¨à¦¤à§à¦¨ à¦¦à¦¾à¦¯à¦¼à¦¿à¦¤à§à¦¬ (à¦ªà§à¦¨à¦ƒà¦¬à¦£à§à¦Ÿà¦¨): ${task.title}` : `à¦Ÿà¦¾à¦¸à§à¦• à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨: ${task.title}`,
-        message: `${task.taskCode} â€¢ ${changes.join(", ") || "à¦¹à¦¾à¦²à¦¨à¦¾à¦—à¦¾à¦¦"} â€¢ à¦¦à¦¿à¦¯à¦¼à§‡à¦›à§‡à¦¨ ${currentUser.name}`,
-        task: updated,
-      });
+      const oldAssigneeUid = await assigneeUserId(task);
+      const recipientIds = newEmpRow
+        ? [newEmpRow.userId, oldAssigneeUid].filter((v): v is number => typeof v === "number")
+        : oldAssigneeUid
+          ? [oldAssigneeUid]
+          : [];
+      if (recipientIds.length > 0) {
+        await notifyUsers({
+          recipientUserIds: recipientIds,
+          actor: { id: currentUser.id, name: currentUser.name },
+          category: newEmpRow ? "Task Assigned" : "Deadline",
+          eventType: newEmpRow ? "TASK_REASSIGNED" : "TASK_DEADLINE_CHANGED",
+          title: newEmpRow ? `নতুন দায়িত্ব (পুনঃবণ্টন): ${task.title}` : `টাস্ক পরিবর্তন: ${task.title}`,
+          message: `${task.taskCode} • ${changes.join(", ") || "হালনাগাদ"} • দিয়েছেন ${currentUser.name}`,
+          task: updated,
+        });
+      }
       await logAudit({
         userId: currentUser.id,
         userName: currentUser.name,
@@ -2553,12 +2540,12 @@ export async function POST(req: NextRequest) {
 
     if (action === "addManualPerformanceScore") {
       if (!isManagementRole(currentUser.role) && currentUser.role !== "HR") {
-        return NextResponse.json({ error: "à¦ªà¦¾à¦°à¦«à¦°à¦®à§à¦¯à¦¾à¦¨à§à¦¸ à¦°à¦¿à¦­à¦¿à¦‰ à¦¦à§‡à¦“à¦¯à¦¼à¦¾à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
+        return NextResponse.json({ error: "পারফরম্যান্স রিভিউ দেওয়ার অনুমতি নেই।" }, { status: 403 });
       }
       const { employeeId, period, score, comments } = body;
       const s = Number(score);
       if (!employeeId || isNaN(s) || s < 0 || s > 100) {
-        return NextResponse.json({ error: "à¦¸à§à¦•à§‹à¦° à§¦â€“à§§à§¦à§¦ à¦à¦° à¦®à¦§à§à¦¯à§‡ à¦¦à¦¿à¦¨" }, { status: 400 });
+        return NextResponse.json({ error: "স্কোর ০–১০০ এর মধ্যে দিন" }, { status: 400 });
       }
       const [rev] = await db
         .insert(performanceReviews)
@@ -2596,7 +2583,7 @@ export async function POST(req: NextRequest) {
         cTask.assignedTo !== currentUser.employeeId &&
         !cTask.isCompanyWide
       ) {
-        return NextResponse.json({ error: "à¦…à¦¨à§à¦¯à§‡à¦° à¦Ÿà¦¾à¦¸à§à¦•à§‡ à¦®à¦¨à§à¦¤à¦¬à§à¦¯à§‡à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
+        return NextResponse.json({ error: "অন্যের টাস্কে মন্তব্যের অনুমতি নেই।" }, { status: 403 });
       }
       const [c] = await db
         .insert(taskComments)
@@ -2630,7 +2617,6 @@ export async function POST(req: NextRequest) {
         landSize,
         roadWidth,
         budget,
-        // Real Estate specific fields
         propertyType,
         projectName,
         unitFlatShop,
@@ -2654,12 +2640,11 @@ export async function POST(req: NextRequest) {
       const access = leadCompanyAccess(currentUser);
       if (access !== "BOTH" && access !== resolvedCompany) {
         return NextResponse.json(
-          { error: "à¦à¦‡ à¦•à§‹à¦®à§à¦ªà¦¾à¦¨à¦¿à¦° à¦²à¦¿à¦¡ à¦¤à§ˆà¦°à¦¿/à¦¦à§‡à¦–à¦¾à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" },
+          { error: "এই কোম্পানির লিড তৈরি/দেখার অনুমতি নেই।" },
           { status: 403 }
         );
       }
 
-      // STRICT BUSINESS-UNIT CATEGORY SEPARATION
       const IBDC_SERVICES = [
         "Architectural Design",
         "Structural Design",
@@ -2706,66 +2691,75 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const existing = await db.select().from(leads);
-      const leadCode = `LEAD-${String(existing.length + 1).padStart(4, "0")}`;
+      // ⭐ race-condition-safe lead code
+      const lead = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('lead-code-allocation', 0))`
+        );
+        const rows = await tx.select({ leadCode: leads.leadCode }).from(leads);
+        const usedCodes = new Set(rows.map((r) => r.leadCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^LEAD-(\d+)$/.exec(r.leadCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let leadCode = `LEAD-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(leadCode)) {
+          nextNum++;
+          leadCode = `LEAD-${String(nextNum).padStart(4, "0")}`;
+        }
 
-      const finalService =
-        resolvedCompany === "IBDC"
-          ? IBDC_SERVICES.includes(service)
-            ? service
-            : "Other"
-          : "Other";
-      const finalPropertyType =
-        resolvedCompany === "IREL"
-          ? IREL_PROPERTY_TYPES.includes(propertyType)
-            ? propertyType
-            : "Other"
-          : "Other";
+        const finalService =
+          resolvedCompany === "IBDC"
+            ? IBDC_SERVICES.includes(service)
+              ? service
+              : "Other"
+            : "Other";
+        const finalPropertyType =
+          resolvedCompany === "IREL"
+            ? IREL_PROPERTY_TYPES.includes(propertyType)
+              ? propertyType
+              : "Other"
+            : "Other";
 
-      const [lead] = await db
-        .insert(leads)
-        .values({
-          leadCode,
-          companyId: resolvedCompany === 'IREL' ? 2 : 1,
-          name,
-          phone,
-          whatsapp: whatsapp || phone,
-          location: location || "",
-          source: source || "Direct",
-          service: finalService,
-          propertyType: finalPropertyType,
-          projectName: resolvedCompany === "IREL" ? projectName || "" : "",
-          unitFlatShop: resolvedCompany === "IREL" ? unitFlatShop || "" : "",
-          preferredLocation: resolvedCompany === "IREL" ? preferredLocation || "" : "",
-          size: resolvedCompany === "IREL" ? size || "" : "",
-          floor: resolvedCompany === "IREL" ? floor || "" : "",
-          bedrooms: resolvedCompany === "IREL" ? bedrooms || "" : "",
-          purpose: resolvedCompany === "IREL" ? purpose || "" : "",
-          expectedPurchaseDate:
-            resolvedCompany === "IREL" ? expectedPurchaseDate || "" : "",
-          clientRequirement: resolvedCompany === "IREL" ? clientRequirement || "" : "",
-          requirement: resolvedCompany === "IBDC" ? requirement || "" : "",
-          landSize: resolvedCompany === "IBDC" ? landSize || "" : "",
-          roadWidth: resolvedCompany === "IBDC" ? roadWidth || "" : "",
-          budget: Number(budget || 0).toFixed(2),
-          priority: ["Hot", "Warm", "Cold"].includes(priority) ? priority : "Warm",
-          status: "New",
-          assignedStaffId: assignedStaffId
-            ? Number(assignedStaffId)
-            : currentUser.employeeId,
-          nextFollowUpDate: nextFollowUpDate || today,
-        })
-        .returning();
+        const [createdLead] = await tx
+          .insert(leads)
+          .values({
+            leadCode,
+            companyId: resolvedCompany === "IREL" ? 2 : 1,
+            name,
+            phone,
+            whatsapp: whatsapp || phone,
+            location: location || "",
+            source: source || "Direct",
+            service: finalService,
+            propertyType: finalPropertyType,
+            projectName: resolvedCompany === "IREL" ? projectName || "" : "",
+            unitFlatShop: resolvedCompany === "IREL" ? unitFlatShop || "" : "",
+            preferredLocation: resolvedCompany === "IREL" ? preferredLocation || "" : "",
+            size: resolvedCompany === "IREL" ? size || "" : "",
+            floor: resolvedCompany === "IREL" ? floor || "" : "",
+            bedrooms: resolvedCompany === "IREL" ? bedrooms || "" : "",
+            purpose: resolvedCompany === "IREL" ? purpose || "" : "",
+            expectedPurchaseDate: resolvedCompany === "IREL" ? expectedPurchaseDate || "" : "",
+            clientRequirement: resolvedCompany === "IREL" ? clientRequirement || "" : "",
+            requirement: resolvedCompany === "IBDC" ? requirement || "" : "",
+            landSize: resolvedCompany === "IBDC" ? landSize || "" : "",
+            roadWidth: resolvedCompany === "IBDC" ? roadWidth || "" : "",
+            budget: Number(budget || 0).toFixed(2),
+            priority: ["Hot", "Warm", "Cold"].includes(priority) ? priority : "Warm",
+            status: "New",
+            assignedStaffId: assignedStaffId ? Number(assignedStaffId) : currentUser.employeeId,
+            nextFollowUpDate: nextFollowUpDate || today,
+          })
+          .returning();
+        return createdLead;
+      });
 
       return NextResponse.json({ success: true, lead });
     }
 
     if (action === "addLeadFollowup") {
-      // =========================================================================
-      // UNLIMITED, APPEND-ONLY FOLLOW-UP ENGINE
-      // Never overwrites history. Stores follow-up number, method, outcome,
-      // client response, staff note, next date/time and attachment.
-      // =========================================================================
       const {
         leadId,
         contactMethod,
@@ -2807,7 +2801,6 @@ export async function POST(req: NextRequest) {
       const isClosed = CLOSED.includes(resolvedOutcome);
       const leadOnHold = lead.status === "On Hold";
 
-      // Rule 3 & 12: Next Follow-up Date is REQUIRED for active leads
       if (!isClosed && !leadOnHold && !nextFollowUpDate) {
         return NextResponse.json(
           {
@@ -2818,38 +2811,46 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const existingFollowUps = await db
-        .select()
-        .from(leadFollowups)
-        .where(eq(leadFollowups.leadId, Number(leadId)));
-      const followUpNumber = existingFollowUps.length + 1;
-      const nowTime = new Date().toTimeString().slice(0, 5);
+      // ⭐ followUpNumber race-safe
+      const { followUpNumber, createdFollowup } = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`followup:${leadId}`}, 0))`
+        );
+        const existingFollowUps = await tx
+          .select({ id: leadFollowups.id, followUpNumber: leadFollowups.followUpNumber })
+          .from(leadFollowups)
+          .where(eq(leadFollowups.leadId, Number(leadId)));
+        const maxFU = existingFollowUps.reduce((m, r) => Math.max(m, r.followUpNumber || 0), 0);
+        const fuNum = maxFU + 1;
+        const nowTime = new Date().toTimeString().slice(0, 5);
 
-      const [f] = await db
-        .insert(leadFollowups)
-        .values({
-          leadId: Number(leadId),
-          followUpNumber,
-          staffId: currentUser.employeeId,
-          staffName: currentUser.name,
-          date: today,
-          time: nowTime,
-          contactMethod: method,
-          outcome: resolvedOutcome,
-          clientResponse: clientResponse || "",
-          discussion: note,
-          nextAction: nextAction || (isClosed ? "No further follow-up" : "Follow up as scheduled"),
-          nextFollowUpDate: isClosed ? null : nextFollowUpDate,
-          nextFollowUpTime: nextFollowUpTime || "10:00",
-          attachmentName: attachment?.name || null,
-          attachmentType: attachment?.type || null,
-          attachmentSize: attachment?.size || null,
-          attachmentUrl: attachment?.url || null,
-          reminderKey: isClosed ? null : `FU-${leadId}-${followUpNumber}`,
-          reminderNotified: false,
-          result: resolvedOutcome,
-        })
-        .returning();
+        const [f] = await tx
+          .insert(leadFollowups)
+          .values({
+            leadId: Number(leadId),
+            followUpNumber: fuNum,
+            staffId: currentUser.employeeId,
+            staffName: currentUser.name,
+            date: today,
+            time: nowTime,
+            contactMethod: method,
+            outcome: resolvedOutcome,
+            clientResponse: clientResponse || "",
+            discussion: note,
+            nextAction: nextAction || (isClosed ? "No further follow-up" : "Follow up as scheduled"),
+            nextFollowUpDate: isClosed ? null : nextFollowUpDate,
+            nextFollowUpTime: nextFollowUpTime || "10:00",
+            attachmentName: attachment?.name || null,
+            attachmentType: attachment?.type || null,
+            attachmentSize: attachment?.size || null,
+            attachmentUrl: attachment?.url || null,
+            reminderKey: isClosed ? null : `FU-${leadId}-${fuNum}`,
+            reminderNotified: false,
+            result: resolvedOutcome,
+          })
+          .returning();
+        return { followUpNumber: fuNum, createdFollowup: f };
+      });
 
       let nextStatus = newStatus;
       if (!nextStatus) {
@@ -2879,7 +2880,7 @@ export async function POST(req: NextRequest) {
           : `Follow-up #${followUpNumber} logged for ${lead.name}`,
         message: isClosed
           ? `${lead.name} (${lead.leadCode}) marked ${resolvedOutcome} by ${currentUser.name} after ${followUpNumber} follow-up(s).`
-          : `${lead.name} (${lead.leadCode}) â€” ${method} â€¢ ${resolvedOutcome}. Next follow-up: ${nextFollowUpDate} ${nextFollowUpTime || "10:00"}. ${clientResponse || note}`,
+          : `${lead.name} (${lead.leadCode}) — ${method} • ${resolvedOutcome}. Next follow-up: ${nextFollowUpDate} ${nextFollowUpTime || "10:00"}. ${clientResponse || note}`,
         createdBy: currentUser.name,
         priority: lead.priority,
         assignedPersonOrTeam: lead.name,
@@ -2898,7 +2899,6 @@ export async function POST(req: NextRequest) {
         beforeData: {
           status: lead.status,
           nextFollowUpDate: lead.nextFollowUpDate,
-          followUpCount: existingFollowUps.length,
         },
         afterData: {
           followUpNumber,
@@ -2912,7 +2912,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return NextResponse.json({ success: true, followup: f });
+      return NextResponse.json({ success: true, followup: createdFollowup });
     }
 
     if (action === "updateLeadStatus") {
@@ -2984,7 +2984,7 @@ export async function POST(req: NextRequest) {
           targetRole: "All",
           type: isOverdue ? "Approval Required" : "Follow-up Due",
           title: isOverdue
-            ? `Follow-up overdue: ${lead.name} â€” ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue`
+            ? `Follow-up overdue: ${lead.name} — ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue`
             : `Follow-up due today: ${lead.name}`,
           message: isOverdue
             ? `${lead.name} (${lead.leadCode}) was scheduled for follow-up on ${lead.nextFollowUpDate} and is now ${daysOverdue} day(s) overdue. Assigned to ${empNameMap.get(lead.assignedStaffId || 0) || "Unassigned"}.`
@@ -3021,31 +3021,48 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Lead not found" }, { status: 404 });
       }
 
-      const existingClients = await db.select().from(clients);
-      const clientCode = `CLI-${String(existingClients.length + 1).padStart(4, "0")}`;
+      const client = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('client-code-allocation', 0))`
+        );
+        const rows = await tx.select({ clientCode: clients.clientCode }).from(clients);
+        const usedCodes = new Set(rows.map((r) => r.clientCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^CLI-(\d+)$/.exec(r.clientCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(clientCode)) {
+          nextNum++;
+          clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
+        }
 
-      const [client] = await db
-        .insert(clients)
-        .values({
-          clientCode,
-          leadId: lead.id,
-          name: lead.name,
-          companyName: companyName || `${lead.name} Holdings`,
-          phone: lead.phone,
-          whatsapp: lead.whatsapp,
-          email: email || "",
-          address: lead.location,
-          assignedStaffId: lead.assignedStaffId,
-          totalInvoiced: "0.00",
-          totalPaid: "0.00",
-          outstandingBalance: "0.00",
-        })
-        .returning();
+        const [createdClient] = await tx
+          .insert(clients)
+          .values({
+            clientCode,
+            leadId: lead.id,
+            name: lead.name,
+            companyName: companyName || `${lead.name} Holdings`,
+            phone: lead.phone,
+            whatsapp: lead.whatsapp,
+            email: email || "",
+            address: lead.location,
+            assignedStaffId: lead.assignedStaffId,
+            totalInvoiced: "0.00",
+            totalPaid: "0.00",
+            outstandingBalance: "0.00",
+          })
+          .returning();
 
-      await db
-        .update(leads)
-        .set({ status: "Won", convertedClientId: client.id })
-        .where(eq(leads.id, lead.id));
+        await tx
+          .update(leads)
+          .set({ status: "Won", convertedClientId: createdClient.id })
+          .where(eq(leads.id, lead.id));
+
+        return createdClient;
+      });
 
       await logAudit({
         userId: currentUser.id,
@@ -3065,22 +3082,39 @@ export async function POST(req: NextRequest) {
       if (!name || !phone) {
         return NextResponse.json({ error: "Client Name and Phone are required" }, { status: 400 });
       }
-      const existingClients = await db.select().from(clients);
-      const clientCode = `CLI-${String(existingClients.length + 1).padStart(4, "0")}`;
 
-      const [client] = await db
-        .insert(clients)
-        .values({
-          clientCode,
-          name,
-          companyName: companyName || "",
-          phone,
-          whatsapp: whatsapp || phone,
-          email: email || "",
-          address: address || "",
-          assignedStaffId: currentUser.employeeId,
-        })
-        .returning();
+      const client = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('client-code-allocation', 0))`
+        );
+        const rows = await tx.select({ clientCode: clients.clientCode }).from(clients);
+        const usedCodes = new Set(rows.map((r) => r.clientCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^CLI-(\d+)$/.exec(r.clientCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(clientCode)) {
+          nextNum++;
+          clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
+        }
+
+        const [createdClient] = await tx
+          .insert(clients)
+          .values({
+            clientCode,
+            name,
+            companyName: companyName || "",
+            phone,
+            whatsapp: whatsapp || phone,
+            email: email || "",
+            address: address || "",
+            assignedStaffId: currentUser.employeeId,
+          })
+          .returning();
+        return createdClient;
+      });
 
       return NextResponse.json({ success: true, client });
     }
@@ -3097,43 +3131,59 @@ export async function POST(req: NextRequest) {
         0
       );
       const disc = Number(discount || 0);
-      const tx = Number(tax || 0);
-      const totalAmount = Math.max(0, subtotal - disc + tx);
+      const tx2 = Number(tax || 0);
+      const totalAmount = Math.max(0, subtotal - disc + tx2);
 
-      const existingQ = await db.select().from(quotations);
-      const quotationNumber = `QUO-${String(existingQ.length + 1).padStart(4, "0")}`;
+      const quotation = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('quotation-code-allocation', 0))`
+        );
+        const rows = await tx.select({ quotationNumber: quotations.quotationNumber }).from(quotations);
+        const usedCodes = new Set(rows.map((r) => r.quotationNumber));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^QUO-(\d+)$/.exec(r.quotationNumber);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let quotationNumber = `QUO-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(quotationNumber)) {
+          nextNum++;
+          quotationNumber = `QUO-${String(nextNum).padStart(4, "0")}`;
+        }
 
-      const [q] = await db
-        .insert(quotations)
-        .values({
-          quotationNumber,
-          leadId: leadId ? Number(leadId) : null,
-          clientId: clientId ? Number(clientId) : null,
-          projectId: projectId ? Number(projectId) : null,
-          service,
-          items: items.map((it: { description: string; unit: string; quantity: number; rate: number }) => ({
-            description: it.description,
-            unit: it.unit || "LS",
-            quantity: Number(it.quantity),
-            rate: Number(it.rate),
-            amount: Number(it.quantity) * Number(it.rate),
-          })),
-          subtotal: subtotal.toFixed(2),
-          discount: disc.toFixed(2),
-          tax: tx.toFixed(2),
-          totalAmount: totalAmount.toFixed(2),
-          terms: terms || "50% advance, 50% on completion.",
-          validUntil: validUntil || "2026-12-31",
-          status: "Sent",
-          createdBy: currentUser.name,
-        })
-        .returning();
+        const [q] = await tx
+          .insert(quotations)
+          .values({
+            quotationNumber,
+            leadId: leadId ? Number(leadId) : null,
+            clientId: clientId ? Number(clientId) : null,
+            projectId: projectId ? Number(projectId) : null,
+            service,
+            items: items.map((it: { description: string; unit: string; quantity: number; rate: number }) => ({
+              description: it.description,
+              unit: it.unit || "LS",
+              quantity: Number(it.quantity),
+              rate: Number(it.rate),
+              amount: Number(it.quantity) * Number(it.rate),
+            })),
+            subtotal: subtotal.toFixed(2),
+            discount: disc.toFixed(2),
+            tax: tx2.toFixed(2),
+            totalAmount: totalAmount.toFixed(2),
+            terms: terms || "50% advance, 50% on completion.",
+            validUntil: validUntil || "2026-12-31",
+            status: "Sent",
+            createdBy: currentUser.name,
+          })
+          .returning();
 
-      if (leadId) {
-        await db.update(leads).set({ status: "Quotation" }).where(eq(leads.id, Number(leadId)));
-      }
+        if (leadId) {
+          await tx.update(leads).set({ status: "Quotation" }).where(eq(leads.id, Number(leadId)));
+        }
+        return q;
+      });
 
-      return NextResponse.json({ success: true, quotation: q });
+      return NextResponse.json({ success: true, quotation });
     }
 
     if (action === "updateQuotationStatus") {
@@ -3169,35 +3219,51 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Client, Project Name & Location required" }, { status: 400 });
       }
 
-      const existingP = await db.select().from(projects);
-      const projectCode = `PRJ-${String(existingP.length + 1).padStart(4, "0")}`;
+      const project = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('project-code-allocation', 0))`
+        );
+        const rows = await tx.select({ projectCode: projects.projectCode }).from(projects);
+        const usedCodes = new Set(rows.map((r) => r.projectCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^PRJ-(\d+)$/.exec(r.projectCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let projectCode = `PRJ-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(projectCode)) {
+          nextNum++;
+          projectCode = `PRJ-${String(nextNum).padStart(4, "0")}`;
+        }
 
-      const [proj] = await db
-        .insert(projects)
-        .values({
-          projectCode,
-          clientId: Number(clientId),
-          quotationId: quotationId ? Number(quotationId) : null,
-          name,
-          location,
-          landSize: landSize || "8 Katha",
-          roadWidth: roadWidth || "30 ft",
-          projectType: projectType || "Residential Building",
-          startDate: startDate || today,
-          expectedCompletion: expectedCompletion || "2027-12-31",
-          budget: Number(budget || 0).toFixed(2),
-          managerId: managerId ? Number(managerId) : currentUser.employeeId,
-          engineerId: engineerId ? Number(engineerId) : currentUser.employeeId,
-          assignedStaffIds: [
-            Number(managerId || currentUser.employeeId || 1),
-            Number(engineerId || currentUser.employeeId || 1),
-          ],
-          progressPercent: 0,
-          status: "Active",
-        })
-        .returning();
+        const [proj] = await tx
+          .insert(projects)
+          .values({
+            projectCode,
+            clientId: Number(clientId),
+            quotationId: quotationId ? Number(quotationId) : null,
+            name,
+            location,
+            landSize: landSize || "8 Katha",
+            roadWidth: roadWidth || "30 ft",
+            projectType: projectType || "Residential Building",
+            startDate: startDate || today,
+            expectedCompletion: expectedCompletion || "2027-12-31",
+            budget: Number(budget || 0).toFixed(2),
+            managerId: managerId ? Number(managerId) : currentUser.employeeId,
+            engineerId: engineerId ? Number(engineerId) : currentUser.employeeId,
+            assignedStaffIds: [
+              Number(managerId || currentUser.employeeId || 1),
+              Number(engineerId || currentUser.employeeId || 1),
+            ],
+            progressPercent: 0,
+            status: "Active",
+          })
+          .returning();
+        return proj;
+      });
 
-      return NextResponse.json({ success: true, project: proj });
+      return NextResponse.json({ success: true, project });
     }
 
     if (action === "createSite") {
@@ -3206,23 +3272,39 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Project, Site Name & Location required" }, { status: 400 });
       }
 
-      const existingS = await db.select().from(sites);
-      const siteCode = `SITE-${String(existingS.length + 1).padStart(4, "0")}`;
+      const site = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('site-code-allocation', 0))`
+        );
+        const rows = await tx.select({ siteCode: sites.siteCode }).from(sites);
+        const usedCodes = new Set(rows.map((r) => r.siteCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^SITE-(\d+)$/.exec(r.siteCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let siteCode = `SITE-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(siteCode)) {
+          nextNum++;
+          siteCode = `SITE-${String(nextNum).padStart(4, "0")}`;
+        }
 
-      const [site] = await db
-        .insert(sites)
-        .values({
-          siteCode,
-          projectId: Number(projectId),
-          name,
-          location,
-          siteManagerId: siteManagerId ? Number(siteManagerId) : currentUser.employeeId,
-          engineerId: engineerId ? Number(engineerId) : currentUser.employeeId,
-          workersCount: Number(workersCount || 15),
-          progressPercent: 0,
-          status: "Active",
-        })
-        .returning();
+        const [createdSite] = await tx
+          .insert(sites)
+          .values({
+            siteCode,
+            projectId: Number(projectId),
+            name,
+            location,
+            siteManagerId: siteManagerId ? Number(siteManagerId) : currentUser.employeeId,
+            engineerId: engineerId ? Number(engineerId) : currentUser.employeeId,
+            workersCount: Number(workersCount || 15),
+            progressPercent: 0,
+            status: "Active",
+          })
+          .returning();
+        return createdSite;
+      });
 
       return NextResponse.json({ success: true, site });
     }
@@ -3246,8 +3328,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Site, Project, and Work Done are required" }, { status: 400 });
       }
 
-      const existingSR = await db.select().from(siteReports);
-      const reportCode = `SR-${String(existingSR.length + 1).padStart(4, "0")}`;
+      const reportCode = `SR-${String(Date.now()).slice(-8)}`;
       const prog = Math.min(100, Math.max(0, Number(progressPercent || 0)));
 
       const [sr] = await db
@@ -3269,7 +3350,6 @@ export async function POST(req: NextRequest) {
         })
         .returning();
 
-      // Update Site progress & workers
       await db
         .update(sites)
         .set({
@@ -3279,7 +3359,6 @@ export async function POST(req: NextRequest) {
         })
         .where(eq(sites.id, Number(siteId)));
 
-      // Aggregate Site progress to Project dashboard
       const projectSites = await db
         .select()
         .from(sites)
@@ -3310,40 +3389,57 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Stock and Unit Cost cannot be negative" }, { status: 400 });
       }
 
-      const existingM = await db.select().from(materials);
-      const materialCode = `MAT-${String(existingM.length + 1).padStart(4, "0")}`;
       const openQty = Number(openingStock || 0);
       const cost = Number(unitCost || 0);
 
-      const [mat] = await db
-        .insert(materials)
-        .values({
-          materialCode,
-          name,
-          category,
-          unit,
-          warehouse: warehouse || "Central Warehouse",
-          openingStock: openQty.toFixed(2),
-          currentStock: openQty.toFixed(2),
-          unitCost: cost.toFixed(2),
-          reorderLevel: Number(reorderLevel || 20).toFixed(2),
-        })
-        .returning();
+      const mat = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('material-code-allocation', 0))`
+        );
+        const rows = await tx.select({ materialCode: materials.materialCode }).from(materials);
+        const usedCodes = new Set(rows.map((r) => r.materialCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^MAT-(\d+)$/.exec(r.materialCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let materialCode = `MAT-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(materialCode)) {
+          nextNum++;
+          materialCode = `MAT-${String(nextNum).padStart(4, "0")}`;
+        }
 
-      if (openQty > 0) {
-        await db.insert(stockMovements).values({
-          materialId: mat.id,
-          movementType: "Opening",
-          quantity: openQty.toFixed(2),
-          unitCost: cost.toFixed(2),
-          totalValue: (openQty * cost).toFixed(2),
-          warehouseFrom: warehouse || "Central Warehouse",
-          referenceCode: "OPENING",
-          notes: "Initial opening stock",
-          createdBy: currentUser.name,
-          date: today,
-        });
-      }
+        const [createdMat] = await tx
+          .insert(materials)
+          .values({
+            materialCode,
+            name,
+            category,
+            unit,
+            warehouse: warehouse || "Central Warehouse",
+            openingStock: openQty.toFixed(2),
+            currentStock: openQty.toFixed(2),
+            unitCost: cost.toFixed(2),
+            reorderLevel: Number(reorderLevel || 20).toFixed(2),
+          })
+          .returning();
+
+        if (openQty > 0) {
+          await tx.insert(stockMovements).values({
+            materialId: createdMat.id,
+            movementType: "Opening",
+            quantity: openQty.toFixed(2),
+            unitCost: cost.toFixed(2),
+            totalValue: (openQty * cost).toFixed(2),
+            warehouseFrom: warehouse || "Central Warehouse",
+            referenceCode: "OPENING",
+            notes: "Initial opening stock",
+            createdBy: currentUser.name,
+            date: today,
+          });
+        }
+        return createdMat;
+      });
 
       return NextResponse.json({ success: true, material: mat });
     }
@@ -3390,8 +3486,22 @@ export async function POST(req: NextRequest) {
             .where(eq(materials.id, Number(materialId)));
           const expAmount = Number(quantity) * Number(mat.unitCost || 0);
           if (expAmount > 0) {
-            const allExp = await tx.select().from(expenses);
-            const expCode = `EXP-${String(allExp.length + 1).padStart(4, "0")}`;
+            await tx.execute(
+              sql`select pg_advisory_xact_lock(hashtextextended('expense-code-allocation', 0))`
+            );
+            const rows = await tx.select({ expenseCode: expenses.expenseCode }).from(expenses);
+            const usedCodes = new Set(rows.map((r) => r.expenseCode));
+            const maxNum = rows.reduce((max, r) => {
+              const m = /^EXP-(\d+)$/.exec(r.expenseCode);
+              return m ? Math.max(max, Number(m[1])) : max;
+            }, 0);
+            let nextNum = maxNum + 1;
+            let expCode = `EXP-${String(nextNum).padStart(4, "0")}`;
+            while (usedCodes.has(expCode)) {
+              nextNum++;
+              expCode = `EXP-${String(nextNum).padStart(4, "0")}`;
+            }
+
             await tx.insert(expenses).values({
               expenseCode: expCode,
               date: today,
@@ -3416,30 +3526,47 @@ export async function POST(req: NextRequest) {
     }
 
     // =========================================================================
-    // 9. SUPPLIERS & PROCUREMENT (PR -> PO -> GRN Receive -> Stock + Payable + Journal)
+    // 9. SUPPLIERS & PROCUREMENT
     // =========================================================================
     if (action === "createSupplier") {
       const { name, phone, email, address, contactPerson, productsProvided } = body;
       if (!name || !phone) {
         return NextResponse.json({ error: "Supplier Name and Phone required" }, { status: 400 });
       }
-      const existingSup = await db.select().from(suppliers);
-      const supplierCode = `SUP-${String(existingSup.length + 1).padStart(4, "0")}`;
 
-      const [sup] = await db
-        .insert(suppliers)
-        .values({
-          supplierCode,
-          name,
-          phone,
-          email: email || "",
-          address: address || "",
-          contactPerson: contactPerson || "",
-          productsProvided: productsProvided || "",
-        })
-        .returning();
+      const supplier = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('supplier-code-allocation', 0))`
+        );
+        const rows = await tx.select({ supplierCode: suppliers.supplierCode }).from(suppliers);
+        const usedCodes = new Set(rows.map((r) => r.supplierCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^SUP-(\d+)$/.exec(r.supplierCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let supplierCode = `SUP-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(supplierCode)) {
+          nextNum++;
+          supplierCode = `SUP-${String(nextNum).padStart(4, "0")}`;
+        }
 
-      return NextResponse.json({ success: true, supplier: sup });
+        const [createdSup] = await tx
+          .insert(suppliers)
+          .values({
+            supplierCode,
+            name,
+            phone,
+            email: email || "",
+            address: address || "",
+            contactPerson: contactPerson || "",
+            productsProvided: productsProvided || "",
+          })
+          .returning();
+        return createdSup;
+      });
+
+      return NextResponse.json({ success: true, supplier });
     }
 
     if (action === "createPurchaseRequest") {
@@ -3447,8 +3574,7 @@ export async function POST(req: NextRequest) {
       if (!Array.isArray(items) || items.length === 0) {
         return NextResponse.json({ error: "At least 1 material item required" }, { status: 400 });
       }
-      const existingPR = await db.select().from(purchaseRequests);
-      const prCode = `PR-${String(existingPR.length + 1).padStart(4, "0")}`;
+      const prCode = `PR-${String(Date.now()).slice(-8)}`;
       const totalEstimated = items.reduce(
         (s: number, i: { quantity: number; estimatedRate: number }) =>
           s + Number(i.quantity) * Number(i.estimatedRate || 0),
@@ -3474,7 +3600,7 @@ export async function POST(req: NextRequest) {
         targetRole: "Manager",
         type: "Purchase Request",
         title: `New Site Purchase Request: ${prCode}`,
-        message: `Estimated value: à§³${totalEstimated.toLocaleString()} requested by ${currentUser.name}.`,
+        message: `Estimated value: ৳${totalEstimated.toLocaleString()} requested by ${currentUser.name}.`,
         relatedUrl: "/purchase-orders",
         relatedEntityCode: prCode,
       });
@@ -3498,8 +3624,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Supplier and PO items required" }, { status: 400 });
       }
 
-      const existingPO = await db.select().from(purchaseOrders);
-      const poCode = `PO-${String(existingPO.length + 1).padStart(4, "0")}`;
       const formattedItems = items.map(
         (it: {
           materialId: number;
@@ -3519,30 +3643,49 @@ export async function POST(req: NextRequest) {
       );
       const totalAmount = formattedItems.reduce((s, i) => s + i.total, 0);
 
-      const [po] = await db
-        .insert(purchaseOrders)
-        .values({
-          poCode,
-          prId: prId ? Number(prId) : null,
-          supplierId: Number(supplierId),
-          projectId: projectId ? Number(projectId) : null,
-          siteId: siteId ? Number(siteId) : null,
-          items: formattedItems,
-          totalAmount: totalAmount.toFixed(2),
-          receivedAmount: "0.00",
-          status: "Approved",
-          supplierQuotationRef: supplierQuotationRef || "",
-          approvedBy: currentUser.name,
-          date: today,
-        })
-        .returning();
+      const po = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('po-code-allocation', 0))`
+        );
+        const rows = await tx.select({ poCode: purchaseOrders.poCode }).from(purchaseOrders);
+        const usedCodes = new Set(rows.map((r) => r.poCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^PO-(\d+)$/.exec(r.poCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let poCode = `PO-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(poCode)) {
+          nextNum++;
+          poCode = `PO-${String(nextNum).padStart(4, "0")}`;
+        }
 
-      if (prId) {
-        await db
-          .update(purchaseRequests)
-          .set({ status: "Converted to PO" })
-          .where(eq(purchaseRequests.id, Number(prId)));
-      }
+        const [createdPo] = await tx
+          .insert(purchaseOrders)
+          .values({
+            poCode,
+            prId: prId ? Number(prId) : null,
+            supplierId: Number(supplierId),
+            projectId: projectId ? Number(projectId) : null,
+            siteId: siteId ? Number(siteId) : null,
+            items: formattedItems,
+            totalAmount: totalAmount.toFixed(2),
+            receivedAmount: "0.00",
+            status: "Approved",
+            supplierQuotationRef: supplierQuotationRef || "",
+            approvedBy: currentUser.name,
+            date: today,
+          })
+          .returning();
+
+        if (prId) {
+          await tx
+            .update(purchaseRequests)
+            .set({ status: "Converted to PO" })
+            .where(eq(purchaseRequests.id, Number(prId)));
+        }
+        return createdPo;
+      });
 
       await logAudit({
         userId: currentUser.id,
@@ -3550,7 +3693,7 @@ export async function POST(req: NextRequest) {
         userRole: currentUser.role,
         action: "CREATE",
         entity: "PurchaseOrder",
-        recordId: poCode,
+        recordId: po.poCode,
         afterData: po,
       });
 
@@ -3614,10 +3757,26 @@ export async function POST(req: NextRequest) {
             status: newPoStatus,
           })
           .where(eq(purchaseOrders.id, po.id));
+        // Create Supplier Bill (⚠️ একই transaction-এর ভিতরে — ধাপ ২ থেকে চলছে)
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('bill-code-allocation', 0))`
+        );
+        const billRows = await tx.select({ billCode: supplierBills.billCode }).from(supplierBills);
+        const usedBillCodes = new Set(billRows.map((r) => r.billCode));
+        const maxBillNum = billRows.reduce((max, r) => {
+          const m = /^BILL-(\d+)$/.exec(r.billCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextBillNum = maxBillNum + 1;
+        let billCode = `BILL-${String(nextBillNum).padStart(4, "0")}`;
+        while (usedBillCodes.has(billCode)) {
+          nextBillNum++;
+          billCode = `BILL-${String(nextBillNum).padStart(4, "0")}`;
+        }
 
-        // Create Supplier Bill
-        const existingBills = await tx.select().from(supplierBills);
-        const billCode = `BILL-${String(existingBills.length + 1).padStart(4, "0")}`;
+        // আজ + ৩০ দিন = default due date (hardcoded 2026-06-30 সরানো)
+        const billDueDate = new Date(Date.now() + 30 * 86400000)
+          .toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
 
         const [bill] = await tx
           .insert(supplierBills)
@@ -3631,7 +3790,7 @@ export async function POST(req: NextRequest) {
             outstandingAmount: batchValue.toFixed(2),
             status: "Unpaid",
             date: today,
-            dueDate: "2026-06-30",
+            dueDate: billDueDate,
           })
           .returning();
 
@@ -3691,28 +3850,45 @@ export async function POST(req: NextRequest) {
       if (!name || !dailyRate) {
         return NextResponse.json({ error: "Labour Name and Daily Rate required" }, { status: 400 });
       }
-      const existingL = await db.select().from(labours);
-      const labourCode = `LAB-${String(existingL.length + 1).padStart(4, "0")}`;
       const days = Number(workDays || 0);
       const rate = Number(dailyRate);
       const earned = days * rate;
 
-      const [lab] = await db
-        .insert(labours)
-        .values({
-          labourCode,
-          name,
-          category: category || "Mason",
-          dailyRate: rate.toFixed(2),
-          phone: phone || "",
-          projectId: projectId ? Number(projectId) : null,
-          assignedSiteId: assignedSiteId ? Number(assignedSiteId) : null,
-          totalWorkDays: days.toFixed(2),
-          totalEarned: earned.toFixed(2),
-          totalPaid: "0.00",
-          dueAmount: earned.toFixed(2),
-        })
-        .returning();
+      const lab = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('labour-code-allocation', 0))`
+        );
+        const rows = await tx.select({ labourCode: labours.labourCode }).from(labours);
+        const usedCodes = new Set(rows.map((r) => r.labourCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^LAB-(\d+)$/.exec(r.labourCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let labourCode = `LAB-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(labourCode)) {
+          nextNum++;
+          labourCode = `LAB-${String(nextNum).padStart(4, "0")}`;
+        }
+
+        const [createdLab] = await tx
+          .insert(labours)
+          .values({
+            labourCode,
+            name,
+            category: category || "Mason",
+            dailyRate: rate.toFixed(2),
+            phone: phone || "",
+            projectId: projectId ? Number(projectId) : null,
+            assignedSiteId: assignedSiteId ? Number(assignedSiteId) : null,
+            totalWorkDays: days.toFixed(2),
+            totalEarned: earned.toFixed(2),
+            totalPaid: "0.00",
+            dueAmount: earned.toFixed(2),
+          })
+          .returning();
+        return createdLab;
+      });
 
       return NextResponse.json({ success: true, labour: lab });
     }
@@ -3731,26 +3907,43 @@ export async function POST(req: NextRequest) {
       if (!name || !specialty) {
         return NextResponse.json({ error: "Contractor Name and Specialty required" }, { status: 400 });
       }
-      const existingC = await db.select().from(contractors);
-      const contractorCode = `CON-${String(existingC.length + 1).padStart(4, "0")}`;
       const approved = Number(approvedBillAmount || 0);
 
-      const [con] = await db
-        .insert(contractors)
-        .values({
-          contractorCode,
-          name,
-          phone: phone || "",
-          specialty,
-          projectId: projectId ? Number(projectId) : null,
-          siteId: siteId ? Number(siteId) : null,
-          workOrderRef: workOrderRef || `WO-${Date.now().toString().slice(-4)}`,
-          contractAmount: Number(contractAmount || approved).toFixed(2),
-          approvedBillAmount: approved.toFixed(2),
-          paidAmount: "0.00",
-          outstandingDue: approved.toFixed(2),
-        })
-        .returning();
+      const con = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('contractor-code-allocation', 0))`
+        );
+        const rows = await tx.select({ contractorCode: contractors.contractorCode }).from(contractors);
+        const usedCodes = new Set(rows.map((r) => r.contractorCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^CON-(\d+)$/.exec(r.contractorCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let contractorCode = `CON-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(contractorCode)) {
+          nextNum++;
+          contractorCode = `CON-${String(nextNum).padStart(4, "0")}`;
+        }
+
+        const [createdCon] = await tx
+          .insert(contractors)
+          .values({
+            contractorCode,
+            name,
+            phone: phone || "",
+            specialty,
+            projectId: projectId ? Number(projectId) : null,
+            siteId: siteId ? Number(siteId) : null,
+            workOrderRef: workOrderRef || `WO-${Date.now().toString().slice(-4)}`,
+            contractAmount: Number(contractAmount || approved).toFixed(2),
+            approvedBillAmount: approved.toFixed(2),
+            paidAmount: "0.00",
+            outstandingDue: approved.toFixed(2),
+          })
+          .returning();
+        return createdCon;
+      });
 
       return NextResponse.json({ success: true, contractor: con });
     }
@@ -3781,8 +3974,21 @@ export async function POST(req: NextRequest) {
       const canAutoApprove = hasPermission(currentUser, "expenses.approve");
 
       const exp = await db.transaction(async (tx) => {
-        const existingE = await tx.select().from(expenses);
-        const expenseCode = `EXP-${String(existingE.length + 1).padStart(4, "0")}`;
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('expense-code-allocation', 0))`
+        );
+        const rows = await tx.select({ expenseCode: expenses.expenseCode }).from(expenses);
+        const usedCodes = new Set(rows.map((r) => r.expenseCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^EXP-(\d+)$/.exec(r.expenseCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let expenseCode = `EXP-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(expenseCode)) {
+          nextNum++;
+          expenseCode = `EXP-${String(nextNum).padStart(4, "0")}`;
+        }
 
         const [created] = await tx
           .insert(expenses)
@@ -3877,7 +4083,7 @@ export async function POST(req: NextRequest) {
     // =========================================================================
     if (action === "editExpense") {
       const { expenseId, amount, category, date, description, paymentMethod } = body;
-      
+
       const [existing] = await db
         .select()
         .from(expenses)
@@ -3893,13 +4099,13 @@ export async function POST(req: NextRequest) {
           amount: amount ? Number(amount).toFixed(2) : existing.amount,
           category: category || existing.category,
           date: date || existing.date,
-          description: description !== undefined ? description : existing.description,
+          // ⭐ ফিক্স: string হলেই update; null/undefined-এ existing থাকবে
+          description: typeof description === "string" ? description : existing.description,
           paymentMethod: paymentMethod || existing.paymentMethod,
         })
         .where(eq(expenses.id, Number(expenseId)))
         .returning();
 
-      // অডিট লগ সংরক্ষণ
       await logAudit({
         userId: currentUser.id,
         userName: currentUser.name,
@@ -3923,9 +4129,25 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Client and positive Invoice amount required" }, { status: 400 });
       }
 
+      const invoiceDueDate = dueDate || new Date(Date.now() + 30 * 86400000)
+        .toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
+
       const inv = await db.transaction(async (tx) => {
-        const existingInv = await tx.select().from(invoices);
-        const invoiceCode = `INV-${String(existingInv.length + 1).padStart(4, "0")}`;
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('invoice-code-allocation', 0))`
+        );
+        const rows = await tx.select({ invoiceCode: invoices.invoiceCode }).from(invoices);
+        const usedCodes = new Set(rows.map((r) => r.invoiceCode));
+        const maxNum = rows.reduce((max, r) => {
+          const m = /^INV-(\d+)$/.exec(r.invoiceCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextNum = maxNum + 1;
+        let invoiceCode = `INV-${String(nextNum).padStart(4, "0")}`;
+        while (usedCodes.has(invoiceCode)) {
+          nextNum++;
+          invoiceCode = `INV-${String(nextNum).padStart(4, "0")}`;
+        }
 
         const [created] = await tx
           .insert(invoices)
@@ -3947,13 +4169,12 @@ export async function POST(req: NextRequest) {
             paidAmount: "0.00",
             outstandingAmount: amt.toFixed(2),
             date: today,
-            dueDate: dueDate || "2026-06-30",
+            dueDate: invoiceDueDate,
             status: "Unpaid",
             notes: notes || "",
           })
           .returning();
 
-        // Update Client totalInvoiced & outstandingBalance
         const [cli] = await tx
           .select()
           .from(clients)
@@ -3970,7 +4191,6 @@ export async function POST(req: NextRequest) {
             .where(eq(clients.id, cli.id));
         }
 
-        // Post Double-Entry Journal: Debit AR (1100) / Credit Revenue (4010)
         await postDoubleEntryJournalTx(tx, {
           date: today,
           referenceType: "Invoice",
@@ -4002,9 +4222,9 @@ export async function POST(req: NextRequest) {
     if (action === "recordPayment") {
       // STRICT TRANSACTIONAL PAYMENT + BALANCE UPDATE + DOUBLE-ENTRY JOURNAL
       const {
-        paymentType, // Client Receipt, Supplier Payment, Contractor Payment, Labour Payment, Expense Payment
+        paymentType,
         amount,
-        method, // Cash or Bank
+        method,
         referenceCode,
         invoiceId,
         supplierId,
@@ -4023,8 +4243,21 @@ export async function POST(req: NextRequest) {
       const cashOrBankCode = method === "Cash" ? "1010" : "1020";
 
       const payRecord = await db.transaction(async (tx) => {
-        const existingPay = await tx.select().from(payments);
-        const paymentCode = `PAY-${String(existingPay.length + 1).padStart(4, "0")}`;
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended('payment-code-allocation', 0))`
+        );
+        const payRows = await tx.select({ paymentCode: payments.paymentCode }).from(payments);
+        const usedPayCodes = new Set(payRows.map((r) => r.paymentCode));
+        const maxPayNum = payRows.reduce((max, r) => {
+          const m = /^PAY-(\d+)$/.exec(r.paymentCode);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        let nextPayNum = maxPayNum + 1;
+        let paymentCode = `PAY-${String(nextPayNum).padStart(4, "0")}`;
+        while (usedPayCodes.has(paymentCode)) {
+          nextPayNum++;
+          paymentCode = `PAY-${String(nextPayNum).padStart(4, "0")}`;
+        }
 
         const [cashBankAcc] = await tx
           .select()
@@ -4042,7 +4275,7 @@ export async function POST(req: NextRequest) {
           if (!inv) throw new Error("Invoice not found");
           if (amt > Number(inv.outstandingAmount) + 0.01) {
             throw new Error(
-              `Payment (à§³${amt}) exceeds invoice outstanding balance (à§³${inv.outstandingAmount})`
+              `Payment (৳${amt}) exceeds invoice outstanding balance (৳${inv.outstandingAmount})`
             );
           }
 
@@ -4076,7 +4309,6 @@ export async function POST(req: NextRequest) {
               .where(eq(clients.id, cli.id));
           }
 
-          // Debit Cash/Bank, Credit Accounts Receivable (1100)
           await postDoubleEntryJournalTx(tx, {
             date: today,
             referenceType: "Payment",
@@ -4125,7 +4357,6 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // Debit Accounts Payable (2010), Credit Cash/Bank
           await postDoubleEntryJournalTx(tx, {
             date: today,
             referenceType: "Payment",
@@ -4155,7 +4386,6 @@ export async function POST(req: NextRequest) {
             })
             .where(eq(contractors.id, con.id));
 
-          // Debit Contractor Payable (2020), Credit Cash/Bank
           await postDoubleEntryJournalTx(tx, {
             date: today,
             referenceType: "Payment",
@@ -4237,7 +4467,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "cashBankTransfer") {
-      // Cash -> Bank or Bank -> Cash Double-Entry Transfer
       const { fromAccountCode, toAccountCode, amount, description } = body;
       const amt = Number(amount);
       if (!fromAccountCode || !toAccountCode || fromAccountCode === toAccountCode || amt <= 0) {
@@ -4272,9 +4501,9 @@ export async function POST(req: NextRequest) {
     }
 
     // =========================================================================
-    // 13. PAYROLL MODULE (সকাল ৯:৩০ - রাত ৭:৩০ এবং ৮.৭৫ ঘণ্টা কর্মসময় অনুযায়ী)
+    // 13. PAYROLL MODULE (৮.৭৫ ঘণ্টা কর্মসময় অনুযায়ী)
     // =========================================================================
-    if (action === "generatePayroll") {
+        if (action === "generatePayroll") {
       if (!hasPermission(currentUser, "payroll.manage")) {
         return NextResponse.json({ error: "Forbidden: HR/Accounts permission required" }, { status: 403 });
       }
@@ -4285,143 +4514,220 @@ export async function POST(req: NextRequest) {
         allowance,
         overtimePay,
         bonus,
+        pfDeduction, 
         advanceDeduction,
         otherDeduction,
         taxDeduction,
       } = body;
 
-      const targetMonth = salaryMonth || new Date().toISOString().slice(0, 7);
+      const toNum = (v: any) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
 
-      const [emp] = await db
-        .select()
-        .from(employees)
-        .where(eq(employees.id, Number(employeeId)));
+      const targetMonth = salaryMonth || today.slice(0, 7);
+
+      const [emp] = await db.select().from(employees).where(eq(employees.id, Number(employeeId)));
       if (!emp) {
         return NextResponse.json({ error: "Employee not found" }, { status: 404 });
       }
 
-      const basic = Number(basicSalary !== undefined ? basicSalary : emp.basicSalary || 0);
-      const allow = Number(allowance !== undefined ? allowance : emp.allowance || 0);
-      const workingDays = 26; // মাসে কর্মদিবস ২৬ দিন
-      const dailyWorkHours = 8.75; // অফিসিয়াল সময়: ৩.৭৫ + ৫.০০ = ৮.৭৫ ঘণ্টা (৮ ঘণ্টা ৪৫ মিনিট)
+      const basic = toNum(basicSalary !== undefined ? basicSalary : emp.basicSalary);
+      const allow = toNum(allowance !== undefined ? allowance : emp.allowance);
+      const workingDays = 26;
+      const perDaySalary = basic / workingDays;
+      const hourlyRate = perDaySalary / STANDARD_WORK_HOURS; // ৮.৭৫ ঘণ্টা
 
-      // নির্দিষ্ট মাসের হাজিরা ডাটা আনা
-      const empAllAttendances = await db
-        .select()
-        .from(attendances)
-        .where(eq(attendances.employeeId, emp.id));
-
-      const monthAttendances = empAllAttendances.filter(
-        (a) => a.date && a.date.startsWith(targetMonth)
-      );
-
-      // ডুপ্লিকেট পাঞ্চ ফিল্টার করে দিনভিত্তিক ডাটা মার্জ
-      const uniqueDaysMap = new Map<string, any>();
-      monthAttendances.forEach((a) => {
-        if (!uniqueDaysMap.has(a.date)) {
-          uniqueDaysMap.set(a.date, { ...a });
+      // এই মাসের হাজিরা — প্রতি দিনে একটি রেকর্ড
+      const empAtt = await db.select().from(attendances).where(eq(attendances.employeeId, emp.id));
+      const dayMap = new Map<string, any>();
+      for (const a of empAtt) {
+        if (!a.date || !a.date.startsWith(targetMonth)) continue;
+        const prev = dayMap.get(a.date);
+        if (!prev) {
+          dayMap.set(a.date, { ...a });
         } else {
-          const prev = uniqueDaysMap.get(a.date);
-          uniqueDaysMap.set(a.date, {
+          dayMap.set(a.date, {
             ...prev,
-            workingHours: Math.max(Number(prev.workingHours || 0), Number(a.workingHours || 0)),
-            overtimeHours: Math.max(Number(prev.overtimeHours || 0), Number(a.overtimeHours || 0)),
-            lateMinutes: Math.max(Number(prev.lateMinutes || 0), Number(a.lateMinutes || 0)),
-            status: prev.status === "Late" || a.status === "Late" ? "Late" : prev.status,
+            checkIn: prev.checkIn || a.checkIn,
+            checkOut: prev.checkOut || a.checkOut,
+            checkIn2: prev.checkIn2 || a.checkIn2,
+            checkOut2: prev.checkOut2 || a.checkOut2,
+            workingHours: Math.max(toNum(prev.workingHours), toNum(a.workingHours)),
+            overtimeHours: Math.max(toNum(prev.overtimeHours), toNum(a.overtimeHours)),
+            lateMinutes: Math.max(toNum(prev.lateMinutes), toNum(a.lateMinutes)),
+            status:
+              prev.status === "Leave" || a.status === "Leave"
+                ? "Leave"
+                : prev.status === "Late" || a.status === "Late"
+                  ? "Late"
+                  : prev.status || a.status,
           });
         }
-      });
-
-      const uniqueMonthRecords = Array.from(uniqueDaysMap.values());
+      }
 
       let presentDays = 0;
-      let lateDays = 0;
+      let lateDays = 0; // রেকর্ডের জন্য — সব দেরি
+      let deductibleLateDays = 0; // যেসব দিনে ৮.৭৫ ঘণ্টা পূরণ হয়নি
       let leaveDays = 0;
       let totalOtHours = 0;
+      let totalShortfallHours = 0;
 
-      uniqueMonthRecords.forEach((a) => {
-        const isPres = ["Present", "Late", "Early Leave", "Missing Checkout"].includes(a.status || "");
-        if (a.status === "Late") {
-          lateDays++;
-          presentDays++;
-        } else if (a.status === "Leave") {
+      for (const a of dayMap.values()) {
+        if (a.status === "Leave") {
           leaveDays++;
-        } else if (isPres || a.checkIn) {
-          presentDays++;
+          continue;
         }
-        totalOtHours += Number(a.overtimeHours || 0);
-      });
+        const hasPunch = Boolean(a.checkIn || a.checkIn2);
+        if (!hasPunch && !["Present", "Late", "Early Leave", "Missing Checkout"].includes(a.status || "")) {
+          continue;
+        }
+        presentDays++;
+        totalOtHours += toNum(a.overtimeHours);
+
+        const lateMin = toNum(a.lateMinutes);
+        if (lateMin > 0) lateDays++;
+
+        // দিন শেষ হয়েছে কিনা (OUT দেওয়া আছে) — চলমান আজকের দিনে ঘাটতি ধরা হবে না
+        const dayEnded = Boolean(a.checkOut2) || (Boolean(a.checkOut) && !a.checkIn2);
+        if (dayEnded) {
+          if (isLateDeductible(lateMin, a.workingHours)) deductibleLateDays++;
+          totalShortfallHours += workShortfallHours(a.workingHours);
+        }
+      }
 
       const absentDays = Math.max(0, workingDays - presentDays - leaveDays);
 
-      // ৮.৭৫ কর্মঘণ্টা ভিত্তিক রেট
-      const perDaySalary = basic / workingDays;
-      const hourlyRate = perDaySalary / dailyWorkHours; // ৮.৭৫ ঘণ্টা দিয়ে ভাগ
-      
-      const autoCalculatedOtPay = Number((totalOtHours * hourlyRate).toFixed(2));
+      // ⭐ Option B:
+      //  • অনুপস্থিত দিন → পূর্ণ দিনের বেতন কাটা
+      //  • উপস্থিত দিনে ৮.৭৫ ঘণ্টার কম কাজ → ঘাটতি ঘণ্টা × ঘণ্টাপ্রতি রেট কাটা
+      //  • দেরি হলেও ৮.৭৫ ঘণ্টা পূরণ হলে কোনো কাটা নেই (শুধু late রেকর্ড থাকবে)
+      //  • OT = ৮.৭৫ ঘণ্টার বেশি কাজ × ঘণ্টাপ্রতি রেট
       const autoAbsentDeduction = Number((absentDays * perDaySalary).toFixed(2));
-      const autoLateDeduction = Number((Math.floor(lateDays / 3) * perDaySalary).toFixed(2));
+      const autoShortfallDeduction = Number((totalShortfallHours * hourlyRate).toFixed(2));
+      const autoCalculatedOtPay = Number((totalOtHours * hourlyRate).toFixed(2));
 
-      const finalOtPay = overtimePay !== undefined && overtimePay !== null && overtimePay !== ""
-        ? Number(overtimePay)
-        : autoCalculatedOtPay;
+      const finalOtPay =
+        overtimePay !== undefined && overtimePay !== null && overtimePay !== ""
+          ? toNum(overtimePay)
+          : autoCalculatedOtPay;
 
-      const bon = Number(bonus || 0);
-      const adv = Number(advanceDeduction !== undefined ? advanceDeduction : emp.advanceBalance || 0);
+      const bon = toNum(bonus);
 
-      const finalOtherDeduction = otherDeduction !== undefined && otherDeduction !== null && otherDeduction !== ""
-        ? Number(otherDeduction)
-        : Number((autoAbsentDeduction + autoLateDeduction).toFixed(2));
+            const finalOtherDeduction =
+        otherDeduction !== undefined && otherDeduction !== null && otherDeduction !== ""
+          ? toNum(otherDeduction)
+          : Number((autoAbsentDeduction + autoShortfallDeduction).toFixed(2));
 
-      const tax = Number(taxDeduction || 0);
+      // ⭐ PF: client থেকে দিলে সেটা, নাহলে Gross-এর ৫%
+      const pf = pfDeduction !== undefined && pfDeduction !== null && pfDeduction !== ""
+        ? toNum(pfDeduction)
+        : Number(((basic + allow) * 0.05).toFixed(2));
 
-      // চূড়ান্ত নেট বেতন
-      const netSalary = Math.max(
+      // ⭐ Advance: body-তে দিলে সেটা, নাহলে কর্মীর advanceBalance
+      const adv =
+        advanceDeduction !== undefined && advanceDeduction !== null && advanceDeduction !== ""
+          ? toNum(advanceDeduction)
+          : toNum(emp.advanceBalance);
+
+      const tax = toNum(taxDeduction);
+
+        const netSalary = Math.max(
         0,
-        Number((basic + allow + finalOtPay + bon - adv - finalOtherDeduction - tax).toFixed(2))
+        Number((basic + allow + finalOtPay + bon - pf - adv - finalOtherDeduction - tax).toFixed(2))
       );
 
-      const existingPr = await db.select().from(payrolls);
-      const payrollCode = `PAYR-${String(existingPr.length + 1).padStart(4, "0")}`;
+            const payrollValues = {
+        workingDays,
+        presentDays,
+        lateDays,
+        leaveDays,
+        overtimeHours: totalOtHours.toFixed(2),
+        basicSalary: basic.toFixed(2),
+        allowance: allow.toFixed(2),
+        overtimePay: finalOtPay.toFixed(2),
+        bonus: bon.toFixed(2),
+        advanceDeduction: adv.toFixed(2),
+        taxDeduction: (tax + pf).toFixed(2), // PF আলাদা column না থাকায় এখানেই
+        netSalary: netSalary.toFixed(2),
+        status: "Approved",
+        approvedBy: currentUser.name,
+      };
 
-      const [pr] = await db
-        .insert(payrolls)
-        .values({
-          payrollCode,
-          employeeId: emp.id,
-          salaryMonth: targetMonth,
-          workingDays,
+      // একই কর্মী + মাসে আগের পে-রোল থাকলে আপডেট (ডুপ্লিকেট নয়)
+      const [existingPayroll] = await db
+        .select()
+        .from(payrolls)
+        .where(and(eq(payrolls.employeeId, emp.id), eq(payrolls.salaryMonth, targetMonth)))
+        .limit(1);
+
+      let pr;
+      if (existingPayroll) {
+        [pr] = await db.update(payrolls).set(payrollValues).where(eq(payrolls.id, existingPayroll.id)).returning();
+      } else {
+        const payrollCode = `PAYR-${targetMonth.replace("-", "")}-${String(emp.id).padStart(4, "0")}`;
+        [pr] = await db
+          .insert(payrolls)
+          .values({ payrollCode, employeeId: emp.id, salaryMonth: targetMonth, ...payrollValues })
+          .returning();
+      }
+
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: existingPayroll ? "UPDATE" : "CREATE",
+        entity: "Payroll",
+        recordId: pr.payrollCode,
+        beforeData: existingPayroll || null,
+        afterData: {
+          ...pr,
+          breakdown: {
+            absentDays,
+            deductibleLateDays,
+            shortfallHours: Number(totalShortfallHours.toFixed(2)),
+            absentDeduction: autoAbsentDeduction,
+            shortfallDeduction: autoShortfallDeduction,
+            otPay: autoCalculatedOtPay,
+          },
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        payroll: pr,
+        breakdown: {
           presentDays,
-          lateDays,
+          absentDays,
           leaveDays,
-          overtimeHours: totalOtHours.toFixed(2),
-          basicSalary: basic.toFixed(2),
-          allowance: allow.toFixed(2),
-          overtimePay: finalOtPay.toFixed(2),
-          bonus: bon.toFixed(2),
-          advanceDeduction: adv.toFixed(2),
-          otherDeduction: finalOtherDeduction.toFixed(2),
-          taxDeduction: tax.toFixed(2),
-          netSalary: netSalary.toFixed(2),
-          status: "Approved",
-          approvedBy: currentUser.name,
-        })
-        .returning();
-
-      return NextResponse.json({ success: true, payroll: pr });
+          lateDays,
+          deductibleLateDays,
+          shortfallHours: Number(totalShortfallHours.toFixed(2)),
+          absentDeduction: autoAbsentDeduction,
+          shortfallDeduction: autoShortfallDeduction,
+          otHours: Number(totalOtHours.toFixed(2)),
+          otPay: finalOtPay,
+        },
+      });
     }
     // =========================================================================
     // 14. LEAVE MANAGEMENT (Auto-reflects in Attendance when Approved)
     // =========================================================================
     if (action === "applyLeave") {
-      const employeeId = Number(body.employeeId || currentUser.employeeId || 1);
+      // ⭐ fallback "|| 1" সরানো
+      const employeeId = Number(body.employeeId || currentUser.employeeId);
+      if (!Number.isInteger(employeeId) || employeeId <= 0) {
+        return NextResponse.json(
+          { error: "আপনার লগইন কোনো কর্মী প্রোফাইলের সাথে যুক্ত নয়। HR-কে জানান।" },
+          { status: 400 }
+        );
+      }
       const { leaveType, startDate, endDate, totalDays, reason } = body;
       if (!leaveType || !startDate || !endDate || !reason) {
         return NextResponse.json({ error: "All leave application fields required" }, { status: 400 });
       }
 
-      const existingL = await db.select().from(leaveRequests);
-      const leaveCode = `LV-${String(existingL.length + 1).padStart(4, "0")}`;
+      const leaveCode = `LV-${String(Date.now()).slice(-8)}`;
 
       const [lv] = await db
         .insert(leaveRequests)
@@ -4453,7 +4759,7 @@ export async function POST(req: NextRequest) {
       if (!hasPermission(currentUser, "leave.approve")) {
         return NextResponse.json({ error: "Forbidden: Manager/HR permission required" }, { status: 403 });
       }
-      const { leaveId, decision } = body; // Approved or Rejected
+      const { leaveId, decision } = body;
       const [lv] = await db
         .select()
         .from(leaveRequests)
@@ -4472,7 +4778,6 @@ export async function POST(req: NextRequest) {
         .where(eq(leaveRequests.id, lv.id))
         .returning();
 
-      // Automatically reflect approved leave in Attendance!
       if (decision === "Approved") {
         await db.insert(attendances).values({
           employeeId: lv.employeeId,
@@ -4507,14 +4812,16 @@ export async function POST(req: NextRequest) {
     // =========================================================================
     // 15. PERFORMANCE REVIEW (Real Activity Calculation)
     // =========================================================================
-    if (action === "generatePerformanceReview" && !isManagementRole(currentUser.role) && currentUser.role !== "HR") {
-      return NextResponse.json({ error: "à¦ªà¦¾à¦°à¦«à¦°à¦®à§à¦¯à¦¾à¦¨à§à¦¸ à¦°à¦¿à¦­à¦¿à¦‰ à¦¦à§‡à¦“à¦¯à¦¼à¦¾à¦° à¦…à¦¨à§à¦®à¦¤à¦¿ à¦¨à§‡à¦‡à¥¤" }, { status: 403 });
-    }
     if (action === "generatePerformanceReview") {
+      if (!isManagementRole(currentUser.role) && currentUser.role !== "HR") {
+        return NextResponse.json(
+          { error: "পারফরম্যান্স রিভিউ দেওয়ার অনুমতি নেই।" },
+          { status: 403 }
+        );
+      }
       const { employeeId, period, managerReviewPoints, managerComments } = body;
       const empId = Number(employeeId);
 
-      // Compute real activity metrics from DB
       const empAtt = await db.select().from(attendances).where(eq(attendances.employeeId, empId));
       const empTasks = await db.select().from(tasks).where(eq(tasks.assignedTo, empId));
       const empDaily = await db.select().from(dailyWorks).where(eq(dailyWorks.employeeId, empId));
@@ -4550,7 +4857,7 @@ export async function POST(req: NextRequest) {
         .insert(performanceReviews)
         .values({
           employeeId: empId,
-          period: period || "2026-04",
+          period: period || new Date().toISOString().slice(0, 7),
           attendanceScore,
           taskScore,
           dailyUpdateScore,
@@ -4562,6 +4869,16 @@ export async function POST(req: NextRequest) {
           reviewedBy: currentUser.name,
         })
         .returning();
+
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "PERFORMANCE_REVIEW",
+        entity: "PerformanceReview",
+        recordId: String(rev.id),
+        afterData: { employeeId: empId, totalPoints },
+      });
 
       return NextResponse.json({ success: true, review: rev });
     }
@@ -4584,8 +4901,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Document name and category required" }, { status: 400 });
       }
 
-      const existingD = await db.select().from(documents);
-      const docCode = `DOC-${String(existingD.length + 1).padStart(4, "0")}`;
+      const docCode = `DOC-${String(Date.now()).slice(-8)}`;
 
       const [doc] = await db
         .insert(documents)
@@ -4616,14 +4932,13 @@ export async function POST(req: NextRequest) {
       if (!n) return NextResponse.json({ error: "Notification not found" }, { status: 404 });
       const mgmtOrHr = isManagementRole(currentUser.role) || currentUser.role === "HR";
       if (n.userId !== null ? n.userId !== currentUser.id : !mgmtOrHr) {
-        return NextResponse.json({ error: "à¦à¦‡ à¦¨à§‹à¦Ÿà¦¿à¦«à¦¿à¦•à§‡à¦¶à¦¨ à¦†à¦ªà¦¨à¦¾à¦° à¦¨à¦¯à¦¼à¥¤" }, { status: 403 });
+        return NextResponse.json({ error: "এই নোটিফিকেশন আপনার নয়।" }, { status: 403 });
       }
       await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, n.id));
       return NextResponse.json({ success: true });
     }
 
     if (action === "markAllNotificationsRead") {
-      // Only the caller's own notifications
       await db.update(notifications).set({ isRead: true }).where(eq(notifications.userId, currentUser.id));
       return NextResponse.json({ success: true });
     }
@@ -4687,21 +5002,21 @@ export async function POST(req: NextRequest) {
       }
       const attendanceReminders = await runReminderAutomation();
       const taskReminders = await runTaskDeadlineScan();
+      // ⭐ unreachable code সরানো (return-এর পরের dead line)
       return NextResponse.json({
         success: true,
         dispatched: { ...attendanceReminders, ...taskReminders },
       });
-
-      const [settings] = await db.select().from(reminderSettings);
     }
 
     return NextResponse.json({ error: `Unknown ERP action: ${action}` }, { status: 400 });
   } catch (err: unknown) {
+    // ⭐ ফিক্স: কাস্টম status (404/409) হারাচ্ছিল — সব error 400 হয়ে যেত
+    if (err instanceof AttendanceRequestError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     const msg = err instanceof Error ? err.message : "ERP operation failed";
     console.error("ERP POST Error:", err);
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
-
-
-

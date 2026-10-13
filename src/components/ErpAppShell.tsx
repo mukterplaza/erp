@@ -8,8 +8,6 @@ import {
   Building2,
   LayoutDashboard,
   Clock,
-  ClipboardCheck,
-  CheckSquare,
   Users,
   Calendar,
   DollarSign,
@@ -94,24 +92,9 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   {
     group: "CRM ও প্রজেক্ট",
     items: [
-      {
-        label: "লিড ও ফলো-আপ",
-        href: "/leads",
-        icon: PhoneCall,
-        needsLeads: true,
-      },
-      {
-        label: "ক্লায়েন্ট",
-        href: "/clients",
-        icon: UserCheck,
-        needsLeads: true,
-      },
-      {
-        label: "কোটেশন",
-        href: "/quotations",
-        icon: FileText,
-        needsLeads: true,
-      },
+      { label: "লিড ও ফলো-আপ", href: "/leads", icon: PhoneCall, needsLeads: true },
+      { label: "ক্লায়েন্ট", href: "/clients", icon: UserCheck, needsLeads: true },
+      { label: "কোটেশন", href: "/quotations", icon: FileText, needsLeads: true },
       { label: "প্রজেক্ট", href: "/projects", icon: Briefcase },
       { label: "সাইট", href: "/sites", icon: MapPin },
     ],
@@ -141,12 +124,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     items: [
       { label: "কর্মচারী", href: "/employees", icon: Users },
       { label: "পে-রোল", href: "/payroll", icon: DollarSign },
-      {
-        label: "Executive Dashboard",
-        href: "/executive-payroll",
-        icon: TrendingUp,
-        execOnly: true,
-      },
+      { label: "Executive Dashboard", href: "/executive-payroll", icon: TrendingUp, execOnly: true },
       { label: "ছুটি", href: "/leave", icon: Calendar },
       { label: "পারফরম্যান্স", href: "/performance", icon: Award },
     ],
@@ -163,6 +141,59 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
   },
 ];
 
+// পুরোনো /my-day, /daily-works, /tasks, /team-tasks — সব একই Work Center-এ
+function isWorkCenterRoute(route: string) {
+  return (
+    route === "/work-center" ||
+    route === "/my-day" ||
+    route === "/daily-works" ||
+    route === "/team-tasks" ||
+    route === "/tasks" ||
+    route.startsWith("/tasks/")
+  );
+}
+
+// Staff / Site Staff / Sales-এর জন্য sidebar group ফিল্টার
+function visibleGroupsFor(role: string) {
+  return (grp: { group: string }) => {
+    if (role === "Staff" || role === "Site Staff") {
+      return (
+        grp.group === "দৈনন্দিন কাজ" ||
+        grp.group === "এইচআর ও কর্মী" ||
+        grp.group === "রিপোর্ট ও নিয়ন্ত্রণ"
+      );
+    }
+    if (role === "Sales") {
+      return (
+        grp.group === "দৈনন্দিন কাজ" ||
+        grp.group === "CRM ও প্রজেক্ট" ||
+        grp.group === "রিপোর্ট ও নিয়ন্ত্রণ"
+      );
+    }
+    return true;
+  };
+}
+
+const MGMT_ROLES_FOR_EMPLOYEE_VIEW = [
+  "Owner",
+  "Chairman",
+  "MD",
+  "Admin",
+  "Manager",
+  "HR",
+  "Project Manager",
+];
+
+const EXECUTIVE_ROLES = [
+  "Owner",
+  "Chairman",
+  "MD",
+  "Admin",
+  "Manager",
+  "HR",
+  "Accounts",
+];
+
 export default function ErpAppShell({
   routeKey,
   entityId,
@@ -176,24 +207,19 @@ export default function ErpAppShell({
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [toast, setToast] = useState<{
-    type: "ok" | "err";
-    msg: string;
-  } | null>(null);
+  const [toast, setToast] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
       const res = await fetch("/api/erp");
-
       if (res.status === 401) {
         router.push("/login");
         return;
       }
-
       const json = await res.json();
       setData(json);
     } catch {
-      // বিদ্যমান আচরণ অপরিবর্তিত রাখা হয়েছে।
+      // নেটওয়ার্ক ব্যর্থ হলে আগের state অপরিবর্তিত থাকবে
     } finally {
       setLoading(false);
     }
@@ -203,45 +229,29 @@ export default function ErpAppShell({
     loadData();
   }, [loadData]);
 
-  // মোবাইল মেনু খোলা অবস্থায় Escape চাপলে বন্ধ হবে।
   useEffect(() => {
     if (!mobileMenuOpen) return;
-
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setMobileMenuOpen(false);
-      }
+      if (event.key === "Escape") setMobileMenuOpen(false);
     }
-
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [mobileMenuOpen]);
 
   async function handleMutate(payload: Record<string, unknown>) {
     setToast(null);
-
     try {
       const res = await fetch("/api/erp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
       const json = await res.json();
-
       if (!res.ok) {
-        setToast({
-          type: "err",
-          msg: json.error || "কাজটি সম্পন্ন হয়নি",
-        });
+        setToast({ type: "err", msg: json.error || "কাজটি সম্পন্ন হয়নি" });
         return json;
       }
-
-      setToast({
-        type: "ok",
-        msg: "সংরক্ষণ হয়েছে — ডাটাবেস আপডেট হয়েছে",
-      });
-
+      setToast({ type: "ok", msg: "সংরক্ষণ হয়েছে — ডাটাবেস আপডেট হয়েছে" });
       await loadData();
       return json;
     } catch {
@@ -257,23 +267,10 @@ export default function ErpAppShell({
         body: JSON.stringify({ action: "logout" }),
       });
     } catch {
-      // বিদ্যমান আচরণ অপরিবর্তিত রাখা হয়েছে।
+      // logout ব্যর্থ হলেও login পেজে পাঠানো হবে
     }
-
     router.push("/login");
   }
-
-  const canViewExecutive = (role: string) => {
-    return [
-      "Owner",
-      "Chairman",
-      "MD",
-      "Admin",
-      "Manager",
-      "HR",
-      "Accounts",
-    ].includes(role);
-  };
 
   if (loading) {
     return (
@@ -283,55 +280,49 @@ export default function ErpAppShell({
             <Building2 className="w-6 h-6" />
           </div>
           <p className="text-sm font-semibold">INSAF ERP লোড হচ্ছে...</p>
-          <p className="text-xs text-slate-400">
-            সেশন ও অনুমতি যাচাই করা হচ্ছে
-          </p>
+          <p className="text-xs text-slate-400">সেশন ও অনুমতি যাচাই করা হচ্ছে</p>
         </div>
       </div>
     );
   }
 
-  if (!data || !data.currentUser) {
-    return null;
-  }
+  if (!data || !data.currentUser) return null;
 
   const role: string = data.currentUser.role;
   const userName: string = data.currentUser.name || "";
-
-  const unreadCount = (data.notifications || []).filter(
-    (n: any) => !n.isRead
-  ).length;
-
+  const unreadCount = (data.notifications || []).filter((n: any) => !n.isRead).length;
   const activeRoute = routeKey || pathname;
 
   const isStaffRestricted =
     role === "Staff" || role === "Site Staff" || role === "Engineer";
+  const noLeadAccess = isStaffRestricted;
 
-  const noLeadAccess =
-    role === "Staff" || role === "Site Staff" || role === "Engineer";
+  const canViewExecutive = EXECUTIVE_ROLES.includes(role);
 
   const filterItem = (item: NavItem) => {
     if (item.needsLeads) return !noLeadAccess;
-    if (item.execOnly) return canViewExecutive(role);
+    if (item.execOnly) return canViewExecutive;
     return true;
   };
 
+  const visibleGroups = NAV_GROUPS.filter(visibleGroupsFor(role));
+
+  const isNavActive = (href: string) =>
+    pathname === href ||
+    pathname.startsWith(`${href}/`) ||
+    (href === "/work-center" && isWorkCenterRoute(pathname));
+
   function renderMainContent() {
-    // Permission check আগেই রাখা হয়েছে; কোনো permission logic বাদ দেওয়া হয়নি।
+    // ---- Permission gates (আগের মতোই) ----
     if (
       noLeadAccess &&
-      (activeRoute === "/leads" ||
-        activeRoute === "/clients" ||
-        activeRoute === "/quotations")
+      (activeRoute === "/leads" || activeRoute === "/clients" || activeRoute === "/quotations")
     ) {
       return (
         <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-6 sm:p-8 text-center space-y-3">
-          <h2 className="text-xl font-bold text-rose-900">
-            প্রবেশাধিকার নেই — লিড/CRM
-          </h2>
+          <h2 className="text-xl font-bold text-rose-900">প্রবেশাধিকার নেই — লিড/CRM</h2>
           <p className="text-xs text-rose-700 max-w-xl mx-auto">
-            সাধারণ স্টাফ INSAF BUILDING DESIGN বা INSAF REAL ESTATE
-            LTD.-এর লিড ডাটাবেস দেখতে পারেন না।
+            সাধারণ স্টাফ INSAF BUILDING DESIGN বা INSAF REAL ESTATE LTD.-এর লিড ডাটাবেস দেখতে পারেন না।
           </p>
           <Link
             href="/dashboard"
@@ -355,9 +346,7 @@ export default function ErpAppShell({
     ) {
       return (
         <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-6 sm:p-8 text-center space-y-3">
-          <h2 className="text-xl font-bold text-rose-900">
-            প্রবেশাধিকার নেই
-          </h2>
+          <h2 className="text-xl font-bold text-rose-900">প্রবেশাধিকার নেই</h2>
           <p className="text-xs text-rose-700 max-w-xl mx-auto">
             এই মডিউল শুধু অনুমোদিত ব্যবস্থাপনার জন্য।
           </p>
@@ -371,6 +360,11 @@ export default function ErpAppShell({
       );
     }
 
+    // ---- Routes ----
+    if (activeRoute === "/dashboard") {
+      return <DashboardView data={data} onMutate={handleMutate} />;
+    }
+
     if (activeRoute === "/attendance") {
       return <AttendanceView data={data} onMutate={handleMutate} />;
     }
@@ -379,46 +373,25 @@ export default function ErpAppShell({
       return <MonthlyAttendanceView data={data} onMutate={handleMutate} />;
     }
 
-    // ✅ নতুন: কাজ ও কার্যক্রম কেন্দ্র
-    // পুরোনো ৪টি route-ও এখানে চলে আসবে (backward compatibility)
-    if (
-      activeRoute === "/work-center" ||
-      activeRoute === "/my-day" ||
-      activeRoute === "/daily-works" ||
-      activeRoute.startsWith("/tasks") ||
-      activeRoute === "/team-tasks"
-    ) {
+    if (isWorkCenterRoute(activeRoute)) {
+      // Work Center নিজেই /api/work-center থেকে ডাটা নেয়।
+      // data ও onMutate পাস করা হচ্ছে যাতে ভবিষ্যতে Dashboard থেকে shared data ব্যবহার করা যায়।
       return <WorkCenterView data={data} onMutate={handleMutate} />;
     }
 
     if (activeRoute.startsWith("/employees")) {
-      const mgmtRoles = [
-        "Owner",
-        "Chairman",
-        "MD",
-        "Admin",
-        "Manager",
-        "HR",
-        "Project Manager",
-      ];
-
       if (
         entityId &&
-        !mgmtRoles.includes(role) &&
+        !MGMT_ROLES_FOR_EMPLOYEE_VIEW.includes(role) &&
         entityId !== data.currentUser.employeeId
       ) {
         return (
           <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-6 text-center space-y-2">
-            <h2 className="text-lg font-bold text-rose-900">
-              প্রবেশাধিকার নেই
-            </h2>
-            <p className="text-xs text-rose-700">
-              অন্য কর্মীর ব্যক্তিগত প্রোফাইল দেখা যাবে না।
-            </p>
+            <h2 className="text-lg font-bold text-rose-900">প্রবেশাধিকার নেই</h2>
+            <p className="text-xs text-rose-700">অন্য কর্মীর ব্যক্তিগত প্রোফাইল দেখা যাবে না।</p>
           </div>
         );
       }
-
       return (
         <EmployeeDirectoryView
           data={data}
@@ -428,24 +401,16 @@ export default function ErpAppShell({
       );
     }
 
-    if (activeRoute === "/leave") {
-      return <LeaveView data={data} onMutate={handleMutate} />;
-    }
-
-    if (activeRoute === "/payroll") {
-      return <PayrollView data={data} onMutate={handleMutate} />;
-    }
+    if (activeRoute === "/leave") return <LeaveView data={data} onMutate={handleMutate} />;
+    if (activeRoute === "/payroll") return <PayrollView data={data} onMutate={handleMutate} />;
 
     if (activeRoute === "/executive-payroll") {
-      if (!canViewExecutive(role)) {
+      if (!canViewExecutive) {
         return (
           <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-8 text-center space-y-3">
-            <h2 className="text-xl font-bold text-rose-900">
-              403 Forbidden
-            </h2>
+            <h2 className="text-xl font-bold text-rose-900">403 Forbidden</h2>
             <p className="text-xs text-rose-700 max-w-xl mx-auto">
-              Executive Dashboard শুধুমাত্র Owner, MD, Chairman, Admin,
-              Manager, HR ও Accounts এর জন্য।
+              Executive Dashboard শুধুমাত্র Owner, MD, Chairman, Admin, Manager, HR ও Accounts এর জন্য।
             </p>
             <Link
               href="/dashboard"
@@ -456,50 +421,22 @@ export default function ErpAppShell({
           </div>
         );
       }
-
-      return (
-        <ExecutivePayrollDashboard
-          data={data}
-          onMutate={handleMutate}
-        />
-      );
+      return <ExecutivePayrollDashboard data={data} onMutate={handleMutate} />;
     }
 
-    if (activeRoute === "/performance") {
-      return <PerformanceView data={data} onMutate={handleMutate} />;
-    }
-
-    if (activeRoute === "/leads") {
-      return <LeadsView data={data} onMutate={handleMutate} />;
-    }
+    if (activeRoute === "/performance") return <PerformanceView data={data} onMutate={handleMutate} />;
+    if (activeRoute === "/leads") return <LeadsView data={data} onMutate={handleMutate} />;
 
     if (activeRoute === "/clients") {
-      return (
-        <ClientsAndQuotationsView
-          data={data}
-          onMutate={handleMutate}
-          mode="clients"
-        />
-      );
+      return <ClientsAndQuotationsView data={data} onMutate={handleMutate} mode="clients" />;
     }
-
     if (activeRoute === "/quotations") {
-      return (
-        <ClientsAndQuotationsView
-          data={data}
-          onMutate={handleMutate}
-          mode="quotations"
-        />
-      );
+      return <ClientsAndQuotationsView data={data} onMutate={handleMutate} mode="quotations" />;
     }
 
     if (activeRoute.startsWith("/projects")) {
       return (
-        <ProjectsView
-          data={data}
-          onMutate={handleMutate}
-          focusedProjectId={entityId}
-        />
+        <ProjectsView data={data} onMutate={handleMutate} focusedProjectId={entityId} />
       );
     }
 
@@ -508,82 +445,33 @@ export default function ErpAppShell({
     }
 
     if (activeRoute === "/materials" || activeRoute === "/inventory") {
-      return (
-        <MaterialsAndInventoryView
-          data={data}
-          onMutate={handleMutate}
-        />
-      );
+      return <MaterialsAndInventoryView data={data} onMutate={handleMutate} />;
     }
 
-    if (
-      activeRoute === "/purchase-orders" ||
-      activeRoute === "/suppliers"
-    ) {
-      return (
-        <ProcurementAndSuppliersView
-          data={data}
-          onMutate={handleMutate}
-        />
-      );
+    if (activeRoute === "/purchase-orders" || activeRoute === "/suppliers") {
+      return <ProcurementAndSuppliersView data={data} onMutate={handleMutate} />;
     }
 
     if (activeRoute === "/labour") {
-      return (
-        <LabourAndContractorsView
-          data={data}
-          onMutate={handleMutate}
-        />
-      );
+      return <LabourAndContractorsView data={data} onMutate={handleMutate} />;
     }
 
-    if (activeRoute === "/accounts") {
-      return <AccountingView data={data} onMutate={handleMutate} />;
-    }
+    if (activeRoute === "/accounts") return <AccountingView data={data} onMutate={handleMutate} />;
 
     if (activeRoute === "/invoices" || activeRoute === "/income") {
-      return (
-        <InvoicesPaymentsExpensesView
-          data={data}
-          onMutate={handleMutate}
-          tab="invoices"
-        />
-      );
+      return <InvoicesPaymentsExpensesView data={data} onMutate={handleMutate} tab="invoices" />;
     }
-
     if (activeRoute === "/expenses") {
-      return (
-        <InvoicesPaymentsExpensesView
-          data={data}
-          onMutate={handleMutate}
-          tab="expenses"
-        />
-      );
+      return <InvoicesPaymentsExpensesView data={data} onMutate={handleMutate} tab="expenses" />;
     }
-
     if (activeRoute === "/payments") {
-      return (
-        <InvoicesPaymentsExpensesView
-          data={data}
-          onMutate={handleMutate}
-          tab="payments"
-        />
-      );
+      return <InvoicesPaymentsExpensesView data={data} onMutate={handleMutate} tab="payments" />;
     }
 
-    if (activeRoute === "/reports") {
-      return <ReportsCenterView data={data} />;
-    }
+    if (activeRoute === "/reports") return <ReportsCenterView data={data} />;
+    if (activeRoute === "/notifications") return <NotificationsView data={data} onMutate={handleMutate} />;
 
-    if (activeRoute === "/notifications") {
-      return <NotificationsView data={data} onMutate={handleMutate} />;
-    }
-
-    if (
-      activeRoute === "/documents" ||
-      activeRoute === "/users" ||
-      activeRoute === "/settings"
-    ) {
+    if (activeRoute === "/documents" || activeRoute === "/users" || activeRoute === "/settings") {
       return (
         <DocumentsAndUsersView
           data={data}
@@ -598,7 +486,7 @@ export default function ErpAppShell({
 
   return (
     <div className="min-h-screen min-w-0 bg-slate-100 text-slate-900 flex flex-col lg:flex-row pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
-      {/* Desktop Sidebar */}
+      {/* ================= Desktop Sidebar ================= */}
       <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 bg-slate-950 text-slate-200 border-r border-slate-800 z-30">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2.5">
@@ -606,48 +494,22 @@ export default function ErpAppShell({
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-white text-sm block leading-none">
-                INSAF ERP
-              </span>
-              <span className="text-[10px] text-emerald-400">
-                Full Business Suite
-              </span>
+              <span className="font-bold text-white text-sm block leading-none">INSAF ERP</span>
+              <span className="text-[10px] text-emerald-400">Full Business Suite</span>
             </div>
           </Link>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-4">
-          {NAV_GROUPS.filter((grp) => {
-            if (role === "Staff" || role === "Site Staff") {
-              return (
-                grp.group === "দৈনন্দিন কাজ" ||
-                grp.group === "এইচআর ও কর্মী" ||
-                grp.group === "রিপোর্ট ও নিয়ন্ত্রণ"
-              );
-            }
-
-            if (role === "Sales") {
-              return (
-                grp.group === "দৈনন্দিন কাজ" ||
-                grp.group === "CRM ও প্রজেক্ট" ||
-                grp.group === "রিপোর্ট ও নিয়ন্ত্রণ"
-              );
-            }
-
-            return true;
-          }).map((grp) => (
+          {visibleGroups.map((grp) => (
             <div key={grp.group}>
               <p className="px-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
                 {grp.group}
               </p>
-
               <div className="space-y-0.5">
                 {grp.items.filter(filterItem).map((item) => {
                   const Icon = item.icon;
-                  const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
-
+                  const isActive = isNavActive(item.href);
                   return (
                     <Link
                       key={`${grp.group}-${item.href}`}
@@ -661,20 +523,17 @@ export default function ErpAppShell({
                       <span className="flex items-center gap-2.5">
                         <Icon className="w-4 h-4" />
                         {item.label}
-
                         {item.execOnly && (
                           <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-400 text-amber-900">
                             MD
                           </span>
                         )}
                       </span>
-
-                      {item.href === "/notifications" &&
-                        unreadCount > 0 && (
-                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white">
-                            {unreadCount}
-                          </span>
-                        )}
+                      {item.href === "/notifications" && unreadCount > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white">
+                          {unreadCount}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
@@ -686,14 +545,11 @@ export default function ErpAppShell({
         <div className="p-3 border-t border-slate-800 bg-slate-900/60">
           <div className="flex items-center justify-between text-xs">
             <div className="truncate">
-              <p className="font-bold text-white truncate">
-                {userName}
-              </p>
+              <p className="font-bold text-white truncate">{userName}</p>
               <p className="text-[11px] text-emerald-400">
                 {role} • {data.currentUser.empCode || "HQ"}
               </p>
             </div>
-
             <button
               type="button"
               onClick={handleLogout}
@@ -706,9 +562,8 @@ export default function ErpAppShell({
         </div>
       </aside>
 
-      {/* Main Content Area */}
+      {/* ================= Main Area ================= */}
       <div className="flex-1 min-w-0 w-full lg:pl-64 flex flex-col min-h-screen">
-        {/* Top Header */}
         <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-3 sm:px-4 lg:px-6 py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button
@@ -718,22 +573,14 @@ export default function ErpAppShell({
               aria-expanded={mobileMenuOpen}
               className="lg:hidden shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-slate-100 text-slate-700"
             >
-              {mobileMenuOpen ? (
-                <X className="w-5 h-5" />
-              ) : (
-                <Menu className="w-5 h-5" />
-              )}
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-xs text-slate-500 min-w-0">
-                <span className="hidden sm:inline shrink-0">
-                  INSAF ERP
-                </span>
+                <span className="hidden sm:inline shrink-0">INSAF ERP</span>
                 <span className="hidden sm:inline shrink-0">/</span>
-                <span className="block truncate font-bold text-slate-900">
-                  {pathname}
-                </span>
+                <span className="block truncate font-bold text-slate-900">{pathname}</span>
               </div>
             </div>
           </div>
@@ -745,15 +592,10 @@ export default function ErpAppShell({
 
             <Link
               href="/notifications"
-              aria-label={
-                unreadCount > 0
-                  ? `নোটিফিকেশন: ${unreadCount}টি অপঠিত`
-                  : "নোটিফিকেশন"
-              }
+              aria-label={unreadCount > 0 ? `নোটিফিকেশন: ${unreadCount}টি অপঠিত` : "নোটিফিকেশন"}
               className="relative p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
               <Bell className="w-5 h-5" />
-
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center">
                   {unreadCount}
@@ -771,7 +613,7 @@ export default function ErpAppShell({
           </div>
         </header>
 
-        {/* Mobile Drawer: পেজের content নিচে না ঠেলে overlay হিসেবে খুলবে */}
+        {/* ================= Mobile Drawer ================= */}
         {mobileMenuOpen && (
           <div className="lg:hidden fixed inset-0 z-40">
             <button
@@ -780,7 +622,6 @@ export default function ErpAppShell({
               onClick={() => setMobileMenuOpen(false)}
               className="absolute inset-0 bg-slate-950/60"
             />
-
             <div
               role="dialog"
               aria-modal="true"
@@ -790,11 +631,8 @@ export default function ErpAppShell({
               <div className="flex items-center justify-between gap-3 p-4 border-b border-slate-800">
                 <div className="min-w-0">
                   <p className="text-sm font-bold">INSAF ERP</p>
-                  <p className="text-xs text-slate-400 truncate">
-                    {userName}
-                  </p>
+                  <p className="text-xs text-slate-400 truncate">{userName}</p>
                 </div>
-
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(false)}
@@ -806,59 +644,29 @@ export default function ErpAppShell({
               </div>
 
               <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-                {NAV_GROUPS.filter((grp) => {
-                  if (role === "Staff" || role === "Site Staff") {
-                    return (
-                      grp.group === "দৈনন্দিন কাজ" ||
-                      grp.group === "এইচআর ও কর্মী" ||
-                      grp.group === "রিপোর্ট ও নিয়ন্ত্রণ"
-                    );
-                  }
-
-                  if (role === "Sales") {
-                    return (
-                      grp.group === "দৈনন্দিন কাজ" ||
-                      grp.group === "CRM ও প্রজেক্ট" ||
-                      grp.group === "রিপোর্ট ও নিয়ন্ত্রণ"
-                    );
-                  }
-
-                  return true;
-                }).map((grp) => (
+                {visibleGroups.map((grp) => (
                   <div key={grp.group} className="mb-4">
-                    <p className="px-2 py-1 text-[11px] font-bold text-emerald-400">
-                      {grp.group}
-                    </p>
-
+                    <p className="px-2 py-1 text-[11px] font-bold text-emerald-400">{grp.group}</p>
                     <div className="grid grid-cols-2 gap-2">
                       {grp.items.filter(filterItem).map((item) => {
                         const Icon = item.icon;
-                        const isActive =
-                          pathname === item.href ||
-                          pathname.startsWith(`${item.href}/`);
-
+                        const isActive = isNavActive(item.href);
                         return (
                           <Link
                             key={`${grp.group}-${item.href}`}
                             href={item.href}
                             onClick={() => setMobileMenuOpen(false)}
                             className={`min-h-[48px] min-w-0 flex items-center gap-2 p-2 rounded-xl text-[11px] leading-snug font-medium ${
-                              isActive
-                                ? "bg-emerald-500 text-slate-950 font-bold"
-                                : "bg-slate-900 text-slate-200"
+                              isActive ? "bg-emerald-500 text-slate-950 font-bold" : "bg-slate-900 text-slate-200"
                             }`}
                           >
                             <Icon className="w-4 h-4 shrink-0" />
-                            <span className="min-w-0 break-words">
-                              {item.label}
-                            </span>
-
-                            {item.href === "/notifications" &&
-                              unreadCount > 0 && (
-                                <span className="ml-auto shrink-0 px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white">
-                                  {unreadCount}
-                                </span>
-                              )}
+                            <span className="min-w-0 break-words">{item.label}</span>
+                            {item.href === "/notifications" && unreadCount > 0 && (
+                              <span className="ml-auto shrink-0 px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white">
+                                {unreadCount}
+                              </span>
+                            )}
                           </Link>
                         );
                       })}
@@ -870,7 +678,7 @@ export default function ErpAppShell({
           </div>
         )}
 
-        {/* Feedback Toast */}
+        {/* ================= Toast ================= */}
         {toast && (
           <div
             className={`mx-3 sm:mx-4 lg:mx-6 mt-4 p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-3 ${
@@ -885,10 +693,8 @@ export default function ErpAppShell({
               ) : (
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
               )}
-
               <span className="min-w-0 break-words">{toast.msg}</span>
             </span>
-
             <button
               type="button"
               onClick={() => setToast(null)}
@@ -900,88 +706,53 @@ export default function ErpAppShell({
           </div>
         )}
 
+        {/* ================= Content ================= */}
         <main className="flex-1 min-w-0 w-full p-3 sm:p-4 lg:p-6">
-          {/* প্রথম লগইনে পাসওয়ার্ড পরিবর্তন */}
-          {data.currentUser.mustChangePassword && (
-            <ForcePasswordBanner />
-          )}
+          {data.currentUser.mustChangePassword && <ForcePasswordBanner />}
 
-          {/* ঘোষণা ব্যানার */}
           {(data.announcements || [])
             .filter((a: { published: boolean }) => a.published)
             .slice(0, 2)
-            .map(
-              (a: {
-                id: number;
-                title: string;
-                message: string;
-                createdBy: string;
-              }) => (
-                <div
-                  key={a.id}
-                  className="mb-4 min-w-0 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-xs"
-                >
-                  <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
-                    অফিসিয়াল ঘোষণা
-                  </p>
-                  <h3 className="text-sm font-bold text-slate-900 mt-0.5 break-words">
-                    {fixBanglaEncoding(a.title)}
-                  </h3>
-                  <p className="text-xs text-slate-700 mt-1 leading-relaxed break-words">
-                    {fixBanglaEncoding(a.message)}
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-1 font-semibold break-words">
-                    প্রকাশক: {fixBanglaEncoding(a.createdBy)}
-                  </p>
-                </div>
-              )
-            )}
+            .map((a: { id: number; title: string; message: string; createdBy: string }) => (
+              <div
+                key={a.id}
+                className="mb-4 min-w-0 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-xs"
+              >
+                <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
+                  অফিসিয়াল ঘোষণা
+                </p>
+                <h3 className="text-sm font-bold text-slate-900 mt-0.5 break-words">
+                  {fixBanglaEncoding(a.title)}
+                </h3>
+                <p className="text-xs text-slate-700 mt-1 leading-relaxed break-words">
+                  {fixBanglaEncoding(a.message)}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1 font-semibold break-words">
+                  প্রকাশক: {fixBanglaEncoding(a.createdBy)}
+                </p>
+              </div>
+            ))}
 
           {renderMainContent()}
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation Bar */}
+      {/* ================= Mobile Bottom Nav ================= */}
       <div className="lg:hidden fixed bottom-0 inset-x-0 bg-slate-950 border-t border-slate-800 px-1 py-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] flex items-center justify-around z-30">
         {[
-          {
-            label: "হোম",
-            href: "/dashboard",
-            icon: LayoutDashboard,
-          },
-          {
-            label: "হাজিরা",
-            href: "/attendance",
-            icon: Clock,
-          },
-          {
-            label: "কাজ",
-            href: "/work-center",
-            icon: Briefcase,
-          },
-          {
-            label: "বার্তা",
-            href: "/notifications",
-            icon: Bell,
-          },
+          { label: "হোম", href: "/dashboard", icon: LayoutDashboard },
+          { label: "হাজিরা", href: "/attendance", icon: Clock },
+          { label: "কাজ", href: "/work-center", icon: Briefcase },
+          { label: "বার্তা", href: "/notifications", icon: Bell },
         ].map((m) => {
           const Icon = m.icon;
-          const active =
-            pathname === m.href ||
-            (m.href === "/work-center" &&
-              (pathname === "/my-day" ||
-                pathname === "/daily-works" ||
-                pathname.startsWith("/tasks") ||
-                pathname === "/team-tasks"));
-
+          const active = isNavActive(m.href);
           return (
             <Link
               key={m.href}
               href={m.href}
               className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg text-[10px] font-medium min-w-0 flex-1 ${
-                active
-                  ? "text-emerald-400 font-bold"
-                  : "text-slate-400"
+                active ? "text-emerald-400 font-bold" : "text-slate-400"
               }`}
             >
               <Icon className="w-4 h-4 mb-0.5 shrink-0" />
@@ -1004,7 +775,6 @@ function ForcePasswordBanner() {
     e.preventDefault();
     setBusy(true);
     setMsg("");
-
     try {
       const res = await fetch("/api/auth", {
         method: "POST",
@@ -1015,9 +785,7 @@ function ForcePasswordBanner() {
           newPassword,
         }),
       });
-
       const d = await res.json();
-
       if (!res.ok) {
         setMsg(d.error || "ব্যর্থ");
       } else {
@@ -1039,7 +807,6 @@ function ForcePasswordBanner() {
       <h3 className="text-sm font-bold text-amber-900">
         প্রথম লগইন — পাসওয়ার্ড পরিবর্তন বাধ্যতামূলক
       </h3>
-
       <input
         type="password"
         required
@@ -1048,7 +815,6 @@ function ForcePasswordBanner() {
         placeholder="বর্তমান পাসওয়ার্ড"
         className="w-full px-3 py-3 rounded-xl border border-amber-300 text-sm min-h-[44px]"
       />
-
       <input
         type="password"
         required
@@ -1058,9 +824,7 @@ function ForcePasswordBanner() {
         placeholder="নতুন পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)"
         className="w-full px-3 py-3 rounded-xl border border-amber-300 text-sm min-h-[44px]"
       />
-
       {msg && <p className="text-xs text-amber-800">{msg}</p>}
-
       <button
         type="submit"
         disabled={busy}

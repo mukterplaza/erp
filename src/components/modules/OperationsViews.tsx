@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
-  CheckCircle2,
+  
   Clock,
   ClipboardCheck,
   Plus,
@@ -20,30 +20,20 @@ import {
   LogOut,
   Activity,
   Megaphone,
-  Filter,
-  X,
-  Edit3,
-  Trash2,
-  Save,
-  TrendingUp,
-  AlertCircle,
-  Users,
   DollarSign,
-  Calendar,
+  
 } from "lucide-react";
 import { exportToCSV, exportToPDFPrint } from "@/lib/export-utils";
 import { calculateFinancialDashboardMetrics } from "@/lib/financial-metrics";
 import { fixBanglaEncoding } from "./FinanceAdminViews";
 
 // ============================================================================
-// 🛠️ Helpers & Constants (বাংলাদেশ রিয়েল-টাইম ইঞ্জিন — Asia/Dhaka)
+// 🛠️ Helpers & Constants (বাংলাদেশ রিয়েল-টাইম ইঞ্জিন — Asia/Dhaka)
 // ============================================================================
-// প্রতিদিন স্বয়ংক্রিয়ভাবে বাংলাদেশ সময় অনুযায়ী আজকের আসল তারিখ নির্ধারণ (YYYY-MM-DD)
 const getTodayLocal = (): string => {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
 };
 
-// বাংলাদেশের বর্তমান লাইভ সময় (HH:MM - 24 ঘণ্টা)
 export const getNowTimeBD = (): string => {
   return new Date().toLocaleTimeString("en-GB", {
     timeZone: "Asia/Dhaka",
@@ -53,7 +43,6 @@ export const getNowTimeBD = (): string => {
   });
 };
 
-// বাংলায় সুন্দর তারিখ প্রদর্শন (যেমন: ৪ অক্টোবর ২০২৬)
 export const formatBanglaDate = (dateStr: string): string => {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -77,11 +66,6 @@ const num = (v: any, fallback = 0): number => {
 
 const taka = (n: number): string => "৳" + num(n).toLocaleString("en-IN");
 
-const hoursFromHHMM = (hhmm: string): number => {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + (m || 0);
-};
-
 const isWeeklyRestDate = (date: string): boolean =>
   new Date(`${date}T00:00:00Z`).getUTCDay() === 5;
 
@@ -93,8 +77,17 @@ const hasApprovedLeaveOn = (leaveRequests: any[], employeeId: number, date: stri
     leave.endDate >= date
   );
 
+// টাস্ক/হাজিরার তারিখকে বাংলাদেশ টাইমজোনে YYYY-MM-DD-তে নেওয়া
+const bdDateKey = (value?: string | Date | null): string => {
+  if (!value) return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 10);
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
+};
+
 // ============================================================================
-// 📦 Strongly-typed Interfaces (No more `any` abuse)
+// 📦 Types
 // ============================================================================
 type AttendanceStatus =
   | "Present"
@@ -189,6 +182,8 @@ type Task = {
   status: string;
   priority?: string;
   assignedTo?: number;
+  assignedToName?: string;
+  assignedByName?: string;
   isCompanyWide?: boolean;
   dueDate?: string;
   createdBy?: string;
@@ -197,6 +192,8 @@ type Task = {
   completedBy?: string;
   reviewedBy?: string;
   completedAt?: string;
+  createdAt?: string;
+  reviewedAt?: string;
   evidenceAttachments?: Array<{ name: string; size: string }>;
 };
 
@@ -225,7 +222,7 @@ function StatPill({
     indigo: "text-indigo-600",
   };
   return (
-    <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs hover:shadow-md transition">
+    <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-xs hover:shadow-md transition">
       <p className="text-xs text-slate-500">{label}</p>
       <p className={`text-xl font-bold mt-1 ${map[color]}`}>{value}</p>
       {hint && <p className="text-[11px] text-slate-400 mt-0.5">{hint}</p>}
@@ -247,6 +244,8 @@ function StatusBadge({ status }: { status?: string }) {
     Review: "bg-purple-100 text-purple-700",
     Blocked: "bg-rose-100 text-rose-700",
     Todo: "bg-slate-100 text-slate-700",
+    "Pending Acceptance": "bg-amber-100 text-amber-700",
+    Declined: "bg-slate-200 text-slate-700",
     Draft: "bg-slate-100 text-slate-700",
     Pending: "bg-amber-100 text-amber-700",
     Paid: "bg-emerald-100 text-emerald-700",
@@ -266,15 +265,17 @@ function StatusBadge({ status }: { status?: string }) {
     Completed: "সম্পন্ন",
     Accepted: "গৃহীত",
     "In Progress": "চলমান",
-    Review: "পর্যালোচনা",
+    Review: "অনুমোদন বাকি",
     Blocked: "ব্লকড",
-    Todo: "করণীয়",
+    Todo: "গ্রহণ বাকি",
+    "Pending Acceptance": "গ্রহণ বাকি",
+    Declined: "প্রত্যাখ্যাত",
     Pending: "বিচারাধীন",
     Approved: "অনুমোদিত",
     Paid: "পরিশোধিত",
     Rejected: "প্রত্যাখ্যাত",
     Cancelled: "বাতিল",
-    Reopened: "পুনরায় খোলা",
+    Reopened: "সংশোধন",
     Draft: "ড্রাফট",
   };
   return (
@@ -308,6 +309,119 @@ function SectionTitle({
 }
 
 // ============================================================================
+// 🏢 OWNER/HR: টিম কাজের লাইভ স্ন্যাপশট (নতুন — কাজ যোগ/শুরু হলেই দেখাবে)
+// ============================================================================
+function TeamWorkSnapshot({
+  tasks,
+  employees,
+  today,
+}: {
+  tasks: Task[];
+  employees: any[];
+  today: string;
+}) {
+  const empName = (id: number) =>
+    employees.find((e: any) => Number(e.id) === Number(id))?.name ||
+    (tasks.find((t) => Number(t.assignedTo) === Number(id))?.assignedToName || `কর্মী #${id}`);
+
+  const live = tasks.filter((t) => ["Accepted", "In Progress"].includes(t.status));
+  const review = tasks.filter((t) => t.status === "Review");
+  const correction = tasks.filter((t) => t.status === "Reopened");
+  const pending = tasks.filter((t) => ["Pending Acceptance", "Todo"].includes(t.status));
+  const todayAssigned = tasks.filter((t) => bdDateKey(t.createdAt) === today);
+  const todayDone = tasks.filter(
+    (t) => t.status === "Completed" && bdDateKey(t.reviewedAt || t.completedAt) === today
+  );
+
+  const livePeople = new Set(live.map((t) => Number(t.assignedTo)).filter((n) => n > 0)).size;
+  const todayPeople = new Set(todayAssigned.map((t) => Number(t.assignedTo)).filter((n) => n > 0)).size;
+
+  // কর্মীভিত্তিক গ্রুপ
+  const byEmp = new Map<number, Task[]>();
+  for (const t of [...live, ...review, ...correction, ...pending, ...todayDone, ...todayAssigned]) {
+    const id = Number(t.assignedTo);
+    if (!Number.isInteger(id) || id <= 0) continue;
+    const arr = byEmp.get(id) || [];
+    if (!arr.some((x) => x.id === t.id)) arr.push(t);
+    byEmp.set(id, arr);
+  }
+
+  const rows = Array.from(byEmp.entries())
+    .map(([id, list]) => {
+      const running = list.filter((t) => ["Accepted", "In Progress"].includes(t.status));
+      const avg = running.length
+        ? Math.round(running.reduce((s, t) => s + num(t.progressPercent), 0) / running.length)
+        : 0;
+      return { id, name: empName(id), list, running, avg };
+    })
+    .sort((a, b) => b.running.length - a.running.length || a.name.localeCompare(b.name, "bn"));
+
+  return (
+    <div className="space-y-3">
+      <SectionTitle
+        icon={<CheckSquare className="w-4 h-4 text-indigo-600" />}
+        title="টিম কাজ — লাইভ পরিস্থিতি"
+        subtitle="কর্মী কাজ যোগ/গ্রহণ/শুরু করলেই এখানে দেখাবে • Completed চলমান থেকে সরে যাবে"
+        right={
+          <Link href="/work-center" className="text-xs font-bold text-emerald-700 hover:underline">
+            কাজ ও কার্যক্রম কেন্দ্র →
+          </Link>
+        }
+      />
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+        <StatPill label="আজ কাজ পেয়েছেন" value={todayPeople} hint="জন কর্মী" color="blue" />
+        <StatPill label="আজ দেওয়া কাজ" value={todayAssigned.length} hint="মোট" color="slate" />
+        <StatPill label="এখন কাজ করছেন" value={livePeople} hint="জন কর্মী" color="indigo" />
+        <StatPill label="মোট চলমান কাজ" value={live.length} hint="গৃহীত+চলমান" color="indigo" />
+        <StatPill label="আজ সম্পন্ন" value={todayDone.length} hint="অনুমোদিত" color="emerald" />
+        <StatPill label="অনুমোদন বাকি" value={review.length} hint="Review" color="amber" />
+        <StatPill label="সংশোধন প্রয়োজন" value={correction.length} hint="Reopened" color="rose" />
+        <StatPill label="গ্রহণের অপেক্ষায়" value={pending.length} hint="নতুন" color="amber" />
+      </div>
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+        {rows.length === 0 ? (
+          <p className="text-xs text-slate-400">
+            আজ কোনো চলমান বা নতুন কাজ নেই। কাজ দিতে "কাজ ও কার্যক্রম কেন্দ্র"-তে যান।
+          </p>
+        ) : (
+          rows.map((row, i) => (
+            <div key={row.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+              <p className="text-sm font-bold text-slate-900">
+                {i + 1}. {fixBanglaEncoding(row.name)}
+                <span className="ml-2 text-[11px] font-semibold text-indigo-700">
+                  চলমান {row.running.length}টি • গড় অগ্রগতি {row.avg}%
+                </span>
+              </p>
+              <div className="mt-2 space-y-1">
+                {row.list.slice(0, 8).map((t) => (
+                  <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="font-semibold text-slate-800">
+                      {fixBanglaEncoding(t.title)}
+                      <span className="ml-1.5 text-[10px] text-slate-400">
+                        দিয়েছেন: {fixBanglaEncoding(t.assignedByName || t.createdBy || "—")}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="font-bold text-indigo-700">{num(t.progressPercent)}%</span>
+                      <StatusBadge status={t.status} />
+                    </span>
+                  </div>
+                ))}
+                {row.list.length > 8 && (
+                  <p className="text-[10px] text-slate-400">
+                    আরও {row.list.length - 8}টি কাজ…
+                  </p>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // 1. DASHBOARD VIEW
 // ============================================================================
 export function DashboardView({
@@ -317,23 +431,19 @@ export function DashboardView({
   data: any;
   onMutate: (payload: Record<string, unknown>) => Promise<any>;
 }) {
-  // ⭐ প্রতিদিন বাংলাদেশ সময় অনুযায়ী রিয়েল তারিখ সেট থাকবে
   const today = getTodayLocal();
   const role = data.currentUser?.role || "Staff";
   const myEmpId: number | undefined = data.currentUser?.employeeId
     ? Number(data.currentUser.employeeId)
     : undefined;
 
-  const [selectedStaffTimelineId, setSelectedStaffTimelineId] = useState<
-    number | null
-  >(null);
+  const [selectedStaffTimelineId, setSelectedStaffTimelineId] = useState<number | null>(null);
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeMsg, setNoticeMsg] = useState("");
   const [noticePriority, setNoticePriority] = useState("High");
   const [attendanceDate, setAttendanceDate] = useState(today);
   const [liveTime, setLiveTime] = useState(getNowTimeBD());
 
-  // লাইভ বাংলাদেশ ঘড়ি ও মধ্যরাতের পর অটো তারিখ পরিবর্তন
   useEffect(() => {
     const timer = setInterval(() => {
       setLiveTime(getNowTimeBD());
@@ -345,11 +455,11 @@ export function DashboardView({
     return () => clearInterval(timer);
   }, [attendanceDate, today]);
 
-  const isManagement = ["Owner", "MD", "Admin", "Manager", "HR"].includes(role);
-  const isOwnerOrMD = ["Owner", "MD", "Admin"].includes(role);
+  const isManagement = ["Owner", "Chairman", "MD", "Admin", "Manager", "HR"].includes(role);
+  const isOwnerOrMD = ["Owner", "Chairman", "MD", "Admin"].includes(role);
   const isAccounts = role === "Accounts";
 
-  // ===== Memoized Derived Data =====
+  // ===== Derived Data (সব hooks Staff return-এর আগেই — React hooks order bug fix) =====
   const attendances: Attendance[] = data.attendances || [];
   const workPlans: WorkPlan[] = data.dailyWorkPlans || [];
   const dailyWorks = data.dailyWorks || [];
@@ -396,25 +506,17 @@ export function DashboardView({
   const myTasks = useMemo(
     () =>
       myEmpId
-        ? tasks.filter(
-            (t) => Number(t.assignedTo) === Number(myEmpId) || t.isCompanyWide
-          )
+        ? tasks.filter((t) => Number(t.assignedTo) === Number(myEmpId) || t.isCompanyWide)
         : [],
     [tasks, myEmpId]
   );
 
   const myPendingTasks = useMemo(
-    () =>
-      myTasks.filter(
-        (t) => t.status !== "Completed" && t.status !== "Cancelled"
-      ),
+    () => myTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled"),
     [myTasks]
   );
 
-  const myCompletedTasks = useMemo(
-    () => myTasks.filter((t) => t.status === "Completed"),
-    [myTasks]
-  );
+  const myCompletedTasks = useMemo(() => myTasks.filter((t) => t.status === "Completed"), [myTasks]);
 
   const myEffectiveCompletion = useMemo(() => {
     if (myTodayPlan?.manualOverridePercent !== undefined) {
@@ -428,6 +530,25 @@ export function DashboardView({
       myTasks.reduce((s, t) => s + num(t.progressPercent), 0) / myTasks.length
     );
   }, [myTodayPlan, myTasks]);
+
+  // ⭐ Management-only data — সব hooks Staff return-এর আগে শেষ (bug fix)
+  const selectedDateAttendances = useMemo(
+    () => consolidateDailyAttendance(attendances.filter((a) => a.date === attendanceDate)),
+    [attendances, attendanceDate]
+  );
+
+  const teamCompletionPercent = useMemo(() => {
+    if (todayWorkPlans.length > 0) {
+      return Math.round(
+        todayWorkPlans.reduce(
+          (s, p) => s + num(p.manualOverridePercent ?? p.autoProgressPercent ?? 0),
+          0
+        ) / todayWorkPlans.length
+      );
+    }
+    if (tasks.length === 0) return 0;
+    return Math.round(tasks.reduce((s, t) => s + num(t.progressPercent), 0) / tasks.length);
+  }, [todayWorkPlans, tasks]);
 
   // ===========================================================================
   // STAFF SELF DASHBOARD
@@ -458,7 +579,6 @@ export function DashboardView({
 
     return (
       <div className="space-y-6">
-        {/* Sticky Quick Actions Bar */}
         <div className="sticky top-14 z-10 bg-slate-900 text-white rounded-2xl p-4 shadow-lg border border-slate-800 flex flex-wrap items-center justify-between gap-3">
           <div>
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
@@ -480,27 +600,20 @@ export function DashboardView({
               {nextPunch ? `পরবর্তী punch: ${nextPunch.label}` : "আজকের ৪টি punch complete"}
             </button>
             <Link
-              href="/my-day"
+              href="/work-center"
               className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5"
             >
-              <ClipboardCheck className="w-4 h-4 text-emerald-400" /> 2. Work Plan
+              <CheckSquare className="w-4 h-4 text-emerald-400" /> কাজ ও কার্যক্রম ({myPendingTasks.length})
             </Link>
             <Link
-              href="/tasks"
+              href="/attendance"
               className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5"
             >
-              <CheckSquare className="w-4 h-4 text-indigo-400" /> 3. Task ({myPendingTasks.length})
-            </Link>
-            <Link
-              href="/my-day"
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 flex items-center gap-1.5"
-            >
-              <Send className="w-4 h-4 text-amber-400" /> 4. Daily Update
+              <Clock className="w-4 h-4 text-amber-400" /> হাজিরা
             </Link>
           </div>
         </div>
 
-        {/* KPI Row */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <StatPill
             label="আজকের ইন টাইম"
@@ -548,14 +661,11 @@ export function DashboardView({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column: Work Plan + Tasks */}
           <div className="lg:col-span-7 space-y-6">
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    আজকের কাজের পরিকল্পনা
-                  </h3>
+                  <h3 className="text-sm font-bold text-slate-900">আজকের কাজের পরিকল্পনা</h3>
                   <p className="text-xs text-slate-500">
                     Click status buttons to auto-compute your daily completion %
                   </p>
@@ -579,9 +689,7 @@ export function DashboardView({
                         {fixBanglaEncoding(item.title)}
                       </span>
                       <div className="flex items-center gap-1.5">
-                        {(
-                          ["Completed", "In Progress", "Pending", "Blocked"] as const
-                        ).map((st) => (
+                        {(["Completed", "In Progress", "Pending", "Blocked"] as const).map((st) => (
                           <button
                             key={st}
                             type="button"
@@ -619,25 +727,19 @@ export function DashboardView({
               )}
             </div>
 
-            {/* My Tasks */}
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900">
                   My অ্যাসাইনকৃত টাস্ক ({myTasks.length})
                 </h3>
-                <Link
-                  href="/tasks"
-                  className="text-xs font-semibold text-emerald-600"
-                >
-                  আমার সব টাস্ক →
+                <Link href="/work-center" className="text-xs font-semibold text-emerald-600">
+                  কাজ ও কার্যক্রম কেন্দ্র →
                 </Link>
               </div>
               {myTasks.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">
-                  কোনো টাস্ক অ্যাসাইন করা হয়নি
-                </p>
+                <p className="text-xs text-slate-400 text-center py-4">কোনো টাস্ক অ্যাসাইন করা হয়নি</p>
               ) : (
-                myTasks.map((t) => (
+                myTasks.slice(0, 6).map((t) => (
                   <div
                     key={t.id}
                     className="p-3.5 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs"
@@ -646,59 +748,35 @@ export function DashboardView({
                       <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
                         {t.taskCode}
                       </span>
-                      <span className="ml-2 font-bold text-slate-900">
-                        {fixBanglaEncoding(t.title)}
-                      </span>
+                      <span className="ml-2 font-bold text-slate-900">{fixBanglaEncoding(t.title)}</span>
                       <p className="text-slate-500 mt-0.5">
-                        Due: {t.dueDate} • Status:{" "}
-                        <strong>{t.status}</strong> ({t.progressPercent}%)
+                        Due: {t.dueDate} • Status: <strong>{t.status}</strong> ({t.progressPercent}%)
                       </p>
                     </div>
                     {t.status !== "Completed" && t.status !== "Cancelled" ? (
                       <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onMutate({
-                              action: "updateTaskStatus",
-                              taskId: t.id,
-                              status: "Accepted",
-                              progressPercent: 15,
-                            })
-                          }
-                          className="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-semibold"
-                        >
-                          Accept
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onMutate({
-                              action: "updateTaskStatus",
-                              taskId: t.id,
-                              status: "In Progress",
-                              progressPercent: 50,
-                            })
-                          }
-                          className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-semibold"
-                        >
-                          Start
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onMutate({
-                              action: "updateTaskStatus",
-                              taskId: t.id,
-                              status: "Completed",
-                              progressPercent: 100,
-                              completionNote: "Completed from My Day Self Dashboard",
-                            })
-                          }
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold"
-                        >
-                          Complete
-                        </button>
+                        {t.status === "Pending Acceptance" || t.status === "Todo" ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onMutate({
+                                action: "updateTaskStatus",
+                                taskId: t.id,
+                                status: "Accepted",
+                              })
+                            }
+                            className="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-semibold"
+                          >
+                            ✓ গ্রহণ
+                          </button>
+                        ) : (
+                          <Link
+                            href="/work-center"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold"
+                          >
+                            অগ্রগতি আপডেট →
+                          </Link>
+                        )}
                       </div>
                     ) : (
                       <span className="px-2.5 py-1 rounded-lg font-bold bg-emerald-100 text-emerald-700">
@@ -711,17 +789,11 @@ export function DashboardView({
             </div>
           </div>
 
-          {/* Right Column: Notifications + Activity Timeline */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900">
-                  My Notifications
-                </h3>
-                <Link
-                  href="/notifications"
-                  className="text-xs font-semibold text-emerald-600"
-                >
+                <h3 className="text-sm font-bold text-slate-900">My Notifications</h3>
+                <Link href="/notifications" className="text-xs font-semibold text-emerald-600">
                   সেন্টার খুলুন →
                 </Link>
               </div>
@@ -746,42 +818,31 @@ export function DashboardView({
               </div>
             </div>
 
-            {/* Private Activity Timeline */}
             <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-emerald-600" /> আমার ব্যক্তিগত
-                কার্যক্রম
+                <Activity className="w-4 h-4 text-emerald-600" /> আমার ব্যক্তিগত কার্যক্রম
               </h3>
               <p className="text-[11px] text-slate-500">
-                Attendance → Work Plan → Daily Work → Tasks → Leave (Strictly
-                private to you & Management)
+                Attendance → Work Plan → Daily Work → Tasks → Leave (Strictly private to you & Management)
               </p>
               <div className="space-y-2.5 border-l-2 border-emerald-500 pl-3 ml-1 text-xs">
                 {myTodayAtt && (
                   <div>
-                    <span className="font-bold text-emerald-700">
-                      Attendance:
-                    </span>{" "}
-                    Checked in at {myTodayAtt.checkIn}{" "}
-                    {myTodayAtt.checkOut
-                      ? `• Checked out at ${myTodayAtt.checkOut}`
-                      : ""}
+                    <span className="font-bold text-emerald-700">Attendance:</span> Checked in at{" "}
+                    {myTodayAtt.checkIn}{" "}
+                    {myTodayAtt.checkOut ? `• Checked out at ${myTodayAtt.checkOut}` : ""}
                   </div>
                 )}
                 {myTodayPlan && (
                   <div>
-                    <span className="font-bold text-indigo-700">
-                      Work Plan:
-                    </span>{" "}
+                    <span className="font-bold text-indigo-700">Work Plan:</span>{" "}
                     {(myTodayPlan.items || []).length} planned items (
                     {myTodayPlan.autoProgressPercent}% complete)
                   </div>
                 )}
                 {myDailyWorks.slice(0, 2).map((dw: any) => (
                   <div key={dw.id}>
-                    <span className="font-bold text-slate-800">
-                      দৈনিক সারাংশ ({dw.date}):
-                    </span>{" "}
+                    <span className="font-bold text-slate-800">দৈনিক সারাংশ ({dw.date}):</span>{" "}
                     {fixBanglaEncoding(dw.workSummary)}
                   </div>
                 ))}
@@ -808,115 +869,112 @@ export function DashboardView({
   );
   const presentTodayIds = new Set(
     activeTodayAttendance
-      .filter((attendance) =>
-        Boolean(attendance.checkIn || attendance.checkIn2) ||
-        ["Present", "Late", "Early Leave", "Missing Checkout"].includes(attendance.status || "")
+      .filter(
+        (attendance) =>
+          Boolean(attendance.checkIn || attendance.checkIn2) ||
+          ["Present", "Late", "Early Leave", "Missing Checkout"].includes(attendance.status || "")
       )
       .map((attendance) => Number(attendance.employeeId))
   );
-  const leaveTodayIds = new Set(activeEmployees.filter((employee: any) => {
-    const id = Number(employee.id);
-    return !presentTodayIds.has(id) && (
-      todayAttendanceByEmployee.get(id)?.status === "Leave" ||
-      hasApprovedLeaveOn(leaveRequests, id, today)
-    );
-  }).map((employee: any) => Number(employee.id)));
-  const holidayTodayIds = new Set(activeTodayAttendance
-    .filter((attendance) => attendance.status === "Holiday")
-    .map((attendance) => Number(attendance.employeeId)));
+  const leaveTodayIds = new Set(
+    activeEmployees
+      .filter((employee: any) => {
+        const id = Number(employee.id);
+        return (
+          !presentTodayIds.has(id) &&
+          (todayAttendanceByEmployee.get(id)?.status === "Leave" ||
+            hasApprovedLeaveOn(leaveRequests, id, today))
+        );
+      })
+      .map((employee: any) => Number(employee.id))
+  );
+  const holidayTodayIds = new Set(
+    activeTodayAttendance
+      .filter((attendance) => attendance.status === "Holiday")
+      .map((attendance) => Number(attendance.employeeId))
+  );
   const checkedInToday = activeTodayAttendance.filter((a) => Boolean(a.checkIn)).length;
   const checkedOutToday = activeTodayAttendance.filter((a) => Boolean(a.checkOut2 || a.checkOut)).length;
   const presentToday = presentTodayIds.size;
   const lateToday = activeTodayAttendance.filter((a) => a.status === "Late").length;
   const onLeaveToday = leaveTodayIds.size;
-  const absentToday = isWeeklyRestDate(today) || liveTime <= "09:30"
-    ? 0
-    : activeEmployees.filter((employee: any) => {
-        const id = Number(employee.id);
-        return !presentTodayIds.has(id) && !leaveTodayIds.has(id) && !holidayTodayIds.has(id);
-      }).length;
+  const absentToday =
+    isWeeklyRestDate(today) || liveTime <= "09:30"
+      ? 0
+      : activeEmployees.filter((employee: any) => {
+          const id = Number(employee.id);
+          return (
+            !presentTodayIds.has(id) && !leaveTodayIds.has(id) && !holidayTodayIds.has(id)
+          );
+        }).length;
 
-  const selectedDateAttendances = useMemo(
-    () => consolidateDailyAttendance(attendances.filter((a) => a.date === attendanceDate)),
-    [attendances, attendanceDate]
-  );
   const selectedDateActiveAttendance = selectedDateAttendances.filter((attendance) =>
     activeEmployeeIds.has(Number(attendance.employeeId))
   );
   const selectedDateByEmployee = new Map(
     selectedDateActiveAttendance.map((attendance) => [Number(attendance.employeeId), attendance])
   );
-  const selectedPresentIds = new Set(selectedDateActiveAttendance
-    .filter((attendance) =>
-      Boolean(attendance.checkIn || attendance.checkIn2) ||
-      ["Present", "Late", "Early Leave", "Missing Checkout"].includes(attendance.status || "")
-    )
-    .map((attendance) => Number(attendance.employeeId)));
-  const selectedLeaveIds = new Set(activeEmployees.filter((employee: any) => {
-    const id = Number(employee.id);
-    return !selectedPresentIds.has(id) && (
-      selectedDateByEmployee.get(id)?.status === "Leave" ||
-      hasApprovedLeaveOn(leaveRequests, id, attendanceDate)
-    );
-  }).map((employee: any) => Number(employee.id)));
-  const selectedHolidayIds = new Set(selectedDateActiveAttendance
-    .filter((attendance) => attendance.status === "Holiday")
-    .map((attendance) => Number(attendance.employeeId)));
+  const selectedPresentIds = new Set(
+    selectedDateActiveAttendance
+      .filter(
+        (attendance) =>
+          Boolean(attendance.checkIn || attendance.checkIn2) ||
+          ["Present", "Late", "Early Leave", "Missing Checkout"].includes(attendance.status || "")
+      )
+      .map((attendance) => Number(attendance.employeeId))
+  );
+  const selectedLeaveIds = new Set(
+    activeEmployees
+      .filter((employee: any) => {
+        const id = Number(employee.id);
+        return (
+          !selectedPresentIds.has(id) &&
+          (selectedDateByEmployee.get(id)?.status === "Leave" ||
+            hasApprovedLeaveOn(leaveRequests, id, attendanceDate))
+        );
+      })
+      .map((employee: any) => Number(employee.id))
+  );
+  const selectedHolidayIds = new Set(
+    selectedDateActiveAttendance
+      .filter((attendance) => attendance.status === "Holiday")
+      .map((attendance) => Number(attendance.employeeId))
+  );
   const selectedDatePresent = selectedPresentIds.size;
   const selectedDateLeave = selectedLeaveIds.size;
-  const selectedDateAbsent = attendanceDate > today || isWeeklyRestDate(attendanceDate) ||
+  const selectedDateAbsent =
+    attendanceDate > today ||
+    isWeeklyRestDate(attendanceDate) ||
     (attendanceDate === today && liveTime <= "09:30")
-    ? 0
-    : activeEmployees.filter((employee: any) => {
-        const id = Number(employee.id);
-        return !selectedPresentIds.has(id) && !selectedLeaveIds.has(id) && !selectedHolidayIds.has(id);
-      }).length;
-  const selectedDateLate = selectedDateActiveAttendance.filter(
-    (a) => a.status === "Late"
-  ).length;
+      ? 0
+      : activeEmployees.filter((employee: any) => {
+          const id = Number(employee.id);
+          return (
+            !selectedPresentIds.has(id) &&
+            !selectedLeaveIds.has(id) &&
+            !selectedHolidayIds.has(id)
+          );
+        }).length;
+  const selectedDateLate = selectedDateActiveAttendance.filter((a) => a.status === "Late").length;
 
   const overdueTasks = tasks.filter(
-    (t) =>
-      t.dueDate &&
-      t.dueDate < today &&
-      t.status !== "Completed" &&
-      t.status !== "Cancelled"
+    (t) => t.dueDate && t.dueDate < today && t.status !== "Completed" && t.status !== "Cancelled"
   );
   const completedTasksCount = tasks.filter((t) => t.status === "Completed").length;
   const pendingTasksCount = tasks.filter((t) =>
-    ["Todo", "Accepted", "In Progress"].includes(t.status)
+    ["Todo", "Pending Acceptance", "Accepted", "In Progress", "Review", "Reopened"].includes(t.status)
   ).length;
   const blockedTasksCount = tasks.filter((t) => t.status === "Blocked").length;
+  const awaitingAcceptanceCount = tasks.filter((t) => t.status === "Pending Acceptance").length;
+  const awaitingApprovalCount = tasks.filter((t) => t.status === "Review").length;
+  const correctionRequiredCount = tasks.filter((t) => t.status === "Reopened").length;
 
-  const todayDailyWorks = dailyWorks.filter(
-    (d: any) => d.date === today
-  );
+  const todayDailyWorks = dailyWorks.filter((d: any) => d.date === today);
 
-  const updatedEmpIdsToday = new Set(
-    todayDailyWorks.map((d: any) => Number(d.employeeId))
-  );
+  const updatedEmpIdsToday = new Set(todayDailyWorks.map((d: any) => Number(d.employeeId)));
   const staffWithoutDailyUpdate = activeEmployees.filter(
     (e: any) => !updatedEmpIdsToday.has(Number(e.id))
   );
-
-  const teamCompletionPercent = useMemo(() => {
-    if (todayWorkPlans.length > 0) {
-      return Math.round(
-        todayWorkPlans.reduce(
-          (s, p) =>
-            s +
-            num(p.manualOverridePercent ?? p.autoProgressPercent ?? 0),
-          0
-        ) / todayWorkPlans.length
-      );
-    }
-    if (tasks.length > 0) {
-      return Math.round(
-        tasks.reduce((s, t) => s + num(t.progressPercent), 0) / tasks.length
-      );
-    }
-    return 0;
-  }, [todayWorkPlans, tasks]);
 
   const financialMetrics = calculateFinancialDashboardMetrics({
     accounts: data.accounts || [],
@@ -934,107 +992,95 @@ export function DashboardView({
     : null;
 
   const staffTimelinePanel = inspectedStaff ? (
-<div className="bg-white rounded-2xl border-2 border-emerald-500 p-5 space-y-3 shadow-md">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <div>
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                    8. কর্মচারী কার্যক্রম টাইমলাইন
-                  </span>
-                  <h3 className="text-base font-bold text-slate-900 mt-1">
-                    {inspectedStaff.name} ({inspectedStaff.empCode})
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedStaffTimelineId(null)}
-                  className="text-xs text-slate-400 hover:text-slate-800"
-                >
-                  ✕ Close
-                </button>
-              </div>
+    <div className="bg-white rounded-2xl border-2 border-emerald-500 p-5 space-y-3 shadow-md">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+        <div>
+          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+            কর্মচারী কার্যক্রম টাইমলাইন
+          </span>
+          <h3 className="text-base font-bold text-slate-900 mt-1">
+            {inspectedStaff.name} ({inspectedStaff.empCode})
+          </h3>
+        </div>
+        <button
+          type="button"
+          onClick={() => setSelectedStaffTimelineId(null)}
+          className="text-xs text-slate-400 hover:text-slate-800"
+        >
+          ✕ Close
+        </button>
+      </div>
 
-              <div className="space-y-2.5 border-l-2 border-emerald-500 pl-3 text-xs max-h-80 overflow-y-auto">
-                <div>
-                  <strong className="text-emerald-700 block">
-                    ১. আজকের হাজিরা:
-                  </strong>
-                  {(() => {
-                    const att = todayAtt.find(
-                      (a) => Number(a.employeeId) === Number(inspectedStaff.id)
-                    );
-                    return att
-                      ? `IN: ${formatTime(att.checkIn)} | OUT: ${formatTime(att.checkOut) || "Active"}`
-                      : "No attendance recorded today";
-                  })()}
-                </div>
-                <div>
-                  <strong className="text-indigo-700 block">
-                    2. আজকের কাজের পরিকল্পনা:
-                  </strong>
-                  {(
-                    todayWorkPlans.find(
-                      (p) => Number(p.employeeId) === Number(inspectedStaff.id)
-                    )?.items || []
-                  ).map((it: any) => (
-                    <div key={it.id} className="text-slate-600">
-                      • {fixBanglaEncoding(it.title)} — <strong>{it.status}</strong> (
-                      {it.completionPercent}%)
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <strong className="text-slate-800 block">
-                    ৩. দৈনিক সারাংশ:
-                  </strong>
-                  {dailyWorks
-                    .filter((d: any) => Number(d.employeeId) === Number(inspectedStaff.id))
-                    .slice(0, 2)
-                    .map((d: any) => (
-                      <div key={d.id} className="text-slate-600">
-                        • [{d.date}] {fixBanglaEncoding(d.workSummary)} ({d.progressPercent}%)
-                      </div>
-                    ))}
-                </div>
-                <div>
-                  <strong className="text-amber-700 block">
-                    4. অ্যাসাইনকৃত টাস্ক:
-                  </strong>
-                  {tasks
-                    .filter((t) => Number(t.assignedTo) === Number(inspectedStaff.id))
-                    .map((t) => (
-                      <div key={t.id} className="text-slate-600">
-                        • {t.taskCode}: {fixBanglaEncoding(t.title)} ({t.status} -{" "}
-                        {t.progressPercent}%)
-                      </div>
-                    ))}
-                </div>
-                <div>
-                  <strong className="text-purple-700 block">
-                    5. Leave & Performance:
-                  </strong>
-                  Leaves:{" "}
-                  {
-                    (data.leaveRequests || []).filter(
-                      (l: any) => Number(l.employeeId) === Number(inspectedStaff.id)
-                    ).length
-                  }{" "}
-                  • Score:{" "}
-                  {(data.performanceReviews || []).find(
-                    (r: any) => Number(r.employeeId) === Number(inspectedStaff.id)
-                  )?.totalPoints || 90}
-                  /100
-                </div>
-              </div>
-
-              <Link
-                href={`/employees/${inspectedStaff.id}/daily`}
-                className="block text-center py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold"
-              >
-                Open Full 360° Profile →
-              </Link>
+      <div className="space-y-2.5 border-l-2 border-emerald-500 pl-3 text-xs max-h-80 overflow-y-auto">
+        <div>
+          <strong className="text-emerald-700 block">১. আজকের হাজিরা:</strong>
+          {(() => {
+            const att = todayAtt.find(
+              (a) => Number(a.employeeId) === Number(inspectedStaff.id)
+            );
+            return att
+              ? `IN: ${formatTime(att.checkIn)} | OUT: ${formatTime(att.checkOut) || "Active"}`
+              : "No attendance recorded today";
+          })()}
+        </div>
+        <div>
+          <strong className="text-indigo-700 block">2. আজকের কাজের পরিকল্পনা:</strong>
+          {(
+            todayWorkPlans.find((p) => Number(p.employeeId) === Number(inspectedStaff.id))
+              ?.items || []
+          ).map((it: any) => (
+            <div key={it.id} className="text-slate-600">
+              • {fixBanglaEncoding(it.title)} — <strong>{it.status}</strong> ({it.completionPercent}%)
             </div>
-  ) : null;
+          ))}
+        </div>
+        <div>
+          <strong className="text-slate-800 block">৩. দৈনিক সারাংশ:</strong>
+          {dailyWorks
+            .filter((d: any) => Number(d.employeeId) === Number(inspectedStaff.id))
+            .slice(0, 2)
+            .map((d: any) => (
+              <div key={d.id} className="text-slate-600">
+                • [{d.date}] {fixBanglaEncoding(d.workSummary)} ({d.progressPercent}%)
+              </div>
+            ))}
+        </div>
+        <div>
+          <strong className="text-amber-700 block">4. চলমান কাজ:</strong>
+          {tasks
+            .filter((t) => Number(t.assignedTo) === Number(inspectedStaff.id))
+            .filter((t) => !["Completed", "Cancelled", "Declined"].includes(t.status))
+            .slice(0, 6)
+            .map((t) => (
+              <div key={t.id} className="text-slate-600">
+                • {t.taskCode}: {fixBanglaEncoding(t.title)} ({t.status} - {t.progressPercent}%)
+              </div>
+            ))}
+        </div>
+        <div>
+          <strong className="text-purple-700 block">5. Leave & Performance:</strong>
+          Leaves:{" "}
+          {
+            (data.leaveRequests || []).filter(
+              (l: any) => Number(l.employeeId) === Number(inspectedStaff.id)
+            ).length
+          }{" "}
+          • Score:{" "}
+          {(data.performanceReviews || []).find(
+            (r: any) => Number(r.employeeId) === Number(inspectedStaff.id)
+          )?.totalPoints || 90}
+          /100
+        </div>
+      </div>
 
+      <Link
+        href={`/employees/${inspectedStaff.id}/daily`}
+        className="block text-center py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold"
+      >
+        Open Full 360° Profile →
+      </Link>
+    </div>
+  ) : null;
 
   return (
     <div className="space-y-6">
@@ -1058,8 +1104,8 @@ export function DashboardView({
           {isOwnerOrMD ? (
             <>
               <Link href="/leads" className="px-3 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs">1. Business</Link>
-              <Link href="/employees" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">2. People</Link>
-              <Link href="/projects" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">3. Projects</Link>
+              <Link href="/work-center" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">2. কাজ</Link>
+              <Link href="/employees" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">3. People</Link>
               <Link href="/accounts" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">4. Finance</Link>
               <Link href="/reports" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">5. Reports</Link>
               <Link href="/settings" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">6. Settings</Link>
@@ -1067,7 +1113,7 @@ export function DashboardView({
           ) : (
             <>
               <Link href="/employees" className="px-3 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs">1. Team</Link>
-              <Link href="/tasks" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">2. Tasks</Link>
+              <Link href="/work-center" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">2. কাজ ({awaitingApprovalCount > 0 ? `অনুমোদন ${awaitingApprovalCount}` : "কেন্দ্র"})</Link>
               <Link href="/leave" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">3. Approvals</Link>
               <Link href="/notifications" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">4. Notifications</Link>
               <Link href="/reports" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-600">5. Reports</Link>
@@ -1081,7 +1127,7 @@ export function DashboardView({
         <SectionTitle
           icon={<BellRing className="w-4 h-4 text-amber-500" />}
           title={`Today's Team Operational Dashboard (${today})`}
-          subtitle="14 operational counters at a glance"
+          subtitle="হাজিরা ও কাজের সারসংক্ষেপ"
           right={
             <button
               type="button"
@@ -1113,22 +1159,16 @@ export function DashboardView({
             color="slate"
           />
           <StatPill
-            label="আজকের কাজের পরিকল্পনা"
-            value={`${todayWorkPlans.length} Plans`}
-            hint="আজ জমা হয়েছে"
+            label="কাজ: চলমান / গ্রহণ বাকি"
+            value={<>{pendingTasksCount - awaitingAcceptanceCount - awaitingApprovalCount} / <span className="text-amber-600">{awaitingAcceptanceCount}</span></>}
+            hint={`সম্পন্ন: ${completedTasksCount} • সংশোধন: ${correctionRequiredCount}`}
             color="indigo"
           />
           <StatPill
-            label="সম্পন্ন / পেন্ডিং / ব্লকড"
-            value={
-              <>
-                <span className="text-emerald-600">{completedTasksCount}</span> /{" "}
-                <span className="text-amber-600">{pendingTasksCount}</span> /{" "}
-                <span className="text-rose-600">{blockedTasksCount}</span>
-              </>
-            }
+            label="অনুমোদনের অপেক্ষায়"
+            value={awaitingApprovalCount}
             hint={`Overdue: ${overdueTasks.length}`}
-            color="slate"
+            color="amber"
           />
           <StatPill
             label="দৈনিক আপডেট নেই"
@@ -1152,67 +1192,66 @@ export function DashboardView({
         </div>
       </div>
 
-      {/* OWNER ATTENDANCE PANEL (বাংলাদেশ লাইভ সময় ও তারিখসহ) */}
+      {/* ⭐ টিম কাজ — লাইভ স্ন্যাপশট (নতুন) */}
+      <TeamWorkSnapshot
+        tasks={tasks}
+        employees={activeEmployees}
+        today={today}
+      />
+
+            {/* =========================================================================
+          ⭐ সমন্বিত লাইভ বোর্ড: হাজিরা + কাজের অগ্রগতি (Combined Attendance & Work Matrix)
+          ========================================================================= */}
       <section className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+        {/* ১. হেডার: লাইভ সময়, তারিখ ও ডেট পিকার */}
         <div className="p-5 border-b border-slate-200">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-emerald-600" />
                 <h2 className="text-base font-bold text-slate-900">
-                  আজকের সকলের হাজিরা — {formatBanglaDate(attendanceDate)}
+                  দৈনিক হাজিরা ও কাজের সমন্বিত বোর্ড — {formatBanglaDate(attendanceDate)}
                 </h2>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                বাংলাদেশ সময়: <span className="font-mono font-bold text-emerald-700">{liveTime}</span> • সকল কর্মকর্তা ও কর্মচারীর দৈনিক লাইভ হাজিরা
+                বাংলাদেশ সময়: <span className="font-mono font-bold text-emerald-700">{liveTime}</span> • কর্মীর নামের ওপর ক্লিক করলে বিস্তারিত টাইমলাইন দেখা যাবে
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold text-slate-600">
-                তারিখ
-              </label>
+              <label className="text-xs font-semibold text-slate-600">তারিখ</label>
               <input
                 type="date"
                 value={attendanceDate}
                 onChange={(e) => setAttendanceDate(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white text-slate-900"
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500"
               />
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-5 bg-slate-50 border-b border-slate-200">
+        {/* ২. সারসংক্ষেপ মেট্রিক্স পিলস */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 p-4 bg-slate-50 border-b border-slate-200">
           <StatPill label="মোট কর্মচারী" value={totalEmpCount} color="slate" />
           <StatPill label="উপস্থিত" value={selectedDatePresent} color="emerald" />
+          <StatPill label="দেরিতে উপস্থিত" value={selectedDateLate} color="amber" />
           <StatPill label="অনুপস্থিত" value={selectedDateAbsent} color="rose" />
-          <StatPill label="ছুটিতে" value={selectedDateLeave} color="amber" />
+          <StatPill label="ছুটিতে" value={selectedDateLeave} color="blue" />
         </div>
-        {/* Mobile: একজন কর্মীর সম্পূর্ণ হাজিরা, তারপর পরের কর্মী */}
+
+        {/* ৩. মোবাইল ভিউ: প্রতি কর্মীর একক কমপ্যাক্ট কার্ড */}
         <div className="space-y-3 p-3 lg:hidden">
           {activeEmployees.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">
-              কোনো সক্রিয় কর্মী পাওয়া যায়নি।
-            </p>
+            <p className="py-8 text-center text-sm text-slate-500">কোনো সক্রিয় কর্মী পাওয়া যায়নি।</p>
           ) : (
-            activeEmployees.map((emp: any) => {
+            activeEmployees.map((emp: any, index: number) => {
               const employeeId = Number(emp.id);
               const att = selectedDateByEmployee.get(employeeId);
 
               const hasPresence =
                 Boolean(att?.checkIn || att?.checkIn2) ||
-                ["Present", "Late", "Early Leave", "Missing Checkout"].includes(
-                  att?.status || ""
-                );
-
-              const approvedLeave = hasApprovedLeaveOn(
-                leaveRequests,
-                employeeId,
-                attendanceDate
-              );
-
-              const beforeCheckInDeadline =
-                attendanceDate === today && liveTime <= "09:30";
-
+                ["Present", "Late", "Early Leave", "Missing Checkout"].includes(att?.status || "");
+              const approvedLeave = hasApprovedLeaveOn(leaveRequests, employeeId, attendanceDate);
+              const beforeCheckInDeadline = attendanceDate === today && liveTime <= "09:30";
               const isFutureDate = attendanceDate > today;
 
               let displayStatus = "অনুপস্থিত";
@@ -1223,7 +1262,7 @@ export function DashboardView({
                   att?.status === "Late"
                     ? "দেরিতে উপস্থিত"
                     : att?.status === "Early Leave"
-                      ? "আগে বের হয়েছেন"
+                      ? "আগে বের হয়েছেন"
                       : att?.status === "Missing Checkout"
                         ? "OUT বাকি"
                         : "উপস্থিত";
@@ -1234,190 +1273,220 @@ export function DashboardView({
               } else if (att?.status === "Leave" || approvedLeave) {
                 displayStatus = "ছুটিতে";
                 statusClass = "bg-blue-100 text-blue-700";
-              } else if (
-                att?.status === "Holiday" ||
-                isWeeklyRestDate(attendanceDate)
-              ) {
+              } else if (att?.status === "Holiday" || isWeeklyRestDate(attendanceDate)) {
                 displayStatus = "সাপ্তাহিক/সরকারি ছুটি";
                 statusClass = "bg-purple-100 text-purple-700";
               } else if (isFutureDate || beforeCheckInDeadline) {
-                displayStatus = "হাজিরার অপেক্ষায়";
+                displayStatus = "হাজিরার অপেক্ষায়";
                 statusClass = "bg-slate-100 text-slate-700";
               }
 
-              const legacyFinalOut = Boolean(
-                att?.checkOut &&
-                  !att.checkOut2 &&
-                  att.checkOut >= "14:30"
-              );
+              const legacyFinalOut = Boolean(att?.checkOut && !att.checkOut2 && att.checkOut >= "14:30");
+
+              // কাজের তথ্য
+              const empTasks = tasks.filter((t) => Number(t.assignedTo) === employeeId);
+              const runningTasks = empTasks.filter((t) => ["Accepted", "In Progress", "Reopened"].includes(t.status));
+              const plan = todayWorkPlans.find((p) => Number(p.employeeId) === employeeId);
+              const dw = todayDailyWorks.find((d: any) => Number(d.employeeId) === employeeId);
+              const effectiveProg = runningTasks.length
+                ? Math.round(runningTasks.reduce((s, t) => s + num(t.progressPercent), 0) / runningTasks.length)
+                : (plan?.manualOverridePercent ?? plan?.autoProgressPercent ?? dw?.progressPercent ?? 0);
 
               return (
-                <article
-                  key={employeeId}
-                  className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-                >
-                  <div className="flex min-w-0 items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h3 className="break-words text-sm font-bold text-slate-900">
-                        {fixBanglaEncoding(emp.name)}
-                      </h3>
-                      <p className="mt-0.5 break-words text-[11px] text-slate-500">
-                        {fixBanglaEncoding(emp.designation || "—")}
-                      </p>
-                      <p className="mt-1 font-mono text-[10px] text-slate-500">
-                        ID: {emp.id} • {emp.empCode}
-                      </p>
+                <React.Fragment key={employeeId}>
+                  <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStaffTimelineId(employeeId)}
+                          className="text-left font-bold text-sm text-slate-900 hover:text-emerald-600 underline decoration-emerald-500/50"
+                        >
+                          {index + 1}. {fixBanglaEncoding(emp.name)}
+                        </button>
+                        <p className="mt-0.5 break-words text-[11px] text-slate-500">
+                          {fixBanglaEncoding(emp.designation || "—")} • {emp.empCode}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${statusClass}`}>
+                        {displayStatus}
+                      </span>
                     </div>
 
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${statusClass}`}
-                    >
-                      {displayStatus}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <div className="min-w-0 rounded-xl bg-emerald-50 p-2.5">
-                      <p className="text-[10px] font-semibold text-emerald-800">
-                        সকাল IN
-                      </p>
-                      <p className="mt-1 font-mono text-sm font-bold text-slate-900">
-                        {att?.checkIn || "—"}
-                      </p>
+                    {/* পাঞ্চ ডিটেইলস */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-xl bg-emerald-50 p-2 font-mono">
+                        <span className="text-[10px] text-emerald-800 block font-sans font-semibold">সকাল IN → OUT</span>
+                        {att?.checkIn || "—"} → {legacyFinalOut ? "—" : att?.checkOut || (att?.checkIn ? "কার্যরত" : "—")}
+                      </div>
+                      <div className="rounded-xl bg-blue-50 p-2 font-mono">
+                        <span className="text-[10px] text-blue-800 block font-sans font-semibold">বিকাল IN → OUT</span>
+                        {att?.checkIn2 || "—"} → {att?.checkOut2 || (legacyFinalOut ? att?.checkOut : att?.checkIn2 ? "কার্যরত" : "—")}
+                      </div>
                     </div>
 
-                    <div className="min-w-0 rounded-xl bg-emerald-50 p-2.5">
-                      <p className="text-[10px] font-semibold text-emerald-800">
-                        সকাল OUT
-                      </p>
-                      <p className="mt-1 font-mono text-sm font-bold text-slate-900">
-                        {legacyFinalOut ? "—" : att?.checkOut || "—"}
-                      </p>
+                    {/* কাজের অগ্রগতি ও সারাংশ */}
+                    <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl border border-slate-200/60">
+                      <div>
+                        <span className="text-slate-500 block">চলমান কাজ:</span>
+                        <span className="font-bold text-indigo-700">
+                          {runningTasks.length > 0 ? `${runningTasks.length}টি টাস্ক (${effectiveProg}%)` : "কোনো টাস্ক নেই"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">দৈনিক আপডেট:</span>
+                        {dw ? (
+                          <span className="font-bold text-emerald-700">জমা হয়েছে ✓</span>
+                        ) : (
+                          <span className="font-semibold text-rose-600">আপডেট নেই</span>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="min-w-0 rounded-xl bg-blue-50 p-2.5">
-                      <p className="text-[10px] font-semibold text-blue-800">
-                        বিকাল IN
-                      </p>
-                      <p className="mt-1 font-mono text-sm font-bold text-slate-900">
-                        {att?.checkIn2 || "—"}
-                      </p>
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                      <span className="font-mono text-slate-600">মোট: {num(att?.workingHours).toFixed(1)}h</span>
+                      {num(att?.lateMinutes) > 0 && (
+                        <span className="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded">
+                          দেরি: {num(att?.lateMinutes)} মি.
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStaffTimelineId(employeeId)}
+                        className="font-bold text-emerald-700 hover:underline"
+                      >
+                        টাইমলাইন →
+                      </button>
                     </div>
-
-                    <div className="min-w-0 rounded-xl bg-blue-50 p-2.5">
-                      <p className="text-[10px] font-semibold text-blue-800">
-                        বিকাল OUT
-                      </p>
-                      <p className="mt-1 font-mono text-sm font-bold text-slate-900">
-                        {att?.checkOut2 ||
-                          (legacyFinalOut ? att?.checkOut : null) ||
-                          "—"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-center">
-                    <div className="min-w-0">
-                      <p className="text-[10px] text-slate-500">মোট ঘণ্টা</p>
-                      <p className="font-mono text-xs font-bold text-slate-900">
-                        {num(att?.workingHours).toFixed(2)}h
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] text-slate-500">দেরি</p>
-                      <p className="font-mono text-xs font-bold text-amber-700">
-                        {num(att?.lateMinutes)}m
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] text-slate-500">ওভারটাইম</p>
-                      <p className="font-mono text-xs font-bold text-indigo-700">
-                        {num(att?.overtimeHours).toFixed(2)}h
-                      </p>
-                    </div>
-                  </div>
-                </article>
+                  </article>
+                  {selectedStaffTimelineId === employeeId && staffTimelinePanel}
+                </React.Fragment>
               );
             })
           )}
         </div>
 
+        {/* ৪. ডেস্কটপ ভিউ: একক সমন্বিত টেবিল */}
         <div className="hidden lg:block overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                <th className="p-3 font-semibold">কর্মচারী</th>
-                <th className="p-3 font-semibold">পদবি</th>
+                <th className="p-3 font-semibold w-10">#</th>
+                <th className="p-3 font-semibold">কর্মচারী (নামে ক্লিক)</th>
                 <th className="p-3 font-semibold">সকাল IN</th>
                 <th className="p-3 font-semibold">সকাল OUT</th>
                 <th className="p-3 font-semibold">বিকাল IN</th>
                 <th className="p-3 font-semibold">বিকাল OUT</th>
-                <th className="p-3 font-semibold">মোট ঘণ্টা</th>
+                <th className="p-3 font-semibold">ঘণ্টা</th>
                 <th className="p-3 font-semibold">লেট</th>
-                <th className="p-3 font-semibold">ওভারটাইম</th>
                 <th className="p-3 font-semibold">স্ট্যাটাস</th>
+                <th className="p-3 font-semibold min-w-[200px]">চলমান কাজ ও অগ্রগতি</th>
+                <th className="p-3 font-semibold text-center">দৈনিক আপডেট</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {activeEmployees.map((emp: any) => {
-                // ⭐ সঠিক আইডি ম্যাচিং (নাম্বার টাইপ কাস্টিং সহ)
-                const att = selectedDateAttendances.find(
-                  (a) => Number(a.employeeId) === Number(emp.id)
-                );
-                const legacyFinalOut = Boolean(
-                  att?.checkOut && !att.checkOut2 && att.checkOut >= "14:30"
-                );
-                const hasPresence = Boolean(att?.checkIn || att?.checkIn2) ||
+              {activeEmployees.map((emp: any, idx: number) => {
+                const employeeId = Number(emp.id);
+                const att = selectedDateAttendances.find((a) => Number(a.employeeId) === employeeId);
+                const legacyFinalOut = Boolean(att?.checkOut && !att.checkOut2 && att.checkOut >= "14:30");
+                const hasPresence =
+                  Boolean(att?.checkIn || att?.checkIn2) ||
                   ["Present", "Late", "Early Leave", "Missing Checkout"].includes(att?.status || "");
-                const isApprovedLeave = hasApprovedLeaveOn(leaveRequests, Number(emp.id), attendanceDate);
-                const status = attendanceDate > today && !att
-                  ? "—"
-                  : hasPresence
-                  ? att?.status || "Present"
-                  : att?.status === "Leave" || isApprovedLeave
+                const isApprovedLeave = hasApprovedLeaveOn(leaveRequests, employeeId, attendanceDate);
+
+                const status =
+                  attendanceDate > today && !att
+                    ? "—"
+                    : hasPresence
+                    ? att?.status || "Present"
+                    : att?.status === "Leave" || isApprovedLeave
                     ? "Leave"
                     : att?.status === "Holiday" || isWeeklyRestDate(attendanceDate)
-                      ? "Holiday"
-                      : att?.status || "Absent";
+                    ? "Holiday"
+                    : att?.status || "Absent";
+
+                // কাজের ডেটা
+                const empTasks = tasks.filter((t) => Number(t.assignedTo) === employeeId);
+                const runningTasks = empTasks.filter((t) => ["Accepted", "In Progress", "Reopened"].includes(t.status));
+                const reviewTasks = empTasks.filter((t) => t.status === "Review");
+                const plan = todayWorkPlans.find((p) => Number(p.employeeId) === employeeId);
+                const dw = todayDailyWorks.find((d: any) => Number(d.employeeId) === employeeId);
+
+                const avgProg = runningTasks.length
+                  ? Math.round(runningTasks.reduce((s, t) => s + num(t.progressPercent), 0) / runningTasks.length)
+                  : (plan?.manualOverridePercent ?? plan?.autoProgressPercent ?? dw?.progressPercent ?? 0);
+
                 return (
                   <tr key={emp.id} className="hover:bg-slate-50 transition">
+                    <td className="p-3 text-slate-400 font-mono">{idx + 1}</td>
                     <td className="p-3">
-                      <div className="font-bold text-slate-900">{emp.name}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">ID: {emp.id} • {emp.empCode}</div>
-                      {emp.archived && <div className="text-[10px] text-amber-700">Archived historical record</div>}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStaffTimelineId(employeeId)}
+                        className="font-bold text-slate-900 hover:text-emerald-600 text-left underline decoration-emerald-500/50"
+                      >
+                        {fixBanglaEncoding(emp.name)}
+                      </button>
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        ID: {emp.id} • {emp.empCode} • {fixBanglaEncoding(emp.designation || "—")}
+                      </div>
                     </td>
-                    <td className="p-3 text-slate-600">{emp.designation || "—"}</td>
-                    <td className="p-3 font-mono font-semibold text-emerald-700">
-                      {att?.checkIn || "—"}
-                    </td>
+                    <td className="p-3 font-mono font-semibold text-emerald-700">{att?.checkIn || "—"}</td>
                     <td className="p-3 font-mono text-blue-700">
                       {legacyFinalOut ? "—" : att?.checkOut || (att?.checkIn ? "কার্যরত" : "—")}
                     </td>
-                    <td className="p-3 font-mono font-semibold text-emerald-700">
-                      {att?.checkIn2 || "—"}
-                    </td>
+                    <td className="p-3 font-mono font-semibold text-emerald-700">{att?.checkIn2 || "—"}</td>
                     <td className="p-3 font-mono text-blue-700">
                       {att?.checkOut2 || (legacyFinalOut ? att?.checkOut : att?.checkIn2 ? "কার্যরত" : "—")}
                     </td>
                     <td className="p-3 font-mono font-semibold">
-                      {att?.workingHours ? `${att.workingHours} ঘণ্টা` : "—"}
+                      {att?.workingHours ? `${att.workingHours}h` : "—"}
                     </td>
                     <td className="p-3">
                       {num(att?.lateMinutes) > 0 ? (
                         <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">
-                          {att?.lateMinutes} মিনিট
+                          {att?.lateMinutes} মি.
                         </span>
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
                     </td>
-                    <td className="p-3 font-mono text-indigo-600 font-semibold">
-                      {num(att?.overtimeHours) > 0
-                        ? `${att?.overtimeHours} ঘণ্টা`
-                        : "—"}
-                    </td>
                     <td className="p-3">
                       <StatusBadge status={status} />
+                    </td>
+                    <td className="p-3">
+                      {runningTasks.length > 0 ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-indigo-700 truncate max-w-[140px]">
+                              {fixBanglaEncoding(runningTasks[0].title)}
+                              {runningTasks.length > 1 && ` (+${runningTasks.length - 1})`}
+                            </span>
+                            <span className="font-bold text-slate-900 ml-1">{avgProg}%</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500 transition-all" style={{ width: `${avgProg}%` }} />
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">—</span>
+                      )}
+                      {reviewTasks.length > 0 && (
+                        <span className="block text-[10px] text-purple-700 font-bold mt-0.5">
+                          অনুমোদন বাকি: {reviewTasks.length}টি
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3 text-center">
+                      {dw ? (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px]">
+                          জমা ✓
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold text-[11px]">
+                          আপডেট নেই
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -1428,403 +1497,76 @@ export function DashboardView({
 
         {selectedDateLate > 0 && (
           <div className="px-5 py-3 bg-amber-50 border-t border-amber-100 text-xs text-amber-800">
-            এই তারিখে দেরিতে উপস্থিত হয়েছেন:{" "}
-            <strong>{selectedDateLate}</strong> জন
+            এই তারিখে দেরিতে উপস্থিত হয়েছেন: <strong>{selectedDateLate}</strong> জন
           </div>
         )}
       </section>
 
-      {/* TEAM ACTIVITY MATRIX + STAFF TIMELINE */}
+      {/* ৫. নির্বাচিত কর্মচারীর টাইমলাইন ও নোটিশ ফর্ম */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-          <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                Today&apos;s Team Matrix (Click Staff Name for Timeline)
-              </h3>
-              <p className="text-xs text-slate-500">
-                Shows who planned what, automatic completion %, daily summary
-              </p>
+        {inspectedStaff ? (
+          <div className="lg:col-span-8">
+            {staffTimelinePanel}
+          </div>
+        ) : null}
+
+        <div className={inspectedStaff ? "lg:col-span-4" : "lg:col-span-12"}>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await onMutate({
+                action: "createAnnouncement",
+                title: noticeTitle,
+                message: noticeMsg,
+                priority: noticePriority,
+                assignedPersonOrTeam: "All Staff",
+              });
+              setNoticeTitle("");
+              setNoticeMsg("");
+            }}
+            className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3 shadow-xs"
+          >
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Megaphone className="w-4 h-4 text-emerald-600" /> Broadcast Notice
+            </h3>
+            <input
+              type="text"
+              required
+              placeholder="Notice / Instruction Title *"
+              value={noticeTitle}
+              onChange={(e) => setNoticeTitle(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500"
+            />
+            <textarea
+              rows={2}
+              required
+              placeholder="Write instruction for All Staff..."
+              value={noticeMsg}
+              onChange={(e) => setNoticeMsg(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500"
+            />
+            <div className="flex gap-2">
+              <select
+                value={noticePriority}
+                onChange={(e) => setNoticePriority(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              >
+                <option>High</option>
+                <option>Critical</option>
+                <option>Medium</option>
+              </select>
+              <button
+                type="submit"
+                className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition"
+              >
+                সকল স্টাফকে জানান
+              </button>
             </div>
-          </div>
-
-                    {/* Mobile: প্রত্যেক কর্মীর কাজের তথ্য আলাদা card */}
-          <div className="space-y-3 p-3 lg:hidden">
-            {activeEmployees.map((emp: any) => {
-              const employeeId = Number(emp.id);
-              const att = todayAttendanceByEmployee.get(employeeId);
-
-              const plan = todayWorkPlans.find(
-                (p) => Number(p.employeeId) === employeeId
-              );
-
-              const dw = todayDailyWorks.find(
-                (item: any) => Number(item.employeeId) === employeeId
-              );
-
-              const totalItems = (plan?.items || []).length;
-              const doneCount = (plan?.items || []).filter(
-                (item: any) => item.status === "Completed"
-              ).length;
-
-              const effectivePct =
-                plan?.manualOverridePercent ??
-                plan?.autoProgressPercent ??
-                dw?.progressPercent ??
-                0;
-
-              const hasPresence =
-                Boolean(att?.checkIn || att?.checkIn2) ||
-                ["Present", "Late", "Early Leave", "Missing Checkout"].includes(
-                  att?.status || ""
-                );
-
-              const onApprovedLeave =
-                att?.status === "Leave" ||
-                hasApprovedLeaveOn(leaveRequests, employeeId, today);
-
-              const attendanceLabel = hasPresence
-                ? "উপস্থিত"
-                : onApprovedLeave
-                  ? "ছুটিতে"
-                  : isWeeklyRestDate(today)
-                    ? "সাপ্তাহিক ছুটি"
-                    : liveTime <= "09:30"
-                      ? "হাজিরার অপেক্ষায়"
-                      : "অনুপস্থিত";
-
-              return (
-                  <React.Fragment key={employeeId}>
-                    <article
-                  className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-                >
-                  <div className="min-w-0 border-b border-slate-100 pb-3">
-                    <h3 className="break-words text-sm font-bold text-slate-900">
-                      {fixBanglaEncoding(emp.name)}
-                    </h3>
-                    <p className="mt-0.5 break-words text-[11px] text-slate-500">
-                      {fixBanglaEncoding(emp.designation || "—")}
-                      {" • "}
-                      {emp.empCode}
-                    </p>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                    <div className="min-w-0 rounded-xl bg-slate-50 p-2.5">
-                      <p className="text-[10px] text-slate-500">হাজিরা</p>
-                      <p className="mt-1 font-bold text-slate-900">
-                        {attendanceLabel}
-                      </p>
-                    </div>
-
-                    <div className="min-w-0 rounded-xl bg-indigo-50 p-2.5">
-                      <p className="text-[10px] text-indigo-700">
-                        কাজের পরিকল্পনা
-                      </p>
-                      <p className="mt-1 font-bold text-indigo-900">
-                        {plan
-                          ? `${doneCount}/${totalItems} সম্পন্ন`
-                          : "পরিকল্পনা নেই"}
-                      </p>
-                    </div>
-
-                    <div className="min-w-0 rounded-xl bg-emerald-50 p-2.5">
-                      <p className="text-[10px] text-emerald-700">
-                        দৈনিক সারাংশ
-                      </p>
-                      <p className="mt-1 font-bold text-emerald-900">
-                        {dw ? "জমা হয়েছে" : "এখনো জমা হয়নি"}
-                      </p>
-                    </div>
-
-                    <div className="min-w-0 rounded-xl bg-amber-50 p-2.5">
-                      <p className="text-[10px] text-amber-800">
-                        সম্পন্ন %
-                      </p>
-                      <p className="mt-1 font-bold text-amber-900">
-                        {effectivePct}%
-                        {plan?.manualOverridePercent != null
-                          ? " • Override"
-                          : ""}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
-                    <p>
-                      সকাল: {att?.checkIn || "—"} → {att?.checkOut || "—"}
-                    </p>
-                    <p>
-                      বিকাল: {att?.checkIn2 || "—"} →{" "}
-                      {att?.checkOut2 || "—"}
-                    </p>
-                  </div>
-
-                  <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedStaffTimelineId(employeeId)}
-                      className="min-h-[44px] flex-1 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white"
-                    >
-                      বিস্তারিত টাইমলাইন দেখুন
-                    </button>
-
-                    {plan && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const value = prompt(
-                            `${emp.name}-এর Work Plan অগ্রগতি % পরিবর্তন করুন (Auto: ${plan.autoProgressPercent}%):`,
-                            String(effectivePct)
-                          );
-
-                          if (value === null) return;
-
-                          const percent = Number(value);
-
-                          if (
-                            !Number.isFinite(percent) ||
-                            percent < 0 ||
-                            percent > 100
-                          ) {
-                            alert("০ থেকে ১০০-এর মধ্যে একটি সংখ্যা দিন।");
-                            return;
-                          }
-
-                          const reason =
-                            prompt(
-                              "পরিবর্তনের কারণ লিখুন (Audit Trail-এ থাকবে):",
-                              "Manager evaluation"
-                            ) || "Manager evaluation";
-
-                          onMutate({
-                            action: "overrideWorkPlanProgress",
-                            planId: plan.id,
-                            manualOverridePercent: percent,
-                            overrideReason: reason,
-                          });
-                        }}
-                        className="min-h-[44px] flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800"
-                      >
-                        অগ্রগতি Override
-                      </button>
-                    )}
-                  </div>
-                </article>
-                    {selectedStaffTimelineId === employeeId && staffTimelinePanel}
-                  </React.Fragment>
-              );
-            })}
-          </div>
-
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                  <th className="p-3">স্টাফ (নামে ক্লিক)</th>
-                  <th className="p-3">ইন / আউট</th>
-                  <th className="p-3">আজকের কাজের পরিকল্পনা</th>
-                  <th className="p-3">দৈনিক সারাংশ</th>
-                  <th className="p-3">সম্পন্ন %</th>
-                  <th className="p-3">ওভাররাইড</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {activeEmployees.map((emp: any) => {
-                  const att = todayAtt.find((a) => Number(a.employeeId) === Number(emp.id));
-                  const plan = todayWorkPlans.find(
-                    (p) => Number(p.employeeId) === Number(emp.id)
-                  );
-                  const dw = todayDailyWorks.find(
-                    (d: any) => Number(d.employeeId) === Number(emp.id)
-                  );
-                  const doneCount = (plan?.items || []).filter(
-                    (i: any) => i.status === "Completed"
-                  ).length;
-                  const totalItems = (plan?.items || []).length;
-                  const effectivePct =
-                    plan?.manualOverridePercent ??
-                    plan?.autoProgressPercent ??
-                    dw?.progressPercent ??
-                    0;
-
-                  return (
-                    <tr key={emp.id} className="hover:bg-slate-50">
-                      <td className="p-3">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedStaffTimelineId(emp.id)}
-                          className="font-bold text-slate-900 hover:text-emerald-600 text-left underline decoration-emerald-500/50"
-                        >
-                          {emp.name}
-                        </button>
-                        <div className="text-[11px] text-slate-400">
-                          {emp.empCode} • {emp.designation}
-                        </div>
-                      </td>
-                      <td className="p-3 font-mono">
-                        {att ? (
-                          <div>
-                            <span className="text-emerald-700 font-bold">
-                              IN: {formatTime(att.checkIn)}
-                            </span>
-                            <span className="block text-slate-500">
-                              OUT: {formatTime(att.checkOut) || "Active"}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-rose-500 font-semibold">
-                            Absent
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        {plan ? (
-                          <div>
-                            <span className="font-bold text-indigo-700">
-                              {doneCount}/{totalItems} Completed
-                            </span>
-                            <div className="text-[11px] text-slate-500 truncate max-w-48">
-                              {(plan.items || [])
-                                .map((i: any) => fixBanglaEncoding(i.title))
-                                .join(" • ")}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-amber-600">
-                            পরিকল্পনা নেই
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        {dw ? (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-                            Submitted ({dw.status})
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold">
-                            আপডেট নেই
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">
-                            {effectivePct}%
-                          </span>
-                          {plan?.manualOverridePercent !== null &&
-                            plan?.manualOverridePercent !== undefined && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-bold">
-                                Overridden
-                              </span>
-                            )}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        {plan && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const val = prompt(
-                                `Override Work Plan অগ্রগতি % for ${emp.name} (Auto: ${plan.autoProgressPercent}%):`,
-                                String(effectivePct)
-                              );
-                              if (val === null) return;
-                              const pct = Number(val);
-                              if (Number.isNaN(pct) || pct < 0 || pct > 100) {
-                                alert(
-                                  "অনুগ্রহ করে 0 থেকে 100 এর মধ্যে একটি সংখ্যা দিন।"
-                                );
-                                return;
-                              }
-                              const reason =
-                                prompt(
-                                  "Reason for manual progress override (logged in Audit Trail):",
-                                  "Verified site & drawing output quality"
-                                ) || "Manager evaluation";
-                              onMutate({
-                                action: "overrideWorkPlanProgress",
-                                planId: plan.id,
-                                manualOverridePercent: pct,
-                                overrideReason: reason,
-                              });
-                            }}
-                            className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-700 text-white text-[11px] font-semibold"
-                          >
-                            ওভাররাইড %
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Right: Broadcast / Staff Timeline */}
-        <div className={inspectedStaff ? "hidden lg:block lg:col-span-4 space-y-6" : "lg:col-span-4 space-y-6"}>
-          {inspectedStaff ? (
-            staffTimelinePanel
-          ) : (
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                await onMutate({
-                  action: "createAnnouncement",
-                  title: noticeTitle,
-                  message: noticeMsg,
-                  priority: noticePriority,
-                  assignedPersonOrTeam: "All Staff",
-                });
-                setNoticeTitle("");
-                setNoticeMsg("");
-              }}
-              className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3"
-            >
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Megaphone className="w-4 h-4 text-emerald-600" /> Broadcast Notice
-              </h3>
-              <input
-                type="text"
-                required
-                placeholder="Notice / Instruction Title *"
-                value={noticeTitle}
-                onChange={(e) => setNoticeTitle(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-              />
-              <textarea
-                rows={2}
-                required
-                placeholder="Write instruction for All Staff..."
-                value={noticeMsg}
-                onChange={(e) => setNoticeMsg(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
-              />
-              <div className="flex gap-2">
-                <select
-                  value={noticePriority}
-                  onChange={(e) => setNoticePriority(e.target.value)}
-                  className="px-3 py-2 rounded-xl border border-slate-300 text-xs"
-                >
-                  <option>High</option>
-                  <option>Critical</option>
-                  <option>Medium</option>
-                </select>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs"
-                >
-                  সকল স্টাফকে জানান
-                </button>
-              </div>
-            </form>
-          )}
+          </form>
         </div>
       </div>
 
-      {/* FINANCIAL KPIs */}
+      {/* ৬. ফিন্যান্সিয়াল মেট্রিক্স (Financial KPIs) */}
       <div>
         <SectionTitle
           icon={<DollarSign className="w-4 h-4 text-emerald-500" />}
@@ -1840,17 +1582,16 @@ export function DashboardView({
         </div>
       </div>
 
-            {!financialMetrics.hasFinancialActivity && (
-              <div role="status" className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
-                এখনো কোনো বাস্তব আর্থিক লেনদেন নেই। নতুন লেনদেন জমা হলে এই সারাংশ database records থেকে হিসাব হবে।
-              </div>
-            )}
+      {!financialMetrics.hasFinancialActivity && (
+        <div role="status" className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          এখনো কোনো বাস্তব আর্থিক লেনদেন নেই। নতুন লেনদেন জমা হলে এই সারাংশ database records থেকে হিসাব হবে।
+        </div>
+      )}
     </div>
   );
 }
-
 // ============================================================================
-// 2. ATTENDANCE VIEW (রিয়েল-টাইম বাংলাদেশ সময় ও নির্ভুল আইডি ম্যাপিং)
+// 2. ATTENDANCE VIEW (রিয়েল-টাইম বাংলাদেশ সময় ও নির্ভুল আইডি ম্যাপিং)
 // ============================================================================
 export function AttendanceView({
   data,
@@ -1859,13 +1600,18 @@ export function AttendanceView({
   data: any;
   onMutate: (payload: Record<string, unknown>) => Promise<any>;
 }) {
-  // ⭐ স্বয়ংক্রিয় বাংলাদেশ রিয়েল-টাইম তারিখ
   const today = getTodayLocal();
   const [employeeId, setEmployeeId] = useState(
     String(data.currentUser?.employeeId || data.allEmployeesDirectory?.[0]?.id || 1)
   );
   const [checkInTime, setCheckInTime] = useState(getNowTimeBD() || "09:30");
   const [notes, setNotes] = useState("Office / Site Shift Check-In");
+
+  // ⭐ লাইভ ঘড়ি — IN TIME সবসময় বর্তমান সময় দেখাবে
+  useEffect(() => {
+    const timer = setInterval(() => setCheckInTime(getNowTimeBD()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Correction state
   const [corrDate, setCorrDate] = useState(today);
@@ -1911,7 +1657,7 @@ export function AttendanceView({
   const handleCorrectionSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      await onMutate({
+      const result = await onMutate({
         action: "requestAttendanceCorrection",
         employeeId: Number(employeeId),
         date: corrDate,
@@ -1921,7 +1667,8 @@ export function AttendanceView({
         requestedCheckOut2: reqOut2 || null,
         reason: corrReason,
       });
-      setCorrReason("");
+      // ⭐ সফল হলেই কেবল ফর্ম clear হবে
+      if (result?.success) setCorrReason("");
     },
     [employeeId, corrDate, reqIn, reqOut, reqIn2, reqOut2, corrReason, onMutate]
   );
@@ -1992,13 +1739,13 @@ export function AttendanceView({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                IN TIME (Asia/Dhaka server time)
+                IN TIME (Asia/Dhaka লাইভ সময়)
               </label>
               <input
                 type="time"
                 value={checkInTime}
                 readOnly
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-slate-50 font-mono font-bold"
               />
             </div>
             <div>
@@ -2097,7 +1844,6 @@ export function AttendanceView({
                 Correction Requests ({(data.attendanceCorrections || []).length})
               </p>
               {(data.attendanceCorrections || []).map((c: any) => {
-                // ⭐ নিরাপদ নাম্বার টাইপ আইডি লুকআপ
                 const emp = empMap.get(Number(c.employeeId));
                 return (
                   <div
@@ -2113,37 +1859,36 @@ export function AttendanceView({
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge status={c.status} />
-                      {c.status === "Pending" &&
-                        data.currentUser?.role !== "Staff" && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onMutate({
-                                  action: "approveAttendanceCorrection",
-                                  correctionId: c.id,
-                                  decision: "Approved",
-                                })
-                              }
-                              className="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onMutate({
-                                  action: "approveAttendanceCorrection",
-                                  correctionId: c.id,
-                                  decision: "Rejected",
-                                })
-                              }
-                              className="px-2.5 py-1 rounded bg-rose-600 text-white font-semibold"
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
+                      {c.status === "Pending" && data.currentUser?.role !== "Staff" && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onMutate({
+                                action: "approveAttendanceCorrection",
+                                correctionId: c.id,
+                                decision: "Approved",
+                              })
+                            }
+                            className="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onMutate({
+                                action: "approveAttendanceCorrection",
+                                correctionId: c.id,
+                                decision: "Rejected",
+                              })
+                            }
+                            className="px-2.5 py-1 rounded bg-rose-600 text-white font-semibold"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -2160,12 +1905,10 @@ export function AttendanceView({
             হাজিরা রেজিস্টার ({registerRows.length} employee-days)
           </h3>
         </div>
-        {/* মোবাইলে হাজিরার কার্ড; desktop table নিচে অপরিবর্তিত থাকবে */}
+
         <div className="space-y-3 p-3 md:hidden">
           {registerRows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">
-              কোনো হাজিরার রেকর্ড নেই
-            </p>
+            <p className="py-8 text-center text-sm text-slate-500">কোনো হাজিরার রেকর্ড নেই</p>
           ) : (
             registerRows.map((a: Attendance) => {
               const emp = empMap.get(Number(a.employeeId));
@@ -2177,7 +1920,7 @@ export function AttendanceView({
 
               return (
                 <article
-                  key={`${a.employeeId}-${a.date}`}
+                  key={a.id}
                   className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
                 >
                   <div className="flex min-w-0 items-start justify-between gap-2">
@@ -2239,6 +1982,7 @@ export function AttendanceView({
             })
           )}
         </div>
+
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
@@ -2259,7 +2003,6 @@ export function AttendanceView({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {registerRows.map((a: any) => {
-                // ⭐ নিরাপদ আইডি লুকআপ যাতে কোনো কর্মচারীর নাম মিস না হয়
                 const emp = empMap.get(Number(a.employeeId));
                 return (
                   <tr key={a.id} className="hover:bg-slate-50">
@@ -2268,8 +2011,12 @@ export function AttendanceView({
                       <div className="font-bold text-slate-900">
                         {emp?.name || `Employee #${a.employeeId}`}
                       </div>
-                      <div className="text-[11px] text-slate-400">ID: {a.employeeId} • {emp?.empCode || "Code unavailable"}</div>
-                      {emp?.archived && <div className="text-[10px] text-amber-700">Archived historical record</div>}
+                      <div className="text-[11px] text-slate-400">
+                        ID: {a.employeeId} • {emp?.empCode || "Code unavailable"}
+                      </div>
+                      {emp?.archived && (
+                        <div className="text-[10px] text-amber-700">Archived historical record</div>
+                      )}
                     </td>
                     <td className="p-3 font-mono font-bold text-emerald-700">{a.checkIn || "—"}</td>
                     <td className="p-3 font-mono font-bold text-slate-800">{a.checkOut || "—"}</td>
@@ -2284,18 +2031,22 @@ export function AttendanceView({
                       <span className="text-rose-600">{a.earlyLeaveMinutes || 0}m</span>
                     </td>
                     <td className="p-3 text-indigo-600 font-semibold">{a.overtimeHours}h</td>
-                    <td className="p-3"><StatusBadge status={a.status} /></td>
                     <td className="p-3">
-                      {a.date === today && a.status !== "Leave" && a.checkIn &&
-                        ((!a.checkOut) || (a.checkIn2 && !a.checkOut2)) && (
-                        <button
-                          type="button"
-                          onClick={() => handleCheckOut(a.id, Number(a.employeeId))}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold"
-                        >
-                          {a.checkIn2 ? "বিকাল OUT দিন" : "সকাল OUT দিন"}
-                        </button>
-                      )}
+                      <StatusBadge status={a.status} />
+                    </td>
+                    <td className="p-3">
+                      {a.date === today &&
+                        a.status !== "Leave" &&
+                        a.checkIn &&
+                        (!a.checkOut || (a.checkIn2 && !a.checkOut2)) && (
+                          <button
+                            type="button"
+                            onClick={() => handleCheckOut(a.id, Number(a.employeeId))}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold"
+                          >
+                            {a.checkIn2 ? "বিকাল OUT দিন" : "সকাল OUT দিন"}
+                          </button>
+                        )}
                     </td>
                   </tr>
                 );
@@ -2322,19 +2073,26 @@ export function MyDayAndDailyWorksView({
   const myEmpId = Number(data.currentUser?.employeeId);
 
   const existingMyPlan = useMemo(
-    () => (data.dailyWorkPlans || []).find((p: any) => Number(p.employeeId) === myEmpId && p.date === today),
+    () =>
+      (data.dailyWorkPlans || []).find(
+        (p: any) => Number(p.employeeId) === myEmpId && p.date === today
+      ),
     [data.dailyWorkPlans, myEmpId, today]
   );
 
   const [planInput, setPlanInput] = useState("");
   const [draftPlanItems, setDraftPlanItems] = useState<WorkPlanItem[]>([]);
 
+  // ⭐ অসংরক্ষিত পরিবর্তন থাকলে server data দিয়ে draft মুছবে না
+  const draftPlanItemsRef = React.useRef<WorkPlanItem[]>([]);
+  const draftHasUnsavedChangesRef = React.useRef(false);
+
   useEffect(() => {
-    if (existingMyPlan?.items) {
-      setDraftPlanItems(existingMyPlan.items);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existingMyPlan?.id, existingMyPlan?.items?.length]);
+    if (draftHasUnsavedChangesRef.current || !existingMyPlan?.items) return;
+    const savedItems = existingMyPlan.items as WorkPlanItem[];
+    draftPlanItemsRef.current = savedItems;
+    setDraftPlanItems(savedItems);
+  }, [existingMyPlan]);
 
   const [startTime, setStartTime] = useState("09:30");
   const [endTime, setEndTime] = useState("19:30");
@@ -2367,6 +2125,15 @@ export function MyDayAndDailyWorksView({
     [data.tasks]
   );
 
+  // ⭐ শুধু নিজের দৈনিক সারাংশ
+  const myDailyWorks = useMemo(
+    () =>
+      (data.dailyWorks || []).filter(
+        (dw: any) => Number(dw.employeeId) === myEmpId
+      ),
+    [data.dailyWorks, myEmpId]
+  );
+
   const handleMultipleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const mapped: Attachment[] = files.map((f) => ({
@@ -2378,18 +2145,44 @@ export function MyDayAndDailyWorksView({
     setAttachments((prev) => [...prev, ...mapped]);
   };
 
+  // ⭐ Save করলে input box-এর pending text-ও যোগ হবে; fail হলে draft মুছবে না
   const handleSaveWorkPlan = useCallback(async () => {
-    await onMutate({
+    const pendingTitle = planInput.trim();
+    const itemsToSave: WorkPlanItem[] = pendingTitle
+      ? [
+          ...draftPlanItemsRef.current,
+          {
+            id: `wp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            title: pendingTitle,
+            status: "Pending",
+            completionPercent: 0,
+          },
+        ]
+      : draftPlanItemsRef.current;
+
+    if (itemsToSave.length === 0) {
+      alert("প্রথমে অন্তত একটি কাজ যোগ করুন।");
+      return;
+    }
+
+    const result = await onMutate({
       action: "saveDailyWorkPlan",
       date: today,
-      items: draftPlanItems,
+      items: itemsToSave,
     });
-  }, [today, draftPlanItems, onMutate]);
+
+    if (result?.success) {
+      draftPlanItemsRef.current = itemsToSave;
+      setDraftPlanItems(itemsToSave);
+      draftHasUnsavedChangesRef.current = false;
+      if (pendingTitle) setPlanInput("");
+    }
+  }, [today, planInput, onMutate]);
 
   const handleSubmitSummary = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      await onMutate({
+      const result = await onMutate({
         action: "submitDailyWork",
         date: today,
         arrivalTime: startTime,
@@ -2407,10 +2200,14 @@ export function MyDayAndDailyWorksView({
         tomorrowPlan: tomorrowPlan || "Continue scheduled tasks",
         attachments,
       });
-      setWorkSummary("");
-      setProblems("");
-      setPendingWork("");
-      setAttachments([]);
+
+      // ⭐ সফল হলেই কেবল ফর্ম clear
+      if (result?.success) {
+        setWorkSummary("");
+        setProblems("");
+        setPendingWork("");
+        setAttachments([]);
+      }
     },
     [today, startTime, endTime, workStatus, workSummary, taskId, projectId, siteId, clientId, progressPercent, problems, pendingWork, tomorrowPlan, attachments, onMutate]
   );
@@ -2442,6 +2239,12 @@ export function MyDayAndDailyWorksView({
         </span>
       </div>
 
+      {!myEmpId && (
+        <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-xs text-rose-800">
+          আপনার লগইন কোনো কর্মী প্রোফাইলের সাথে যুক্ত নয়। HR-কে জানান।
+        </div>
+      )}
+
       {/* Work Plan */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
@@ -2456,7 +2259,8 @@ export function MyDayAndDailyWorksView({
           <button
             type="button"
             onClick={handleSaveWorkPlan}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs"
+            disabled={!myEmpId}
+            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold text-xs shadow-xs"
           >
             Save Plan ({autoDraftPercent}%)
           </button>
@@ -2473,11 +2277,20 @@ export function MyDayAndDailyWorksView({
           <button
             type="button"
             onClick={() => {
-              if (!planInput.trim()) return;
-              setDraftPlanItems((prev) => [
-                ...prev,
-                { id: `wp-${Date.now()}`, title: planInput.trim(), status: "Pending" },
-              ]);
+              const title = planInput.trim();
+              if (!title) return;
+              const updatedItems: WorkPlanItem[] = [
+                ...draftPlanItemsRef.current,
+                {
+                  id: `wp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                  title,
+                  status: "Pending",
+                  completionPercent: 0,
+                },
+              ];
+              draftPlanItemsRef.current = updatedItems;
+              draftHasUnsavedChangesRef.current = true;
+              setDraftPlanItems(updatedItems);
               setPlanInput("");
             }}
             className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold"
@@ -2500,11 +2313,14 @@ export function MyDayAndDailyWorksView({
                   <button
                     key={st}
                     type="button"
-                    onClick={() =>
-                      setDraftPlanItems((prev) =>
-                        prev.map((p) => (p.id === it.id ? { ...p, status: st } : p))
-                      )
-                    }
+                    onClick={() => {
+                      const updatedItems = draftPlanItemsRef.current.map((item) =>
+                        item.id === it.id ? { ...item, status: st } : item
+                      );
+                      draftPlanItemsRef.current = updatedItems;
+                      draftHasUnsavedChangesRef.current = true;
+                      setDraftPlanItems(updatedItems);
+                    }}
                     className={`px-2 py-1 rounded text-[10px] font-bold ${
                       it.status === st
                         ? st === "Completed"
@@ -2524,16 +2340,22 @@ export function MyDayAndDailyWorksView({
             </div>
           ))}
         </div>
+
+        {draftHasUnsavedChangesRef.current && (
+          <p className="text-[11px] font-semibold text-amber-700">
+            ⚠ অসংরক্ষিত পরিবর্তন আছে — "Save Plan" চাপুন।
+          </p>
+        )}
       </div>
 
-            {/* Daily Work Summary Form */}
+      {/* Daily Work Summary Form */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <form
           onSubmit={handleSubmitSummary}
           className="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 space-y-3.5 h-fit"
         >
           <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <ClipboardCheck className="w-4 h-4 text-emerald-600" /> Submit Daily Summary (Bangla/English/Mixed)
+            <ClipboardCheck className="w-4 h-4 text-emerald-600" /> Submit Daily Summary
           </h2>
 
           <div className="grid grid-cols-3 gap-2">
@@ -2603,7 +2425,7 @@ export function MyDayAndDailyWorksView({
 
           <div className="p-3 rounded-xl bg-slate-50 border border-dashed border-slate-300 space-y-2">
             <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
-              <Paperclip className="w-3.5 h-3.5 text-emerald-600" /> Attach Images, PDFs (Multiple Allowed)
+              <Paperclip className="w-3.5 h-3.5 text-emerald-600" /> Attach Images, PDFs
             </label>
             <input
               type="file"
@@ -2625,25 +2447,28 @@ export function MyDayAndDailyWorksView({
 
           <div className="grid grid-cols-2 gap-2">
             <input type="text" value={problems} onChange={(e) => setProblems(e.target.value)} placeholder="Problems / সমস্যা (Optional)" className="px-3 py-2 rounded-xl border border-slate-300 text-xs" />
-            <input type="text" value={tomorrowPlan} onChange={(e) => setTomorrowPlan(e.target.value)} placeholder="Tomorrow Plan / আগামীকালের পরিকল্পনা" className="px-3 py-2 rounded-xl border border-slate-300 text-xs" />
+            <input type="text" value={tomorrowPlan} onChange={(e) => setTomorrowPlan(e.target.value)} placeholder="Tomorrow Plan" className="px-3 py-2 rounded-xl border border-slate-300 text-xs" />
           </div>
 
-          <button type="submit" className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center justify-center gap-2">
+          <button
+            type="submit"
+            disabled={!myEmpId}
+            className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-semibold text-xs transition flex items-center justify-center gap-2"
+          >
             <Send className="w-4 h-4" /> Save দৈনিক সারাংশ & Attachments
           </button>
         </form>
 
-        {/* Submitted Work Plans & Logs */}
+        {/* Submitted Work Plans & Logs — শুধু নিজের */}
         <div className="lg:col-span-7 space-y-4">
           <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
             <h3 className="text-sm font-bold text-slate-900">
-              জমাকৃত দৈনিক সারাংশ ({(data.dailyWorks || []).length})
+              আমার জমাকৃত দৈনিক সারাংশ ({myDailyWorks.length})
             </h3>
-            {(data.dailyWorks || []).length === 0 ? (
+            {myDailyWorks.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-4">কোনো সারাংশ জমা হয়নি</p>
             ) : (
-              (data.dailyWorks || []).map((dw: any) => {
-                // ⭐ নিরাপদ নাম্বার টাইপ আইডি লুকআপ
+              myDailyWorks.map((dw: any) => {
                 const emp = empMap.get(Number(dw.employeeId));
                 const proj = projMap.get(Number(dw.projectId));
                 const site = siteMap.get(Number(dw.siteId));
@@ -2682,7 +2507,7 @@ export function MyDayAndDailyWorksView({
                     )}
                     <div className="flex flex-wrap gap-2 text-[11px]">
                       {task && (
-                        <Link href={`/tasks/${task.id}`} className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
+                        <Link href="/work-center" className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
                           Task: {task.taskCode}
                         </Link>
                       )}
@@ -2701,7 +2526,7 @@ export function MyDayAndDailyWorksView({
 }
 
 // ============================================================================
-// 6 & 7. TASK MANAGEMENT
+// 6 & 7. TASK MANAGEMENT (নতুন workflow: Pending Acceptance → Accepted → Review → Completed)
 // ============================================================================
 export function TasksView({
   data,
@@ -2713,10 +2538,14 @@ export function TasksView({
   focusedTaskId?: number;
 }) {
   const today = getTodayLocal();
+  const myEmpId = Number(data.currentUser?.employeeId);
+  const role = data.currentUser?.role || "Staff";
+  const isTaskMgmt = ["Owner", "Chairman", "MD", "Admin", "Manager", "HR", "Project Manager"].includes(role);
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignedTo, setAssignedTo] = useState(
-    String(data.allEmployeesDirectory?.[0]?.id || 1)
+    String(data.currentUser?.employeeId || data.allEmployeesDirectory?.[0]?.id || 1)
   );
   const [assignToAllStaff, setAssignToAllStaff] = useState(false);
   const [projectId, setProjectId] = useState("");
@@ -2731,7 +2560,6 @@ export function TasksView({
   const [completionNote, setCompletionNote] = useState("");
   const [evidenceFiles, setEvidenceFiles] = useState<Attachment[]>([]);
 
-  // ⭐ নিরাপদ নাম্বার টাইপ আইডি ম্যাপ
   const empMap = useMemo(
     () => new Map<number, any>((data.allEmployeesDirectory || []).map((e: any) => [Number(e.id), e])),
     [data.allEmployeesDirectory]
@@ -2740,7 +2568,7 @@ export function TasksView({
   const handleCreateTask = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      await onMutate({
+      const result = await onMutate({
         action: "createTask",
         title,
         description,
@@ -2753,9 +2581,11 @@ export function TasksView({
         attachmentUrl,
         requiresReview: false,
       });
-      setTitle("");
-      setDescription("");
-      setAttachmentUrl("");
+      if (result?.success) {
+        setTitle("");
+        setDescription("");
+        setAttachmentUrl("");
+      }
     },
     [title, description, assignedTo, assignToAllStaff, projectId, siteId, priority, dueDate, attachmentUrl, onMutate]
   );
@@ -2769,29 +2599,29 @@ export function TasksView({
 
   const submitCompletion = useCallback(async () => {
     if (!completingTaskId) return;
-    await onMutate({
+    const result = await onMutate({
       action: "updateTaskStatus",
       taskId: completingTaskId,
-      status: "Completed",
+      status: "Review",
       progressPercent: 100,
       completionNote: completionNote || "Completed with verified evidence",
       evidenceAttachments: evidenceFiles,
     });
-    setCompletingTaskId(null);
-    setCompletionNote("");
-    setEvidenceFiles([]);
+    if (result?.success) {
+      setCompletingTaskId(null);
+      setCompletionNote("");
+      setEvidenceFiles([]);
+    }
   }, [completingTaskId, completionNote, evidenceFiles, onMutate]);
 
   const submitComment = useCallback(
     async (taskId: number) => {
       const text = (commentDrafts[taskId] || "").trim();
       if (!text) return;
-      await onMutate({
-        action: "addTaskComment",
-        taskId,
-        comment: text,
-      });
-      setCommentDrafts((prev) => ({ ...prev, [taskId]: "" }));
+      const result = await onMutate({ action: "addTaskComment", taskId, comment: text });
+      if (result?.success) {
+        setCommentDrafts((prev) => ({ ...prev, [taskId]: "" }));
+      }
     },
     [commentDrafts, onMutate]
   );
@@ -2806,16 +2636,19 @@ export function TasksView({
               : "টাস্ক ব্যবস্থাপনা ও নির্দেশনা ওয়ার্কফ্লো"}
           </h1>
           <p className="text-xs text-slate-500">
-            Workflow: Todo → Accepted → In Progress → Review → Completed
+            Workflow: গ্রহণ বাকি → গৃহীত → চলমান → অনুমোদন বাকি → সম্পন্ন
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
+          <Link href="/work-center" className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold">
+            কাজ ও কার্যক্রম কেন্দ্র →
+          </Link>
           {focusedTaskId ? (
             <Link href="/tasks" className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-semibold">
               ← সকল টাস্ক
             </Link>
           ) : (
-            ["All", "Todo", "Accepted", "In Progress", "Review", "Completed", "Blocked", "Reopened"].map((st) => (
+            ["All", "Pending Acceptance", "Accepted", "In Progress", "Review", "Completed", "Reopened", "Declined"].map((st) => (
               <button
                 key={st}
                 type="button"
@@ -2838,7 +2671,7 @@ export function TasksView({
         <div className="bg-emerald-950 text-white p-5 rounded-2xl border border-emerald-700 space-y-3 shadow-xl">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold">
-              Complete Task #{completingTaskId} — Attach Completion Note & Evidence
+              Task #{completingTaskId} — অনুমোদনে পাঠানোর নোট ও প্রমাণ
             </h3>
             <button type="button" onClick={() => setCompletingTaskId(null)} className="text-xs text-slate-300">
               ✕ Cancel
@@ -2873,13 +2706,13 @@ export function TasksView({
             onClick={submitCompletion}
             className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs"
           >
-            সম্পন্ন নিশ্চিত ও ম্যানেজারকে জানান
+            অনুমোদনে পাঠান
           </button>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {!focusedTaskId && (
+        {!focusedTaskId && isTaskMgmt && (
           <form
             onSubmit={handleCreateTask}
             className="lg:col-span-4 bg-white p-5 rounded-2xl border border-slate-200 space-y-3.5 h-fit"
@@ -2902,13 +2735,18 @@ export function TasksView({
               <label className="block text-xs font-semibold text-slate-600 mb-1">কর্মচারী অ্যাসাইন</label>
               <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} disabled={assignToAllStaff} className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs">
                 {(data.allEmployeesDirectory || []).map((e: any) => (
-                  <option key={e.id} value={e.id}>{e.empCode} — {e.name}</option>
+                  <option key={e.id} value={e.id}>
+                    {Number(e.id) === myEmpId ? "★ নিজে — " : ""}{e.empCode} — {e.name}
+                  </option>
                 ))}
               </select>
               <label className="flex items-center gap-2 text-xs text-slate-700 mt-2 cursor-pointer font-medium">
                 <input type="checkbox" checked={assignToAllStaff} onChange={(e) => setAssignToAllStaff(e.target.checked)} />
                 Notify & Assign to All Staff
               </label>
+              <p className="text-[10px] text-slate-500 mt-1">
+                নিজেকে দিলে সরাসরি কাজে যোগ হবে। অন্যকে দিলে তিনি গ্রহণ করলে যোগ হবে।
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -2951,20 +2789,19 @@ export function TasksView({
           </form>
         )}
 
-        <div className={focusedTaskId ? "lg:col-span-12 space-y-4" : "lg:col-span-8 space-y-3"}>
+        <div className={focusedTaskId || !isTaskMgmt ? "lg:col-span-12 space-y-4" : "lg:col-span-8 space-y-3"}>
           {filteredTasks.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 text-sm">
               কোনো টাস্ক পাওয়া যায়নি
             </div>
           ) : (
             filteredTasks.map((t: any) => {
-              // ⭐ নিরাপদ নাম্বার টাইপ আইডি লুকআপ
               const emp = empMap.get(Number(t.assignedTo));
+              const isOwnTask = Number(t.assignedTo) === myEmpId;
               const isOverdue =
                 t.dueDate &&
                 t.dueDate < today &&
-                t.status !== "Completed" &&
-                t.status !== "Cancelled";
+                !["Completed", "Cancelled", "Declined"].includes(t.status);
               const comments = (data.taskComments || []).filter(
                 (c: any) => Number(c.taskId) === Number(t.id)
               );
@@ -2996,27 +2833,36 @@ export function TasksView({
                           </span>
                         )}
                       </div>
-                      <Link href={`/tasks/${t.id}`} className="text-base font-bold text-slate-900 hover:text-emerald-600 mt-1.5 block">
+                      <p className="text-base font-bold text-slate-900 mt-1.5">
                         {fixBanglaEncoding(t.title)}
-                      </Link>
+                      </p>
                       <p className="text-xs text-slate-500 mt-0.5">{fixBanglaEncoding(t.description)}</p>
                     </div>
                     <div className="text-right text-xs">
                       <p className="font-semibold text-slate-800">
-                        Assignee: {t.isCompanyWide ? "All Staff" : emp?.name || `EMP-${t.assignedTo}`}
+                        Assignee: {t.isCompanyWide ? "All Staff" : emp?.name || t.assignedToName || `EMP-${t.assignedTo}`}
                       </p>
                       <p className="text-slate-500">
-                        By: {fixBanglaEncoding(t.createdBy) || "Manager"} • Due: {t.dueDate}
+                        By: {fixBanglaEncoding(t.assignedByName || t.createdBy) || "Manager"} • Due: {t.dueDate}
                       </p>
                       <p className="font-bold text-emerald-600 mt-1">Progress: {t.progressPercent}%</p>
+                      {t.rating && (
+                        <p className="text-[11px] font-bold text-amber-700 mt-0.5">রেটিং: {t.rating}</p>
+                      )}
                     </div>
                   </div>
+
+                  {t.status === "Reopened" && t.reviewNote && (
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900">
+                      <b>{t.reviewedBy || "ম্যানেজমেন্ট"}</b> সংশোধন চেয়েছেন: {fixBanglaEncoding(t.reviewNote)}
+                    </div>
+                  )}
 
                   {t.status === "Completed" && (
                     <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs space-y-1">
                       <div className="font-bold text-emerald-900">
-                        ✓ Completed by {t.completedBy || t.reviewedBy || "Staff"}{" "}
-                        {t.completedAt ? `on ${new Date(t.completedAt).toLocaleString()}` : ""}
+                        ✓ অনুমোদন করেছেন {t.reviewedBy || t.completedBy || "ম্যানেজমেন্ট"}{" "}
+                        {t.completedAt ? `• ${new Date(t.completedAt).toLocaleString("bn-BD")}` : ""}
                       </div>
                       {t.completionNote && <p className="text-emerald-800">Note: {fixBanglaEncoding(t.completionNote)}</p>}
                       {(t.evidenceAttachments || []).length > 0 && (
@@ -3033,33 +2879,86 @@ export function TasksView({
 
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
                     <div className="flex flex-wrap gap-1.5">
-                      {(["Accepted", "In Progress", "Review", "Blocked", "Reopened", "Cancelled"] as const).map((st) => (
+                      {/* নিজের কাজ: গ্রহণ */}
+                      {isOwnTask && ["Pending Acceptance", "Todo"].includes(t.status) && (
                         <button
-                          key={st}
                           type="button"
-                          onClick={() =>
-                            onMutate({ action: "updateTaskStatus", taskId: t.id, status: st })
-                          }
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
+                          onClick={() => onMutate({ action: "updateTaskStatus", taskId: t.id, status: "Accepted" })}
+                          className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold"
                         >
-                          {st}
+                          ✓ গ্রহণ করুন
                         </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => setCompletingTaskId(t.id)}
-                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition"
-                      >
-                        ✓ প্রমাণসহ সম্পন্ন
-                      </button>
+                      )}
+                      {/* নিজের কাজ: চলমান */}
+                      {isOwnTask && ["Accepted", "Reopened"].includes(t.status) && (
+                        <button
+                          type="button"
+                          onClick={() => onMutate({ action: "updateTaskStatus", taskId: t.id, status: "In Progress" })}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-xs font-semibold"
+                        >
+                          কাজ শুরু
+                        </button>
+                      )}
+                      {/* নিজের কাজ: অনুমোদনে পাঠান */}
+                      {isOwnTask && ["Accepted", "In Progress", "Reopened"].includes(t.status) && (
+                        <button
+                          type="button"
+                          onClick={() => setCompletingTaskId(t.id)}
+                          className="px-3 py-1 rounded-lg bg-purple-600 text-white text-xs font-bold"
+                        >
+                          ১০০% — অনুমোদনে পাঠান
+                        </button>
+                      )}
+                      {/* ম্যানেজমেন্ট: রিভিউ */}
+                      {isTaskMgmt && t.status === "Review" && !isOwnTask && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const rating = prompt("রেটিং দিন: Best / Better / Good / Needs Improvement / Penalty", "Good");
+                              if (!rating) return;
+                              onMutate({ action: "reviewTask", taskId: t.id, decision: "Approve", rating, reason: "" });
+                            }}
+                            className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold"
+                          >
+                            ✓ অনুমোদন
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const reason = prompt("কী সংশোধন করতে হবে?");
+                              if (reason?.trim()) {
+                                onMutate({ action: "reviewTask", taskId: t.id, decision: "Correction", reason });
+                              }
+                            }}
+                            className="px-3 py-1 rounded-lg bg-amber-500 text-white text-xs font-bold"
+                          >
+                            ↺ সংশোধনে ফেরত
+                          </button>
+                        </>
+                      )}
+                      {/* ম্যানেজমেন্ট: বাতিল */}
+                      {isTaskMgmt && !["Completed", "Cancelled", "Declined"].includes(t.status) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm("কাজটি বাতিল করবেন?")) {
+                              onMutate({ action: "updateTaskStatus", taskId: t.id, status: "Cancelled" });
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium"
+                        >
+                          বাতিল
+                        </button>
+                      )}
                     </div>
-                    <Link href={`/tasks/${t.id}`} className="text-xs font-semibold text-emerald-600 hover:underline flex items-center gap-1">
-                      থ্রেড খুলুন ({comments.length}) <ArrowUpRight className="w-3.5 h-3.5" />
+                    <Link href="/work-center" className="text-xs font-semibold text-emerald-600 hover:underline flex items-center gap-1">
+                      কেন্দ্রে দেখুন ({comments.length}) <ArrowUpRight className="w-3.5 h-3.5" />
                     </Link>
                   </div>
 
                   <div className="pt-3 border-t border-slate-100 space-y-2">
-                    {comments.map((c: any) => (
+                    {comments.slice(0, 5).map((c: any) => (
                       <div key={c.id} className="text-xs bg-slate-50 px-3 py-2 rounded-lg border border-slate-200/60 flex items-center justify-between">
                         <div>
                           <span className="font-bold text-slate-800">{fixBanglaEncoding(c.authorName)}: </span>
@@ -3103,20 +3002,20 @@ export function TasksView({
 // ⭐ MONTHLY ATTENDANCE REGISTER — সম্পূর্ণ সংস্করণ (দিনে ৪টি পাঞ্চ ও ৩টি ভিউ)
 // 1. Grid: সব কর্মচারী × সব দিন (ম্যানেজমেন্টের জন্য)
 // 2. Summary: সবার মাসিক সারাংশ (ম্যানেজমেন্টের জন্য)
-// 3. Individual: ⭐ একজন করে আলাদাভাবে ৪টি পাঞ্চসহ বিস্তারিত দেখা (স্টাফ শুধুমাত্র নিজেরটা দেখবে)
+// 3. Individual: একজন করে আলাদাভাবে ৪টি পাঞ্চসহ বিস্তারিত (স্টাফ শুধু নিজেরটা)
 // ============================================================================
 export function MonthlyAttendanceView({
   data,
-  onMutate,
+  onMutate: _onMutate,
 }: {
   data: any;
   onMutate: (payload: Record<string, unknown>) => Promise<any>;
 }) {
+  void _onMutate; // এই view শুধু পড়ে, কোনো mutation করে না
   const currentUser = data?.currentUser || {};
   const myEmpId = Number(currentUser?.employeeId);
   const myRole = currentUser?.role || "Staff";
 
-  // ম্যানেজমেন্ট রোল যাচাই
   const isManagement = [
     "Owner",
     "Chairman",
@@ -3127,20 +3026,19 @@ export function MonthlyAttendanceView({
     "Accounts",
   ].includes(myRole);
 
- const [selectedMonth, setSelectedMonth] = useState(
-  () => getTodayLocal().slice(0, 7)
-);
+  const [selectedMonth, setSelectedMonth] = useState(() => getTodayLocal().slice(0, 7));
   const [search, setSearch] = useState("");
 
-  // সাধারণ কর্মীর জন্য ভিউ সবসময় 'individual' এ ফিক্সড থাকবে
   const [viewMode, setViewMode] = useState<"grid" | "summary" | "individual">(
     isManagement ? "grid" : "individual"
   );
 
-  // সাধারণ কর্মী কখনো অন্যের আইডি দেখতে পারবে না
   const [individualEmpId, setIndividualEmpId] = useState<number | null>(
     isManagement
-      ? (data.allEmployeesDirectory?.find((employee: any) => !employee.archived)?.id || data.allEmployeesDirectory?.[0]?.id || myEmpId || null)
+      ? data.allEmployeesDirectory?.find((employee: any) => !employee.archived)?.id ||
+        data.allEmployeesDirectory?.[0]?.id ||
+        myEmpId ||
+        null
       : myEmpId
   );
   const [empSearch, setEmpSearch] = useState("");
@@ -3148,7 +3046,6 @@ export function MonthlyAttendanceView({
 
   const activeEmpId = isManagement ? individualEmpId : myEmpId;
 
-  // ⭐ নিরাপদ নাম্বার টাইপ আইডি ম্যাপ
   const empMap = useMemo(
     () => new Map<number, any>((data.allEmployeesDirectory || []).map((e: any) => [Number(e.id), e])),
     [data.allEmployeesDirectory]
@@ -3170,7 +3067,7 @@ export function MonthlyAttendanceView({
     timeZone: "UTC",
   });
 
-    // ===== প্রতি কর্মী + প্রতি দিন = একটি রেকর্ড; দুই শিফটের চারটি punch =====
+  // ===== প্রতি কর্মী + প্রতি দিন = একটি রেকর্ড; দুই শিফটের চারটি punch =====
   const dailyAttendanceMap = useMemo(() => {
     type MonthlyDayAttendance = {
       employeeId: number;
@@ -3189,9 +3086,7 @@ export function MonthlyAttendanceView({
     const map = new Map<string, MonthlyDayAttendance>();
 
     const rawList = (data.attendances || []).filter(
-      (a: any) =>
-        typeof a.date === "string" &&
-        a.date.startsWith(`${selectedMonth}-`)
+      (a: any) => typeof a.date === "string" && a.date.startsWith(`${selectedMonth}-`)
     );
 
     const seenRows = new Set<string>();
@@ -3202,6 +3097,7 @@ export function MonthlyAttendanceView({
       const signature = JSON.stringify([
         a.checkIn, a.checkOut, a.checkIn2, a.checkOut2,
         a.workingHours, a.morningHours, a.afternoonHours, a.overtimeHours,
+        a.status, a.lateMinutes,
       ]);
       const uniqueRowKey = `${employeeId}_${a.date}_${signature}`;
       if (seenRows.has(uniqueRowKey)) continue;
@@ -3219,91 +3115,50 @@ export function MonthlyAttendanceView({
         workingHours: 0,
         overtimeHours: 0,
         lateMinutes: 0,
-        status: a.status || "Present",
+        // ⭐ status না থাকলে ফাঁকা — আগে ভুলভাবে "Present" ধরা হচ্ছিল
+        status: a.status || "",
         notes: "",
       };
 
-      /*
-       * নতুন চার-punch record:
-       * checkIn  = সকাল IN
-       * checkOut = সকাল OUT
-       * checkIn2 = বিকাল IN
-       * checkOut2 = বিকাল OUT
-       *
-       * পুরোনো demo/legacy record-এ দ্বিতীয় শিফটের field খালি থাকলে
-       * আগের সময়ভিত্তিক display fallback রাখা হয়েছে।
-       */
-      const morningIn =
-        a.checkIn && a.checkIn < "14:00" ? String(a.checkIn) : "";
-      const legacyAfternoonIn =
-        a.checkIn && a.checkIn >= "14:00" ? String(a.checkIn) : "";
-
-      const morningOut =
-        a.checkOut && a.checkOut < "14:30"
-          ? String(a.checkOut)
-          : "";
+      const morningIn = a.checkIn && a.checkIn < "14:00" ? String(a.checkIn) : "";
+      const legacyAfternoonIn = a.checkIn && a.checkIn >= "14:00" ? String(a.checkIn) : "";
+      const morningOut = a.checkOut && a.checkOut < "14:30" ? String(a.checkOut) : "";
       const legacyEveningOut =
-        a.checkOut && !a.checkOut2 && a.checkOut >= "14:30"
-          ? String(a.checkOut)
-          : "";
+        a.checkOut && !a.checkOut2 && a.checkOut >= "14:30" ? String(a.checkOut) : "";
 
-      const afternoonIn = a.checkIn2
-        ? String(a.checkIn2)
-        : legacyAfternoonIn;
+      const afternoonIn = a.checkIn2 ? String(a.checkIn2) : legacyAfternoonIn;
+      const eveningOut = a.checkOut2 ? String(a.checkOut2) : legacyEveningOut;
 
-      const eveningOut = a.checkOut2
-        ? String(a.checkOut2)
-        : legacyEveningOut;
-
-      // পুরোনো একাধিক row থাকলেও দিনের চারটি সময় একটি entry-তে মেশানো হবে।
       if (morningIn && (!existing.morningIn || morningIn < existing.morningIn)) {
         existing.morningIn = morningIn;
       }
       if (morningOut && (!existing.morningOut || morningOut > existing.morningOut)) {
         existing.morningOut = morningOut;
       }
-      if (
-        afternoonIn &&
-        (!existing.afternoonIn || afternoonIn < existing.afternoonIn)
-      ) {
+      if (afternoonIn && (!existing.afternoonIn || afternoonIn < existing.afternoonIn)) {
         existing.afternoonIn = afternoonIn;
       }
       if (eveningOut && (!existing.eveningOut || eveningOut > existing.eveningOut)) {
         existing.eveningOut = eveningOut;
       }
 
-      /*
-       * নতুন ব্যবস্থায় প্রতিদিন একটি row, তাই সেই row-এর workingHours-ই
-       * দিনের মোট ঘণ্টা। পুরোনো একাধিক shift-row থাকলে ঘণ্টা যোগ হবে।
-       */
       existing.workingHours += Number(a.workingHours || 0);
-      existing.overtimeHours = Math.max(
-        existing.overtimeHours,
-        Number(a.overtimeHours || 0)
-      );
-      existing.lateMinutes = Math.max(
-        existing.lateMinutes,
-        Number(a.lateMinutes || 0)
-      );
+      // ⭐ পুরোনো split-shift হলে OT যোগ হবে (আগে Math.max-এ কম দেখাত)
+      existing.overtimeHours += Number(a.overtimeHours || 0);
+      existing.lateMinutes = Math.max(existing.lateMinutes, Number(a.lateMinutes || 0));
 
       if (a.status === "Leave") {
         existing.status = "Leave";
       } else if (a.status === "Late" && existing.status !== "Leave") {
         existing.status = "Late";
-      } else if (
-        existing.status !== "Leave" &&
-        existing.status !== "Late" &&
-        a.status
-      ) {
+      } else if (existing.status !== "Leave" && existing.status !== "Late" && a.status) {
         existing.status = a.status;
       }
 
       if (a.notes) {
         const note = String(a.notes).trim();
         if (note && !existing.notes.includes(note)) {
-          existing.notes = existing.notes
-            ? `${existing.notes} | ${note}`
-            : note;
+          existing.notes = existing.notes ? `${existing.notes} | ${note}` : note;
         }
       }
 
@@ -3322,7 +3177,11 @@ export function MonthlyAttendanceView({
   const filteredEmployees = useMemo(() => {
     const q = search.trim().toLowerCase();
     const visibleEmployees = (data.allEmployeesDirectory || []).filter(
-      (employee: any) => !employee.archived || monthAttendances.some((attendance: any) => Number(attendance.employeeId) === Number(employee.id))
+      (employee: any) =>
+        !employee.archived ||
+        monthAttendances.some(
+          (attendance: any) => Number(attendance.employeeId) === Number(employee.id)
+        )
     );
     if (!q) return visibleEmployees;
     return visibleEmployees.filter(
@@ -3335,7 +3194,11 @@ export function MonthlyAttendanceView({
   const individualEmpChoices = useMemo(() => {
     const q = empSearch.trim().toLowerCase();
     const all = (data.allEmployeesDirectory || []).filter(
-      (employee: any) => !employee.archived || monthAttendances.some((attendance: any) => Number(attendance.employeeId) === Number(employee.id))
+      (employee: any) =>
+        !employee.archived ||
+        monthAttendances.some(
+          (attendance: any) => Number(attendance.employeeId) === Number(employee.id)
+        )
     );
     if (!q) return all;
     return all.filter(
@@ -3347,20 +3210,37 @@ export function MonthlyAttendanceView({
 
   const reportToday = getTodayLocal();
   const reportCurrentMonth = reportToday.slice(0, 7);
-  const elapsedMonthDayCount = selectedMonth < reportCurrentMonth
-    ? daysInMonth
-    : selectedMonth > reportCurrentMonth
-      ? 0
-      : Number(reportToday.slice(8, 10)) - (getNowTimeBD() > "09:30" ? 0 : 1);
+  const elapsedMonthDayCount =
+    selectedMonth < reportCurrentMonth
+      ? daysInMonth
+      : selectedMonth > reportCurrentMonth
+        ? 0
+        : Number(reportToday.slice(8, 10)) - (getNowTimeBD() > "09:30" ? 0 : 1);
+
+  // ⭐ চলতি মাসে কত কর্মদিবস গেছে (সাপ্তাহিক ছুটি বাদে) — উপস্থিতির হারের সঠিক denominator
+  const elapsedWorkdayCount = useMemo(() => {
+    let count = 0;
+    for (let day = 1; day <= elapsedMonthDayCount; day++) {
+      const date = `${selectedMonth}-${String(day).padStart(2, "0")}`;
+      if (!isWeeklyRestDate(date)) count++;
+    }
+    return count;
+  }, [elapsedMonthDayCount, selectedMonth]);
 
   // Monthly totals count elapsed workdays, once per employee/date.
   const empMonthlySummary = useMemo(() => {
     const map = new Map<
       number,
       {
-        present: number; late: number; leave: number; absent: number;
-        totalHours: number; totalOT: number; totalLateMin: number;
-        firstIn: string; lastOut: string;
+        present: number;
+        late: number;
+        leave: number;
+        absent: number;
+        totalHours: number;
+        totalOT: number;
+        totalLateMin: number;
+        firstIn: string;
+        lastOut: string;
       }
     >();
 
@@ -3369,17 +3249,28 @@ export function MonthlyAttendanceView({
       const employeeId = Number(employee.id);
       if (!Number.isInteger(employeeId) || employeeId <= 0) continue;
       const summary = {
-        present: 0, late: 0, leave: 0, absent: 0,
-        totalHours: 0, totalOT: 0, totalLateMin: 0,
-        firstIn: "99:99", lastOut: "00:00",
+        present: 0,
+        late: 0,
+        leave: 0,
+        absent: 0,
+        totalHours: 0,
+        totalOT: 0,
+        totalLateMin: 0,
+        firstIn: "99:99",
+        lastOut: "00:00",
       };
 
       for (let day = 1; day <= elapsedMonthDayCount; day++) {
         const date = `${selectedMonth}-${String(day).padStart(2, "0")}`;
         const attendance = dailyAttendanceMap.get(`${employeeId}_${date}`);
         const hasPunch = Boolean(attendance?.morningIn || attendance?.afternoonIn);
-        const present = hasPunch || ["Present", "Late", "Early Leave", "Missing Checkout"].includes(attendance?.status || "");
-        const leave = attendance?.status === "Leave" ||
+        const present =
+          hasPunch ||
+          ["Present", "Late", "Early Leave", "Missing Checkout"].includes(
+            attendance?.status || ""
+          );
+        const leave =
+          attendance?.status === "Leave" ||
           hasApprovedLeaveOn(data.leaveRequests || [], employeeId, date);
 
         if (attendance?.status === "Holiday") continue;
@@ -3406,45 +3297,76 @@ export function MonthlyAttendanceView({
     }
 
     return map;
-  }, [data.allEmployeesDirectory, data.leaveRequests, dailyAttendanceMap, elapsedMonthDayCount, selectedMonth]);
+  }, [
+    data.allEmployeesDirectory,
+    data.leaveRequests,
+    dailyAttendanceMap,
+    elapsedMonthDayCount,
+    selectedMonth,
+  ]);
 
-  const getDayAtt = (empId: number, day: number) => {
-    const dateStr = `${selectedMonth}-${String(day).padStart(2, "0")}`;
-    return dailyAttendanceMap.get(`${Number(empId)}_${dateStr}`);
-  };
+  const getDayAttendanceState = useCallback(
+    (employeeId: number, day: number) => {
+      const date = `${selectedMonth}-${String(day).padStart(2, "0")}`;
+      const attendance = dailyAttendanceMap.get(`${Number(employeeId)}_${date}`);
+      const hasPunch = Boolean(attendance?.morningIn || attendance?.afternoonIn);
+      const isPresent =
+        hasPunch ||
+        ["Present", "Late", "Early Leave", "Missing Checkout"].includes(
+          attendance?.status || ""
+        );
+      const isHoliday = !isPresent && attendance?.status === "Holiday";
+      const isWeeklyRest = !isPresent && !isHoliday && isWeeklyRestDate(date);
+      const isLeave =
+        !isPresent &&
+        !isHoliday &&
+        !isWeeklyRest &&
+        (attendance?.status === "Leave" ||
+          hasApprovedLeaveOn(data.leaveRequests || [], Number(employeeId), date));
+      const isAbsent =
+        !isPresent && !isHoliday && !isWeeklyRest && !isLeave && day <= elapsedMonthDayCount;
+      // ⭐ ভবিষ্যতের দিন — কোনো কিছুই নয়
+      const isFuture = day > elapsedMonthDayCount && !isPresent && !isLeave && !isHoliday;
 
-  const getDayAttendanceState = useCallback((employeeId: number, day: number) => {
-    const date = `${selectedMonth}-${String(day).padStart(2, "0")}`;
-    const attendance = dailyAttendanceMap.get(`${Number(employeeId)}_${date}`);
-    const hasPunch = Boolean(attendance?.morningIn || attendance?.afternoonIn);
-    const isPresent = hasPunch || ["Present", "Late", "Early Leave", "Missing Checkout"].includes(attendance?.status || "");
-    const isHoliday = !isPresent && attendance?.status === "Holiday";
-    const isWeeklyRest = !isPresent && !isHoliday && isWeeklyRestDate(date);
-    const isLeave = !isPresent && !isHoliday && !isWeeklyRest && (
-      attendance?.status === "Leave" ||
-      hasApprovedLeaveOn(data.leaveRequests || [], Number(employeeId), date)
-    );
-    const isAbsent = !isPresent && !isHoliday && !isWeeklyRest && !isLeave && day <= elapsedMonthDayCount;
-    const morning = attendance?.morningIn || attendance?.morningOut
-      ? `১ম ${attendance.morningIn || "?"}-${attendance.morningOut || "?"}`
-      : "";
-    const afternoon = attendance?.afternoonIn || attendance?.eveningOut
-      ? `২য় ${attendance.afternoonIn || "?"}-${attendance.eveningOut || "?"}`
-      : "";
-    const punchDetails = [morning, afternoon].filter(Boolean).join("\n");
-    const text = isLeave
-      ? "LV"
-      : isHoliday
-        ? "H"
-        : isWeeklyRest
-          ? "W"
-          : isAbsent
-            ? "A"
-            : `${attendance?.status === "Late" ? "L\n" : ""}${punchDetails || (attendance?.status === "Present" ? "P" : "")}`;
-    return { attendance, isPresent, isLate: attendance?.status === "Late", isLeave, isHoliday, isWeeklyRest, isAbsent, text };
-  }, [data.leaveRequests, dailyAttendanceMap, elapsedMonthDayCount, selectedMonth]);
+      const morning =
+        attendance?.morningIn || attendance?.morningOut
+          ? `১ম ${attendance.morningIn || "?"}-${attendance.morningOut || "?"}`
+          : "";
+      const afternoon =
+        attendance?.afternoonIn || attendance?.eveningOut
+          ? `২য় ${attendance.afternoonIn || "?"}-${attendance.eveningOut || "?"}`
+          : "";
+      const punchDetails = [morning, afternoon].filter(Boolean).join("\n");
+      const text = isLeave
+        ? "LV"
+        : isHoliday
+          ? "H"
+          : isWeeklyRest
+            ? "W"
+            : isAbsent
+              ? "A"
+              : isFuture
+                ? ""
+                : `${attendance?.status === "Late" ? "L\n" : ""}${
+                    punchDetails || (attendance?.status === "Present" ? "P" : "")
+                  }`;
 
-  // নির্বাচিত কর্মচারীর ১ থেকে ৩০ দিনের পূর্ণাঙ্গ দিনভিত্তিক রেকর্ড
+      return {
+        attendance,
+        isPresent,
+        isLate: attendance?.status === "Late",
+        isLeave,
+        isHoliday,
+        isWeeklyRest,
+        isAbsent,
+        isFuture,
+        text,
+      };
+    },
+    [data.leaveRequests, dailyAttendanceMap, elapsedMonthDayCount, selectedMonth]
+  );
+
+  // নির্বাচিত কর্মচারীর পূর্ণাঙ্গ দিনভিত্তিক রেকর্ড
   const individualDays = useMemo(() => {
     if (!activeEmpId) return [];
     return daysArray.map((day) => {
@@ -3469,40 +3391,60 @@ export function MonthlyAttendanceView({
   // ব্যক্তিগত সারাংশ
   const individualStats = useMemo(() => {
     if (!activeEmpId) return null;
-    return empMonthlySummary.get(Number(activeEmpId)) || {
-      present: 0, late: 0, leave: 0, absent: 0,
-      totalHours: 0, totalOT: 0, totalLateMin: 0,
-      firstIn: "99:99", lastOut: "00:00",
-    };
+    return (
+      empMonthlySummary.get(Number(activeEmpId)) || {
+        present: 0,
+        late: 0,
+        leave: 0,
+        absent: 0,
+        totalHours: 0,
+        totalOT: 0,
+        totalLateMin: 0,
+        firstIn: "99:99",
+        lastOut: "00:00",
+      }
+    );
   }, [activeEmpId, empMonthlySummary]);
 
-  const individualEmp = activeEmpId ? empMap.get(Number(activeEmpId)) || {
-    name: currentUser.name,
-    empCode: currentUser.empCode || "EMP",
-    designation: currentUser.role,
-    department: "General",
-  } : null;
+  const individualEmp = activeEmpId
+    ? empMap.get(Number(activeEmpId)) || {
+        name: currentUser.name,
+        empCode: currentUser.empCode || "EMP",
+        designation: currentUser.role,
+        department: "General",
+      }
+    : null;
 
   // CSV Exports
   const exportMonthlyCSV = () => {
-    const headers = ["Employee", "Employee ID", "Code", ...daysArray.map((d) => `Day ${d}`), "Present", "Late", "Leave", "Total Hrs", "OT Hrs"];
+    const headers = [
+      "Employee",
+      "Employee ID",
+      "Code",
+      ...daysArray.map((d) => `Day ${d}`),
+      "Present",
+      "Late",
+      "Leave",
+      "Total Hrs",
+      "OT Hrs",
+    ];
     const rows = filteredEmployees.map((emp: any) => {
       const s = empMonthlySummary.get(Number(emp.id));
-      const dayCells = daysArray.map((d) => {
-        return getDayAttendanceState(Number(emp.id), d).text;
-      });
+      const dayCells = daysArray.map((d) => getDayAttendanceState(Number(emp.id), d).text);
       return [
-        emp.name, emp.id, emp.empCode, ...dayCells,
-        s?.present || 0, s?.late || 0, s?.leave || 0,
-        (s?.totalHours || 0).toFixed(2), (s?.totalOT || 0).toFixed(2),
+        emp.name,
+        emp.id,
+        emp.empCode,
+        ...dayCells,
+        s?.present || 0,
+        s?.late || 0,
+        s?.leave || 0,
+        (s?.totalHours || 0).toFixed(2),
+        (s?.totalOT || 0).toFixed(2),
       ];
     });
     const csv = [headers, ...rows]
-      .map((r) =>
-        r
-          .map((c: unknown) => `"${String(c ?? "").replace(/"/g, '""')}"`)
-          .join(",")
-      )
+      .map((r) => r.map((c: unknown) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
       .join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -3515,23 +3457,52 @@ export function MonthlyAttendanceView({
 
   const exportIndividualCSV = () => {
     if (!individualEmp) return;
-    const headers = ["Date", "Day", "Morning IN", "Morning OUT", "Afternoon IN", "Evening OUT", "Working Hrs", "OT Hrs", "Late (min)", "Status", "Notes"];
+    const headers = [
+      "Date",
+      "Day",
+      "Morning IN",
+      "Morning OUT",
+      "Afternoon IN",
+      "Evening OUT",
+      "Working Hrs",
+      "OT Hrs",
+      "Late (min)",
+      "Status",
+      "Notes",
+    ];
     const rows = individualDays.map((d) => {
       const att = d.att;
       return [
-        d.date, d.weekday,
-        att?.morningIn || "", att?.morningOut || "",
-        att?.afternoonIn || "", att?.eveningOut || "",
+        d.date,
+        d.weekday,
+        att?.morningIn || "",
+        att?.morningOut || "",
+        att?.afternoonIn || "",
+        att?.eveningOut || "",
         (att?.workingHours || 0).toFixed(2),
         (att?.overtimeHours || 0).toFixed(2),
         att?.lateMinutes || 0,
-        att?.status || (d.isApprovedLeave ? "LV" : d.isHoliday ? "Holiday" : d.isFriday ? "Weekly Rest" : d.isAbsent ? "A" : d.isSunday ? "Sunday" : "No Record"),
+        att?.status ||
+          (d.isApprovedLeave
+            ? "LV"
+            : d.isHoliday
+              ? "Holiday"
+              : d.isFriday
+                ? "Weekly Rest"
+                : d.isAbsent
+                  ? "A"
+                  : d.isSunday
+                    ? "Sunday"
+                    : "No Record"),
         att?.notes || "",
       ];
     });
     const totalsRow = [
-      "TOTAL", "", individualStats?.firstIn === "99:99" ? "" : individualStats?.firstIn,
-      "", "",
+      "TOTAL",
+      "",
+      individualStats?.firstIn === "99:99" ? "" : individualStats?.firstIn,
+      "",
+      "",
       individualStats?.lastOut === "00:00" ? "" : individualStats?.lastOut,
       (individualStats?.totalHours || 0).toFixed(2),
       (individualStats?.totalOT || 0).toFixed(2),
@@ -3539,12 +3510,8 @@ export function MonthlyAttendanceView({
       `P:${individualStats?.present} L:${individualStats?.late} LV:${individualStats?.leave} A:${individualStats?.absent}`,
       "",
     ];
-        const csv = [headers, ...rows, totalsRow]
-      .map((r) =>
-        r
-          .map((c: unknown) => `"${String(c ?? "").replace(/"/g, '""')}"`)
-          .join(",")
-      )
+    const csv = [headers, ...rows, totalsRow]
+      .map((r) => r.map((c: unknown) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
       .join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -3557,7 +3524,12 @@ export function MonthlyAttendanceView({
   };
 
   const monthStats = useMemo(() => {
-    let present = 0, late = 0, leave = 0, absent = 0, ot = 0, hours = 0;
+    let present = 0,
+      late = 0,
+      leave = 0,
+      absent = 0,
+      ot = 0,
+      hours = 0;
     filteredEmployees.forEach((employee: any) => {
       const summary = empMonthlySummary.get(Number(employee.id));
       if (!summary) return;
@@ -3601,14 +3573,15 @@ export function MonthlyAttendanceView({
               className="px-3 py-2.5 rounded-xl bg-white/95 text-slate-800 text-sm font-bold focus:ring-2 focus:ring-white"
             />
 
-            {/* বাটনগুলো শুধুমাত্র Owner, MD, Manager, HR দেখতে পাবেন */}
             {isManagement && (
               <>
                 <button
                   type="button"
                   onClick={() => setViewMode("grid")}
                   className={`px-3 py-2.5 rounded-xl font-semibold text-xs border ${
-                    viewMode === "grid" ? "bg-white text-indigo-700 border-white" : "bg-white/20 border-white/30"
+                    viewMode === "grid"
+                      ? "bg-white text-indigo-700 border-white"
+                      : "bg-white/20 border-white/30"
                   }`}
                 >
                   📅 সবার গ্রিড
@@ -3617,7 +3590,9 @@ export function MonthlyAttendanceView({
                   type="button"
                   onClick={() => setViewMode("summary")}
                   className={`px-3 py-2.5 rounded-xl font-semibold text-xs border ${
-                    viewMode === "summary" ? "bg-white text-indigo-700 border-white" : "bg-white/20 border-white/30"
+                    viewMode === "summary"
+                      ? "bg-white text-indigo-700 border-white"
+                      : "bg-white/20 border-white/30"
                   }`}
                 >
                   📊 সবার সারাংশ
@@ -3626,7 +3601,9 @@ export function MonthlyAttendanceView({
                   type="button"
                   onClick={() => setViewMode("individual")}
                   className={`px-3 py-2.5 rounded-xl font-semibold text-xs border ${
-                    viewMode === "individual" ? "bg-white text-indigo-700 border-white" : "bg-white/20 border-white/30"
+                    viewMode === "individual"
+                      ? "bg-white text-indigo-700 border-white"
+                      : "bg-white/20 border-white/30"
                   }`}
                 >
                   👤 একজন করে
@@ -3638,11 +3615,10 @@ export function MonthlyAttendanceView({
       </div>
 
       {/* ================================================================
-          ⭐ VIEW 3: INDIVIDUAL — একজন করে আলাদাভাবে দেখা (৪টি পাঞ্চসহ)
+          VIEW 3: INDIVIDUAL — একজন করে আলাদাভাবে দেখা (৪টি পাঞ্চসহ)
           ================================================================ */}
       {viewMode === "individual" && (
         <div className="space-y-4">
-          {/* Employee Picker: শুধুমাত্র Owner / MD / Manager / HR দেখতে পাবেন */}
           {isManagement && (
             <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
               <h3 className="text-sm font-bold text-slate-900">
@@ -3715,7 +3691,12 @@ export function MonthlyAttendanceView({
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                 <div className="bg-white rounded-xl p-3 border border-emerald-200">
                   <p className="text-[10px] text-slate-500 uppercase font-bold">উপস্থিত</p>
-                  <p className="text-xl font-bold text-emerald-600">{individualStats.present}<span className="text-xs text-slate-400">/{individualStats.present + individualStats.absent + individualStats.leave}</span></p>
+                  <p className="text-xl font-bold text-emerald-600">
+                    {individualStats.present}
+                    <span className="text-xs text-slate-400">
+                      /{individualStats.present + individualStats.absent + individualStats.leave}
+                    </span>
+                  </p>
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-amber-200">
                   <p className="text-[10px] text-slate-500 uppercase font-bold">দেরি</p>
@@ -3732,16 +3713,30 @@ export function MonthlyAttendanceView({
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-slate-200">
                   <p className="text-[10px] text-slate-500 uppercase font-bold">মোট ঘণ্টা</p>
-                  <p className="text-xl font-bold text-slate-800">{individualStats.totalHours.toFixed(0)}h</p>
+                  <p className="text-xl font-bold text-slate-800">
+                    {individualStats.totalHours.toFixed(0)}h
+                  </p>
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-indigo-200">
                   <p className="text-[10px] text-slate-500 uppercase font-bold">মোট OT</p>
-                  <p className="text-xl font-bold text-indigo-600">{individualStats.totalOT.toFixed(1)}h</p>
+                  <p className="text-xl font-bold text-indigo-600">
+                    {individualStats.totalOT.toFixed(1)}h
+                  </p>
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-purple-200">
                   <p className="text-[10px] text-slate-500 uppercase font-bold">উপস্থিতি হার</p>
                   <p className="text-xl font-bold text-purple-600">
-                    {daysInMonth > 0 ? Math.round(((individualStats.present + individualStats.leave) / daysInMonth) * 100) : 0}%
+                    {elapsedWorkdayCount > 0
+                      ? Math.round(
+                          ((individualStats.present + individualStats.leave) /
+                            elapsedWorkdayCount) *
+                            100
+                        )
+                      : 0}
+                    %
+                  </p>
+                  <p className="text-[9px] text-slate-400">
+                    {elapsedWorkdayCount} কর্মদিবস পর্যন্ত
                   </p>
                 </div>
               </div>
@@ -3765,35 +3760,42 @@ export function MonthlyAttendanceView({
                   <p className="text-lg font-bold font-mono text-slate-800 mt-0.5">
                     {individualStats.present > 0
                       ? (individualStats.totalHours / individualStats.present).toFixed(1)
-                      : "0"}h
+                      : "0"}
+                    h
                   </p>
                 </div>
               </div>
 
-              {/* ⭐ Calendar Grid: একজনের পুরো মাস (সকাল ও বিকালের পাঞ্চসহ) */}
+              {/* Calendar Grid */}
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-200 bg-slate-50">
                   <h3 className="text-sm font-bold text-slate-900">
                     🗓️ {individualEmp.name} — {monthName} ক্যালেন্ডার
                   </h3>
-                  <p className="text-[11px] text-slate-500">প্রতিটি ঘরে সেই দিনের সকাল ও বিকালের IN / OUT টাইম</p>
+                  <p className="text-[11px] text-slate-500">
+                    প্রতিটি ঘরে সেই দিনের সকাল ও বিকালের IN / OUT টাইম
+                  </p>
                 </div>
                 <div className="p-2 sm:p-4 grid grid-cols-2 sm:grid-cols-7 gap-2">
                   {["রবি", "সোম", "মঙ্গল", "বুধ", "বৃহঃ", "শুক্র", "শনি"].map((wd) => (
-                    <div key={wd} className="hidden sm:block text-center text-[10px] font-bold text-slate-500 uppercase pb-1">
+                    <div
+                      key={wd}
+                      className="hidden sm:block text-center text-[10px] font-bold text-slate-500 uppercase pb-1"
+                    >
                       {wd}
                     </div>
                   ))}
-                  {Array.from({ length: new Date(`${selectedMonth}-01T00:00:00Z`).getUTCDay() }, (_, i) => (
-                    <div key={`empty-${i}`} className="hidden sm:block" />
-                  ))}
+                  {Array.from(
+                    { length: new Date(`${selectedMonth}-01T00:00:00Z`).getUTCDay() },
+                    (_, i) => (
+                      <div key={`empty-${i}`} className="hidden sm:block" />
+                    )
+                  )}
                   {individualDays.map((d) => {
                     const att = d.att;
                     const state = getDayAttendanceState(Number(activeEmpId), d.day);
                     let bg = "bg-slate-50 border-slate-200";
-                    let content = (
-                      <div className="text-slate-300 text-lg font-bold">{d.day}</div>
-                    );
+                    let content = <div className="text-slate-300 text-lg font-bold">{d.day}</div>;
 
                     if (state.isLeave) {
                       bg = "bg-blue-50 border-blue-300";
@@ -3805,18 +3807,39 @@ export function MonthlyAttendanceView({
                       );
                     } else if (state.isHoliday) {
                       bg = "bg-slate-100 border-slate-300";
-                      content = <div className="text-slate-600 text-sm font-bold">{d.day}<div className="text-[10px]">H</div></div>;
+                      content = (
+                        <div className="text-slate-600 text-sm font-bold">
+                          {d.day}
+                          <div className="text-[10px]">H</div>
+                        </div>
+                      );
                     } else if (state.isPresent) {
-                      bg = state.isLate ? "bg-amber-50 border-amber-300" : "bg-emerald-50 border-emerald-300";
+                      bg = state.isLate
+                        ? "bg-amber-50 border-amber-300"
+                        : "bg-emerald-50 border-emerald-300";
                       content = (
                         <div className="text-[10px] leading-tight">
-                          <div className={`font-bold ${state.isLate ? "text-amber-800" : "text-emerald-800"}`}>
+                          <div
+                            className={`font-bold ${
+                              state.isLate ? "text-amber-800" : "text-emerald-800"
+                            }`}
+                          >
                             {d.day} {state.isLate && "L"}
                           </div>
-                          {att?.morningIn && <div className="font-mono text-emerald-700">১ম: {att.morningIn}-{att.morningOut || "?"}</div>}
-                          {att?.afternoonIn && <div className="font-mono text-blue-700">২য়: {att.afternoonIn}-{att.eveningOut || "?"}</div>}
+                          {att?.morningIn && (
+                            <div className="font-mono text-emerald-700">
+                              ১ম: {att.morningIn}-{att.morningOut || "?"}
+                            </div>
+                          )}
+                          {att?.afternoonIn && (
+                            <div className="font-mono text-blue-700">
+                              ২য়: {att.afternoonIn}-{att.eveningOut || "?"}
+                            </div>
+                          )}
                           {Number(att?.overtimeHours) > 0 && (
-                            <div className="text-[9px] font-bold text-indigo-600">+{att?.overtimeHours}h OT</div>
+                            <div className="text-[9px] font-bold text-indigo-600">
+                              +{att?.overtimeHours}h OT
+                            </div>
                           )}
                         </div>
                       );
@@ -3831,13 +3854,21 @@ export function MonthlyAttendanceView({
                     } else if (state.isAbsent) {
                       bg = "bg-rose-50 border-rose-200";
                       content = (
-                        <div className="text-rose-700 text-sm font-bold">{d.day}<div className="text-[10px]">A</div></div>
+                        <div className="text-rose-700 text-sm font-bold">
+                          {d.day}
+                          <div className="text-[10px]">A</div>
+                        </div>
                       );
                     }
 
                     return (
-                      <div key={d.day} className={`min-h-[70px] p-1.5 rounded-lg border ${bg} transition hover:shadow-sm`}>
-                        <span className="block text-[10px] font-semibold text-slate-500 sm:hidden">{d.weekdayBn}</span>
+                      <div
+                        key={d.day}
+                        className={`min-h-[70px] p-1.5 rounded-lg border ${bg} transition hover:shadow-sm`}
+                      >
+                        <span className="block text-[10px] font-semibold text-slate-500 sm:hidden">
+                          {d.weekdayBn}
+                        </span>
                         {content}
                       </div>
                     );
@@ -3845,17 +3876,18 @@ export function MonthlyAttendanceView({
                 </div>
               </div>
 
-                            {/* ⭐ Detailed Daily Table — ৪টি পাঞ্চসহ ১ থেকে ৩০ দিনের পূর্ণ বিবরণী */}
+              {/* Detailed Daily Table */}
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-sm font-bold text-slate-900">
-                    📋 দৈনিক বিস্তারিত রেজিস্টার (সকাল ও বিকাল ৪টি পাঞ্চ) — {fixBanglaEncoding(individualEmp?.name)}
+                    📋 দৈনিক বিস্তারিত রেজিস্টার (৪টি পাঞ্চ) —{" "}
+                    {fixBanglaEncoding(individualEmp?.name)}
                   </h3>
                   <span className="text-xs text-slate-500">
                     শিফট ১: ০৯:৩০–০১:১৫ | বিরতি | শিফট ২: ০২:৩০–০৭:৩০
                   </span>
                 </div>
-                {/* মোবাইলে ব্যক্তিগত দৈনিক কার্ড; desktop table অক্ষত */}
+
                 <div className="space-y-2 p-3 md:hidden">
                   {individualDays.map((d) => {
                     const att = d.att;
@@ -3895,7 +3927,7 @@ export function MonthlyAttendanceView({
                             </p>
                           </div>
                           <div className="min-w-0 rounded-lg bg-blue-50 p-2">
-                            ২য় শিফট
+                            ২য় শিফট
                             <p className="font-mono font-bold">
                               {att?.afternoonIn || "—"} – {att?.eveningOut || "—"}
                             </p>
@@ -3904,25 +3936,34 @@ export function MonthlyAttendanceView({
 
                         {att && (
                           <p className="mt-2 break-words text-[11px] text-slate-600">
-                            কাজ: {Number(att.workingHours || 0).toFixed(1)}h
-                            {" • "}OT: {Number(att.overtimeHours || 0).toFixed(1)}h
-                            {" • "}লেট: {att.lateMinutes || 0}m
+                            কাজ: {Number(att.workingHours || 0).toFixed(1)}h{" • "}OT:{" "}
+                            {Number(att.overtimeHours || 0).toFixed(1)}h{" • "}লেট:{" "}
+                            {att.lateMinutes || 0}m
                           </p>
                         )}
                       </article>
                     );
                   })}
                 </div>
+
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left text-xs min-w-[850px]">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
                         <th className="p-2.5">তারিখ</th>
                         <th className="p-2.5">বার</th>
-                        <th className="p-2.5 text-center bg-emerald-50 text-emerald-800">১. সকাল IN (০৯:৩০)</th>
-                        <th className="p-2.5 text-center bg-emerald-50 text-emerald-800">২. দুপুর OUT (০১:১৫)</th>
-                        <th className="p-2.5 text-center bg-blue-50 text-blue-800">৩. দুপুর IN (০২:৩০)</th>
-                        <th className="p-2.5 text-center bg-blue-50 text-blue-800">৪. রাত OUT (০৭:৩০)</th>
+                        <th className="p-2.5 text-center bg-emerald-50 text-emerald-800">
+                          ১. সকাল IN (০৯:৩০)
+                        </th>
+                        <th className="p-2.5 text-center bg-emerald-50 text-emerald-800">
+                          ২. দুপুর OUT (০১:১৫)
+                        </th>
+                        <th className="p-2.5 text-center bg-blue-50 text-blue-800">
+                          ৩. দুপুর IN (০২:৩০)
+                        </th>
+                        <th className="p-2.5 text-center bg-blue-50 text-blue-800">
+                          ৪. রাত OUT (০৭:৩০)
+                        </th>
                         <th className="p-2.5 text-center">ঘণ্টা</th>
                         <th className="p-2.5 text-center">OT</th>
                         <th className="p-2.5 text-center">দেরি</th>
@@ -3938,44 +3979,35 @@ export function MonthlyAttendanceView({
                         return (
                           <tr
                             key={d.day}
-                            className={`hover:bg-slate-50 ${d.isFriday ? "bg-purple-50/20" : d.isSunday ? "bg-slate-50/50" : ""}`}
+                            className={`hover:bg-slate-50 ${
+                              d.isFriday ? "bg-purple-50/20" : d.isSunday ? "bg-slate-50/50" : ""
+                            }`}
                           >
                             <td className="p-2.5 font-semibold text-slate-800">{d.date}</td>
                             <td className="p-2.5 text-slate-500">
-                              {d.weekdayBn} {d.isFriday && <span className="text-purple-600 font-bold">(ছুটি)</span>} {d.isSunday && <span className="text-slate-400">*</span>}
+                              {d.weekdayBn}{" "}
+                              {d.isFriday && <span className="text-purple-600 font-bold">(ছুটি)</span>}{" "}
+                              {d.isSunday && <span className="text-slate-400">*</span>}
                             </td>
-
-                            {/* ১. সকাল IN */}
                             <td className="p-2.5 text-center font-mono font-bold text-emerald-700 bg-emerald-50/20">
                               {att?.morningIn || "—"}
                             </td>
-
-                            {/* ২. দুপুর OUT */}
                             <td className="p-2.5 text-center font-mono font-bold text-emerald-700 bg-emerald-50/20">
                               {att?.morningOut || "—"}
                             </td>
-
-                            {/* ৩. দুপুর IN */}
                             <td className="p-2.5 text-center font-mono font-bold text-blue-700 bg-blue-50/20">
                               {att?.afternoonIn || "—"}
                             </td>
-
-                            {/* ৪. রাত OUT */}
                             <td className="p-2.5 text-center font-mono font-bold text-blue-700 bg-blue-50/20">
-                              {att?.eveningOut || (att?.afternoonIn ? "কার্যরত" : "—")}
+                              {att?.eveningOut ||
+                                (att?.afternoonIn && d.date === reportToday ? "কার্যরত" : "—")}
                             </td>
-
-                            {/* মোট ঘণ্টা */}
                             <td className="p-2.5 text-center font-semibold">
                               {att?.workingHours ? `${Number(att.workingHours).toFixed(1)}h` : "—"}
                             </td>
-
-                            {/* OT */}
                             <td className="p-2.5 text-center text-indigo-600 font-semibold">
                               {Number(att?.overtimeHours || 0) > 0 ? `${att?.overtimeHours}h` : "—"}
                             </td>
-
-                            {/* দেরি */}
                             <td className="p-2.5 text-center">
                               {Number(att?.lateMinutes || 0) > 0 ? (
                                 <span className="text-amber-600 font-bold">{att?.lateMinutes}m</span>
@@ -3983,18 +4015,30 @@ export function MonthlyAttendanceView({
                                 <span className="text-slate-300">—</span>
                               )}
                             </td>
-
-                            {/* স্ট্যাটাস */}
                             <td className="p-2.5 text-center">
-                              {state.isPresent && att ? <StatusBadge status={att.status || "Present"} />
-                                : state.isLeave ? <span className="text-blue-700 font-bold">LV</span>
-                                  : state.isHoliday ? <span className="text-slate-600 font-bold">H</span>
-                                    : state.isWeeklyRest ? <span className="text-purple-700 font-bold">W</span>
-                                      : state.isAbsent ? <span className="text-rose-700 font-bold">A</span>
-                                        : <span className="text-slate-400">—</span>}
+                              {state.isPresent && att ? (
+                                <StatusBadge status={att.status || "Present"} />
+                              ) : state.isLeave ? (
+                                <span className="text-blue-700 font-bold">LV</span>
+                              ) : state.isHoliday ? (
+                                <span className="text-slate-600 font-bold">H</span>
+                              ) : state.isWeeklyRest ? (
+                                <span className="text-purple-700 font-bold">W</span>
+                              ) : state.isAbsent ? (
+                                <span className="text-rose-700 font-bold">A</span>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              )}
                             </td>
                             <td className="p-2.5 text-slate-500 text-[11px] max-w-40 truncate">
-                              {fixBanglaEncoding(att?.notes) || (state.isLeave ? "অনুমোদিত ছুটি" : state.isHoliday ? "ছুটি" : state.isWeeklyRest ? "সাপ্তাহিক ছুটি" : "—")}
+                              {fixBanglaEncoding(att?.notes) ||
+                                (state.isLeave
+                                  ? "অনুমোদিত ছুটি"
+                                  : state.isHoliday
+                                    ? "ছুটি"
+                                    : state.isWeeklyRest
+                                      ? "সাপ্তাহিক ছুটি"
+                                      : "—")}
                             </td>
                           </tr>
                         );
@@ -4002,15 +4046,27 @@ export function MonthlyAttendanceView({
                     </tbody>
                     <tfoot>
                       <tr className="bg-indigo-50 border-t-2 border-indigo-300 font-bold">
-                        <td className="p-2.5" colSpan={2}>মোট ({daysInMonth} দিন)</td>
-                        <td className="p-2.5 text-center font-mono" colSpan={4}>
-                          সকাল শুরু: {individualStats.firstIn === "99:99" ? "—" : individualStats.firstIn} • ছুটি: {individualStats.lastOut === "00:00" ? "—" : individualStats.lastOut}
+                        <td className="p-2.5" colSpan={2}>
+                          মোট ({daysInMonth} দিন)
                         </td>
-                        <td className="p-2.5 text-center">{Number(individualStats.totalHours || 0).toFixed(1)}h</td>
-                        <td className="p-2.5 text-center text-indigo-700">{Number(individualStats.totalOT || 0).toFixed(1)}h</td>
-                        <td className="p-2.5 text-center text-amber-700">{individualStats.totalLateMin}m</td>
+                        <td className="p-2.5 text-center font-mono" colSpan={4}>
+                          সকাল শুরু:{" "}
+                          {individualStats.firstIn === "99:99" ? "—" : individualStats.firstIn} •
+                          ছুটি:{" "}
+                          {individualStats.lastOut === "00:00" ? "—" : individualStats.lastOut}
+                        </td>
+                        <td className="p-2.5 text-center">
+                          {Number(individualStats.totalHours || 0).toFixed(1)}h
+                        </td>
+                        <td className="p-2.5 text-center text-indigo-700">
+                          {Number(individualStats.totalOT || 0).toFixed(1)}h
+                        </td>
+                        <td className="p-2.5 text-center text-amber-700">
+                          {individualStats.totalLateMin}m
+                        </td>
                         <td className="p-2.5 text-center text-[11px]" colSpan={2}>
-                          উপস্থিত: {individualStats.present} | দেরি: {individualStats.late} | ছুটি: {individualStats.leave} | অনুপস্থিত: {individualStats.absent}
+                          উপস্থিত: {individualStats.present} | দেরি: {individualStats.late} | ছুটি:{" "}
+                          {individualStats.leave} | অনুপস্থিত: {individualStats.absent}
                         </td>
                       </tr>
                     </tfoot>
@@ -4050,11 +4106,10 @@ export function MonthlyAttendanceView({
                 📊 {monthName} — কর্মচারী সারাংশ (নামে ক্লিক করলে ব্যক্তিগত ভিউ)
               </h3>
             </div>
-            {/* মোবাইলে কর্মচারী সারাংশ; desktop table অক্ষত */}
+
             <div className="space-y-2 p-3 md:hidden">
               {filteredEmployees.map((emp: any) => {
                 const s = empMonthlySummary.get(Number(emp.id));
-
                 return (
                   <button
                     key={emp.id}
@@ -4072,13 +4127,14 @@ export function MonthlyAttendanceView({
                       {fixBanglaEncoding(emp.designation)} • {emp.empCode}
                     </span>
                     <span className="mt-2 block text-xs text-slate-700">
-                      উপস্থিত {s?.present || 0} • দেরি {s?.late || 0} •
-                      ছুটি {s?.leave || 0} • OT {(s?.totalOT || 0).toFixed(1)}h
+                      উপস্থিত {s?.present || 0} • দেরি {s?.late || 0} • ছুটি {s?.leave || 0} • OT{" "}
+                      {(s?.totalOT || 0).toFixed(1)}h
                     </span>
                   </button>
                 );
               })}
             </div>
+
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
@@ -4096,7 +4152,6 @@ export function MonthlyAttendanceView({
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredEmployees.map((emp: any) => {
-                    // ⭐ নিরাপদ নাম্বার টাইপ আইডি লুকআপ
                     const s = empMonthlySummary.get(Number(emp.id));
                     return (
                       <tr key={emp.id} className="hover:bg-slate-50">
@@ -4122,7 +4177,7 @@ export function MonthlyAttendanceView({
                         </td>
                         <td className="p-3 text-center">
                           <span className="font-bold text-emerald-700">{s?.present || 0}</span>
-                          <span className="text-slate-400">/{daysInMonth}</span>
+                          <span className="text-slate-400">/{elapsedWorkdayCount}</span>
                         </td>
                         <td className="p-3 text-center font-bold text-amber-600">{s?.late || 0}</td>
                         <td className="p-3 text-center font-bold text-blue-600">{s?.leave || 0}</td>
@@ -4200,7 +4255,7 @@ export function MonthlyAttendanceView({
                 প্রতিটি সেল = সেই দিনের IN-OUT • L=দেরি, A=অনুপস্থিত, LV=ছুটি
               </p>
             </div>
-            {/* মোবাইলে দিন নির্বাচন করে কর্মীদের দুই শিফট দেখাবে */}
+
             <div className="space-y-3 p-3 md:hidden">
               <label className="block text-xs font-bold text-slate-700">
                 দিন নির্বাচন করুন
@@ -4248,7 +4303,7 @@ export function MonthlyAttendanceView({
                         </p>
                       </div>
                       <div className="min-w-0 rounded-lg bg-blue-50 p-2">
-                        ২য় শিফট
+                        ২য় শিফট
                         <p className="font-mono font-bold">
                           {att?.afternoonIn || "—"} – {att?.eveningOut || "—"}
                         </p>
@@ -4274,6 +4329,7 @@ export function MonthlyAttendanceView({
                 );
               })}
             </div>
+
             <div className="hidden md:block overflow-x-auto">
               <table className="text-[10px] border-collapse">
                 <thead>
@@ -4285,7 +4341,9 @@ export function MonthlyAttendanceView({
                       <th key={d} className="p-1 border border-slate-200 min-w-[100px] text-center">
                         {d}
                         <div className="text-[8px] text-slate-400 font-normal">
-                          {new Date(`${selectedMonth}-${String(d).padStart(2, "0")}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })}
+                          {new Date(
+                            `${selectedMonth}-${String(d).padStart(2, "0")}T00:00:00Z`
+                          ).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })}
                         </div>
                       </th>
                     ))}
@@ -4297,7 +4355,6 @@ export function MonthlyAttendanceView({
                 </thead>
                 <tbody>
                   {filteredEmployees.map((emp: any) => {
-                    // ⭐ নিরাপদ নাম্বার টাইপ আইডি লুকআপ
                     const s = empMonthlySummary.get(Number(emp.id));
                     return (
                       <tr key={emp.id} className="hover:bg-slate-50">
@@ -4316,7 +4373,7 @@ export function MonthlyAttendanceView({
                         </td>
                         {daysArray.map((d) => {
                           const state = getDayAttendanceState(Number(emp.id), d);
-                          const cellContent = state.text || "—";
+                          const cellContent = state.text;
                           let cellClass = "text-slate-300";
                           if (state.isLeave) {
                             cellClass = "text-blue-600 font-bold bg-blue-50";
@@ -4329,9 +4386,9 @@ export function MonthlyAttendanceView({
                           } else if (state.isPresent) {
                             const completedBothShifts = Boolean(
                               state.attendance?.morningIn &&
-                              state.attendance?.morningOut &&
-                              state.attendance?.afternoonIn &&
-                              state.attendance?.eveningOut
+                                state.attendance?.morningOut &&
+                                state.attendance?.afternoonIn &&
+                                state.attendance?.eveningOut
                             );
                             cellClass = state.isLate
                               ? "text-amber-700 font-semibold bg-amber-50"
@@ -4370,26 +4427,31 @@ export function MonthlyAttendanceView({
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-3 flex flex-wrap gap-4 text-[11px] text-slate-600">
-            <span><span className="inline-block w-3 h-3 bg-emerald-50 border border-emerald-300 mr-1 align-middle"></span>IN-OUT সম্পূর্ণ</span>
-            <span><span className="inline-block w-3 h-3 bg-amber-50 border border-amber-300 mr-1 align-middle"></span>দেরি (Late)</span>
-            <span><span className="inline-block w-3 h-3 bg-purple-50 border border-purple-300 mr-1 align-middle"></span>OUT বাকি</span>
-            <span><b className="text-blue-600">LV</b> = ছুটি</span>
-            <span><b className="text-rose-600">A</b> = অনুপস্থিত</span>
-            <span><span className="inline-block w-3 h-3 bg-purple-100 border border-purple-300 mr-1 align-middle"></span>শুক্রবার (ছুটি)</span>
+            <span>
+              <span className="inline-block w-3 h-3 bg-emerald-50 border border-emerald-300 mr-1 align-middle"></span>
+              IN-OUT সম্পূর্ণ
+            </span>
+            <span>
+              <span className="inline-block w-3 h-3 bg-amber-50 border border-amber-300 mr-1 align-middle"></span>
+              দেরি (Late)
+            </span>
+            <span>
+              <span className="inline-block w-3 h-3 bg-purple-50 border border-purple-300 mr-1 align-middle"></span>
+              OUT বাকি
+            </span>
+            <span>
+              <b className="text-blue-600">LV</b> = ছুটি
+            </span>
+            <span>
+              <b className="text-rose-600">A</b> = অনুপস্থিত
+            </span>
+            <span>
+              <span className="inline-block w-3 h-3 bg-purple-100 border border-purple-300 mr-1 align-middle"></span>
+              শুক্রবার (ছুটি)
+            </span>
           </div>
         </>
       )}
     </div>
   );
 }
-
-void Users;
-void DollarSign;
-void Calendar;
-void Filter;
-void X;
-void Edit3;
-void Trash2;
-void Save;
-void TrendingUp;
-void AlertCircle;

@@ -10,7 +10,9 @@ import {
 } from "@/db";
 import { eq, sql } from "drizzle-orm";
 
+// ============================================================================
 // 1. AUDIT TRAIL LOGGER
+// ============================================================================
 export async function logAudit(params: {
   userId?: number | null;
   userName: string;
@@ -35,7 +37,9 @@ export async function logAudit(params: {
   });
 }
 
+// ============================================================================
 // 2. NOTIFICATION DISPATCHER
+// ============================================================================
 export async function createNotification(params: {
   userId?: number | null;
   targetRole?: string;
@@ -71,107 +75,89 @@ export async function createNotification(params: {
   });
 }
 
-// 3. AUTOMATIC ATTENDANCE CALCULATION ENGINE
-// Schedule:
-// Morning: 9:30 AM – 1:15 PM (570m to 795m = 3.75h)
-// Break:   1:15 PM – 2:30 PM (795m to 870m = 1.25h break)
-// Afternoon: 2:30 PM – 7:30 PM (870m to 1170m = 5.00h)
+// ============================================================================
+// 3. ATTENDANCE ENGINE — Option B (flexible punch, fixed office rule)
+// ----------------------------------------------------------------------------
+// • কর্মী যেকোনো সময় IN/OUT দিতে পারবে (11:00 IN → 15:00 OUT → 16:00 IN → 22:00 OUT)
+// • শুধু ক্রম ঠিক থাকতে হবে: IN1 < OUT1 < IN2 < OUT2
+// • মোট কাজ = (OUT1-IN1) + (OUT2-IN2)  → break কাজের সময়ে ধরা হয় না
+// • Late  = প্রথম IN অফিস সময় 09:30-এর পরে হলে (রেকর্ড সবসময় থাকবে)
+// • OT    = মোট কাজ ৮.৭৫ ঘণ্টার বেশি হলে অতিরিক্ত অংশ
+// • Late deduction: ৮.৭৫ ঘণ্টা পূরণ হলে কাটবে না (isLateDeductible)
+// ============================================================================
+export const SHIFT_START_MINUTES = 9 * 60 + 30; // 09:30
+export const SHIFT_END_MINUTES = 19 * 60 + 30; // 19:30
+export const STANDARD_WORK_MINUTES = 8.75 * 60; // 525 মিনিট
+export const STANDARD_WORK_HOURS = 8.75;
+const EARLY_LEAVE_GRACE_MINUTES = 15;
+
+function punchToMinutes(value?: string | null): number | null {
+  if (!value) return null;
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function sessionMinutes(inMinutes: number | null, outMinutes: number | null): number {
+  if (inMinutes === null || outMinutes === null) return 0;
+  return Math.max(0, outMinutes - inMinutes);
+}
+
+function emptyMetrics(status: string) {
+  return {
+    status,
+    lateMinutes: 0,
+    earlyLeaveMinutes: 0,
+    morningHours: "0.00",
+    afternoonHours: "0.00",
+    workingHours: "0.00",
+    overtimeHours: "0.00",
+  };
+}
+
+/**
+ * পুরোনো দুই-punch রেকর্ডের জন্য (legacy correction ইত্যাদি)।
+ * এখন এটাও একই Option B নিয়মে চলে — একটি IN–OUT session হিসেবে।
+ */
 export function calculateAttendanceMetrics(
   checkIn: string | null | undefined,
   checkOut: string | null | undefined,
   overrideStatus?: string
 ) {
   if (overrideStatus === "Leave" || overrideStatus === "Holiday" || overrideStatus === "Absent") {
-    return {
-      status: overrideStatus,
-      lateMinutes: 0,
-      earlyLeaveMinutes: 0,
-      morningHours: "0.00",
-      afternoonHours: "0.00",
-      workingHours: "0.00",
-      overtimeHours: "0.00",
-    };
+    return emptyMetrics(overrideStatus);
+  }
+  const inM = punchToMinutes(checkIn);
+  if (inM === null) return emptyMetrics("Absent");
+
+  const outM = punchToMinutes(checkOut);
+  const lateMinutes = Math.max(0, inM - SHIFT_START_MINUTES);
+
+  if (outM === null) {
+    return { ...emptyMetrics(lateMinutes > 0 ? "Late" : "Present"), lateMinutes };
   }
 
-  if (!checkIn) {
-    return {
-      status: "Absent",
-      lateMinutes: 0,
-      earlyLeaveMinutes: 0,
-      morningHours: "0.00",
-      afternoonHours: "0.00",
-      workingHours: "0.00",
-      overtimeHours: "0.00",
-    };
-  }
-
-  const [inH, inM] = checkIn.split(":").map(Number);
-  const inTotalMinutes = inH * 60 + (inM || 0);
-
-  const morningStartMinutes = 9 * 60 + 30; // 09:30 AM
-  const breakStartMinutes = 13 * 60 + 15; // 01:15 PM
-  const afternoonStartMinutes = 14 * 60 + 30; // 02:30 PM
-  const officialEndMinutes = 19 * 60 + 30; // 07:30 PM (19:30)
-
-  const lateMinutes =
-    inTotalMinutes > morningStartMinutes ? inTotalMinutes - morningStartMinutes : 0;
-
-  if (!checkOut) {
-    return {
-      status: lateMinutes > 0 ? "Late" : "Present",
-      lateMinutes,
-      earlyLeaveMinutes: 0,
-      morningHours: "0.00",
-      afternoonHours: "0.00",
-      workingHours: "0.00",
-      overtimeHours: "0.00",
-    };
-  }
-
-  const [outH, outM] = checkOut.split(":").map(Number);
-  const outTotalMinutes = outH * 60 + (outM || 0);
-
+  const worked = sessionMinutes(inM, outM);
   const earlyLeaveMinutes =
-    outTotalMinutes < officialEndMinutes ? officialEndMinutes - outTotalMinutes : 0;
-
-  // Morning duration: overlap between [inTotalMinutes, outTotalMinutes] and [0, breakStartMinutes]
-  const morningEnd = Math.min(outTotalMinutes, breakStartMinutes);
-  const morningMins = Math.max(0, morningEnd - inTotalMinutes);
-  const morningHoursNum = morningMins / 60;
-
-  // Afternoon duration: overlap between [inTotalMinutes, outTotalMinutes] and [afternoonStartMinutes, Infinity]
-  const afternoonBegin = Math.max(inTotalMinutes, afternoonStartMinutes);
-  const afternoonMins = Math.max(0, outTotalMinutes - afternoonBegin);
-  const afternoonHoursNum = afternoonMins / 60;
-
-  // Total net working hours (excluding the 1:15 PM - 2:30 PM break)
-  let workingHoursNum = morningHoursNum + afternoonHoursNum;
-  if (workingHoursNum <= 0 && outTotalMinutes > inTotalMinutes) {
-    workingHoursNum = (outTotalMinutes - inTotalMinutes) / 60;
-  }
-
-  // Overtime: time worked after 7:30 PM (19:30) or net hours above 8.75h
-  const postShiftMins = Math.max(0, outTotalMinutes - officialEndMinutes);
-  const overtimeHoursNum = Math.max(postShiftMins / 60, Math.max(0, workingHoursNum - 8.75));
+    worked < STANDARD_WORK_MINUTES ? Math.max(0, SHIFT_END_MINUTES - outM) : 0;
+  const overtimeMinutes = Math.max(0, worked - STANDARD_WORK_MINUTES);
 
   let status = "Present";
-  if (lateMinutes > 0) {
-    status = "Late";
-  } else if (earlyLeaveMinutes > 15) {
-    status = "Early Leave";
-  }
+  if (lateMinutes > 0) status = "Late";
+  else if (earlyLeaveMinutes > EARLY_LEAVE_GRACE_MINUTES) status = "Early Leave";
 
   return {
     status,
     lateMinutes,
     earlyLeaveMinutes,
-    morningHours: morningHoursNum.toFixed(2),
-    afternoonHours: afternoonHoursNum.toFixed(2),
-    workingHours: workingHoursNum.toFixed(2),
-    overtimeHours: overtimeHoursNum.toFixed(2),
+    morningHours: (worked / 60).toFixed(2),
+    afternoonHours: "0.00",
+    workingHours: (worked / 60).toFixed(2),
+    overtimeHours: (overtimeMinutes / 60).toFixed(2),
   };
 }
 
+/** চার-punch (দুই session) হিসাব — Option B */
 export function calculateFourPunchAttendanceMetrics(times: {
   checkIn?: string | null;
   checkOut?: string | null;
@@ -180,41 +166,39 @@ export function calculateFourPunchAttendanceMetrics(times: {
   overrideStatus?: string;
 }) {
   const { checkIn, checkOut, checkIn2, checkOut2, overrideStatus } = times;
+
   if (overrideStatus === "Leave" || overrideStatus === "Holiday" || overrideStatus === "Absent") {
-    return calculateAttendanceMetrics(null, null, overrideStatus);
+    return emptyMetrics(overrideStatus);
   }
 
-  const toMinutes = (value: string) => {
-    const [hours, minutes] = value.split(":").map(Number);
-    return hours * 60 + minutes;
-  };
-  const morningStart = 9 * 60 + 30;
-  const morningEnd = 13 * 60 + 15;
-  const afternoonStart = 14 * 60 + 30;
-  const officialEnd = 19 * 60 + 30;
-  const morningIn = checkIn ? toMinutes(checkIn) : null;
-  const morningOut = checkOut ? toMinutes(checkOut) : null;
-  const afternoonIn = checkIn2 ? toMinutes(checkIn2) : null;
-  const afternoonOut = checkOut2 ? toMinutes(checkOut2) : null;
+  const in1 = punchToMinutes(checkIn);
+  const out1 = punchToMinutes(checkOut);
+  const in2 = punchToMinutes(checkIn2);
+  const out2 = punchToMinutes(checkOut2);
 
-  const lateMinutes = morningIn === null ? 0 : Math.max(0, morningIn - morningStart);
-  const morningMinutes =
-    morningIn === null || morningOut === null
-      ? 0
-      : Math.max(0, Math.min(morningOut, morningEnd) - morningIn);
-  const afternoonMinutes =
-    afternoonIn === null || afternoonOut === null
-      ? 0
-      : Math.max(0, afternoonOut - Math.max(afternoonIn, afternoonStart));
+  if (in1 === null && in2 === null) return emptyMetrics("Absent");
+
+  const morningMinutes = sessionMinutes(in1, out1);
+  const afternoonMinutes = sessionMinutes(in2, out2);
+  const workedMinutes = morningMinutes + afternoonMinutes;
+
+  const firstIn = in1 ?? in2;
+  const lateMinutes = firstIn !== null ? Math.max(0, firstIn - SHIFT_START_MINUTES) : 0;
+
+  // দিনের শেষ OUT (OUT2, না থাকলে শুধু-এক-session দিনে OUT1)
+  const dayEnded = out2 !== null || (in2 === null && out1 !== null);
+  const lastOut = out2 ?? out1;
   const earlyLeaveMinutes =
-    afternoonOut === null ? 0 : Math.max(0, officialEnd - afternoonOut);
-  const overtimeMinutes =
-    afternoonOut === null ? 0 : Math.max(0, afternoonOut - officialEnd);
-  const workingMinutes = morningMinutes + afternoonMinutes;
+    dayEnded && lastOut !== null && workedMinutes < STANDARD_WORK_MINUTES
+      ? Math.max(0, SHIFT_END_MINUTES - lastOut)
+      : 0;
 
-  let status = lateMinutes > 0 ? "Late" : "Present";
-  if (earlyLeaveMinutes > 15) status = "Early Leave";
-  if (lateMinutes > 0 && earlyLeaveMinutes > 15) status = "Late";
+  const overtimeMinutes = Math.max(0, workedMinutes - STANDARD_WORK_MINUTES);
+
+  let status = "Present";
+  if (lateMinutes > 0) status = "Late";
+  else if (earlyLeaveMinutes > EARLY_LEAVE_GRACE_MINUTES) status = "Early Leave";
+  else if (in2 !== null && out2 === null) status = "Present"; // দ্বিতীয় session চলমান
 
   return {
     status,
@@ -222,13 +206,30 @@ export function calculateFourPunchAttendanceMetrics(times: {
     earlyLeaveMinutes,
     morningHours: (morningMinutes / 60).toFixed(2),
     afternoonHours: (afternoonMinutes / 60).toFixed(2),
-    workingHours: (workingMinutes / 60).toFixed(2),
+    workingHours: (workedMinutes / 60).toFixed(2),
     overtimeHours: (overtimeMinutes / 60).toFixed(2),
   };
 }
 
+/**
+ * Option B: দেরি হলেও দিনে ৮.৭৫ ঘণ্টা বা বেশি কাজ হলে late deduction হবে না।
+ * Payroll-এ প্রতিদিনের রেকর্ডে এটা দিয়ে যাচাই হবে।
+ */
+export function isLateDeductible(lateMinutes: number, workingHours: number | string): boolean {
+  return Number(lateMinutes) > 0 && Number(workingHours) < STANDARD_WORK_HOURS;
+}
+
+/**
+ * Payroll helper: কাজের ঘাটতি (ঘণ্টা)। ঘাটতি থাকলে সেই অনুপাতে টাকা কাটবে।
+ * পূরণ হলে 0।
+ */
+export function workShortfallHours(workingHours: number | string): number {
+  return Math.max(0, Number((STANDARD_WORK_HOURS - Number(workingHours || 0)).toFixed(2)));
+}
+
+// ============================================================================
 // 3b. AUTOMATIC WORK PLAN PROGRESS ENGINE
-// 5 planned tasks: 5 completed = 100%, 4 completed = 80%, 3 completed = 60%
+// ============================================================================
 export function calculateWorkPlanProgress(
   items: Array<{ status: string; completionPercent?: number }>
 ): number {
@@ -237,8 +238,9 @@ export function calculateWorkPlanProgress(
   return Math.round((completedCount / items.length) * 100);
 }
 
+// ============================================================================
 // 4. STRICT INVENTORY STOCK FORMULA ENGINE
-// Current Stock = Opening + Purchase Received + Transfer In + Return - Issue - Transfer Out - Consumption ± Adjustment
+// ============================================================================
 export function computeExactMaterialStock(mat: {
   openingStock: string | number;
   purchaseReceived: string | number;
@@ -264,7 +266,6 @@ export function computeExactMaterialStock(mat: {
 }
 
 export async function recordStockMovementTx(
-   
   tx: any,
   params: {
     materialId: number;
@@ -402,9 +403,10 @@ export async function recordStockMovementTx(
   return newCurrentStock;
 }
 
+// ============================================================================
 // 5. DOUBLE-ENTRY JOURNAL POSTING ENGINE (TRANSACTIONAL)
+// ============================================================================
 export async function postDoubleEntryJournalTx(
-   
   tx: any,
   params: {
     date: string;
@@ -473,8 +475,6 @@ export async function postDoubleEntryJournalTx(
       description: line.description || params.description,
     });
 
-    // Asset & Expense increase on Debit, decrease on Credit
-    // Liability, Equity & Revenue increase on Credit, decrease on Debit
     const isDebitNormal = acc.type === "Asset" || acc.type === "Expense";
     const delta = isDebitNormal ? debit - credit : credit - debit;
     const newBal = Number(acc.balance) + delta;
