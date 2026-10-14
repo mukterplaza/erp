@@ -4525,18 +4525,51 @@ export async function POST(req: NextRequest) {
         return Number.isFinite(n) ? n : 0;
       };
 
-      const targetMonth = salaryMonth || today.slice(0, 7);
+      const targetMonth = String(salaryMonth || today.slice(0, 7)).trim();
+      // Validate YYYY-MM before querying attendance or writing payroll.
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(targetMonth)) {
+        return NextResponse.json(
+          { error: "salaryMonth অবশ্যই YYYY-MM ফরম্যাটে দিন (যেমন 2026-10)।" },
+          { status: 400 }
+        );
+      }
+      const targetEmployeeId = Number(employeeId);
+      if (!Number.isInteger(targetEmployeeId) || targetEmployeeId <= 0) {
+        return NextResponse.json({ error: "সঠিক Employee ID দিন।" }, { status: 400 });
+      }
 
-      const [emp] = await db.select().from(employees).where(eq(employees.id, Number(employeeId)));
+      const [emp] = await db.select().from(employees).where(eq(employees.id, targetEmployeeId)).limit(1);
       if (!emp) {
         return NextResponse.json({ error: "Employee not found" }, { status: 404 });
       }
 
       const basic = toNum(basicSalary !== undefined ? basicSalary : emp.basicSalary);
       const allow = toNum(allowance !== undefined ? allowance : emp.allowance);
+      const numericInputs: Array<[string, number]> = [
+        ["basicSalary", basic],
+        ["allowance", allow],
+        ["overtimePay", overtimePay === undefined || overtimePay === null || overtimePay === "" ? 0 : toNum(overtimePay)],
+        ["bonus", toNum(bonus)],
+        ["pfDeduction", pfDeduction === undefined || pfDeduction === null || pfDeduction === "" ? 0 : toNum(pfDeduction)],
+        ["advanceDeduction", advanceDeduction === undefined || advanceDeduction === null || advanceDeduction === "" ? 0 : toNum(advanceDeduction)],
+        ["otherDeduction", otherDeduction === undefined || otherDeduction === null || otherDeduction === "" ? 0 : toNum(otherDeduction)],
+        ["taxDeduction", toNum(taxDeduction)],
+      ];
+      if (numericInputs.some(([, value]) => !Number.isFinite(value) || value < 0)) {
+        return NextResponse.json(
+          { error: "বেতন, ভাতা, OT, বোনাস ও deduction-এর পরিমাণ ঋণাত্মক হতে পারবে না।" },
+          { status: 400 }
+        );
+      }
       const workingDays = 26;
+      // প্রতিষ্ঠানের মাসিক বেতন-ভিত্তি ২৬ কর্মদিবস। হাজিরা না থাকলে
+      // নির্ধারিত কর্মদিবসের অনুপস্থিতি কর্তন গণনা হবে; শুধু ভবিষ্যৎ তারিখ
+      // বলে মাসিক অনুপস্থিতির হিসাব থেকে দিন বাদ দেওয়া হবে না।
+      const absenceCalculationDays = workingDays;
       const perDaySalary = basic / workingDays;
-      const hourlyRate = perDaySalary / STANDARD_WORK_HOURS; // ৮.৭৫ ঘণ্টা
+      const standardWorkMinutes = STANDARD_WORK_HOURS * 60; // ৮.৭৫ ঘণ্টা = ৫২৫ মিনিট
+      const perMinuteRate = perDaySalary / standardWorkMinutes;
+      const hourlyRate = perMinuteRate * 60;
 
       // এই মাসের হাজিরা — প্রতি দিনে একটি রেকর্ড
       const empAtt = await db.select().from(attendances).where(eq(attendances.employeeId, emp.id));
@@ -4596,7 +4629,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const absentDays = Math.max(0, workingDays - presentDays - leaveDays);
+      const absentDays = Math.max(0, absenceCalculationDays - presentDays - leaveDays);
 
       // ⭐ Option B:
       //  • অনুপস্থিত দিন → পূর্ণ দিনের বেতন কাটা
@@ -4604,7 +4637,9 @@ export async function POST(req: NextRequest) {
       //  • দেরি হলেও ৮.৭৫ ঘণ্টা পূরণ হলে কোনো কাটা নেই (শুধু late রেকর্ড থাকবে)
       //  • OT = ৮.৭৫ ঘণ্টার বেশি কাজ × ঘণ্টাপ্রতি রেট
       const autoAbsentDeduction = Number((absentDays * perDaySalary).toFixed(2));
-      const autoShortfallDeduction = Number((totalShortfallHours * hourlyRate).toFixed(2));
+      // প্রতিটি সম্পন্ন কর্মদিবসে ৫২৫ মিনিটের কম কাজের ঘাটতি মিনিট-প্রতি রেটে কাটবে।
+      const totalShortfallMinutes = totalShortfallHours * 60;
+      const autoShortfallDeduction = Number((totalShortfallMinutes * perMinuteRate).toFixed(2));
       const autoCalculatedOtPay = Number((totalOtHours * hourlyRate).toFixed(2));
 
       const finalOtPay =
@@ -4614,10 +4649,15 @@ export async function POST(req: NextRequest) {
 
       const bon = toNum(bonus);
 
-            const finalOtherDeduction =
+            // otherDeduction হলো অতিরিক্ত manual deduction; এটি দিলে automatic
+      // absent/shortfall deduction বাদ পড়বে না।
+      const manualOtherDeduction =
         otherDeduction !== undefined && otherDeduction !== null && otherDeduction !== ""
           ? toNum(otherDeduction)
-          : Number((autoAbsentDeduction + autoShortfallDeduction).toFixed(2));
+          : 0;
+      const finalOtherDeduction = Number(
+        (manualOtherDeduction + autoAbsentDeduction + autoShortfallDeduction).toFixed(2)
+      );
 
       // ⭐ PF: client থেকে দিলে সেটা, নাহলে Gross-এর ৫%
       const pf = pfDeduction !== undefined && pfDeduction !== null && pfDeduction !== ""
@@ -4650,16 +4690,31 @@ export async function POST(req: NextRequest) {
         advanceDeduction: adv.toFixed(2),
         taxDeduction: (tax + pf).toFixed(2), // PF আলাদা column না থাকায় এখানেই
         netSalary: netSalary.toFixed(2),
-        status: "Approved",
-        approvedBy: currentUser.name,
+        // Generation শুধু হিসাব তৈরি করবে; অনুমোদন আলাদা workflow-তে হবে।
+        status: "Calculated",
+        approvedBy: null,
       };
 
-      // একই কর্মী + মাসে আগের পে-রোল থাকলে আপডেট (ডুপ্লিকেট নয়)
+      // একই কর্মী + মাসে আগের পে-রোল থাকলে যাচাই করে আপডেট (ডুপ্লিকেট নয়)।
       const [existingPayroll] = await db
         .select()
         .from(payrolls)
         .where(and(eq(payrolls.employeeId, emp.id), eq(payrolls.salaryMonth, targetMonth)))
         .limit(1);
+
+      // Reviewed/Approved/Paid/Locked payroll পুনরায় generate করে overwrite করা যাবে না।
+      if (
+        existingPayroll &&
+        ["Reviewed", "Approved", "Paid", "Locked"].includes(String(existingPayroll.status))
+      ) {
+        return NextResponse.json(
+          {
+            error: `এই মাসের payroll status "${existingPayroll.status}"। নিরাপত্তার জন্য এটি overwrite করা হয়নি।`,
+            payroll: existingPayroll,
+          },
+          { status: 409 }
+        );
+      }
 
       let pr;
       if (existingPayroll) {
@@ -4684,10 +4739,17 @@ export async function POST(req: NextRequest) {
           ...pr,
           breakdown: {
             absentDays,
+            absenceCalculationDays,
+            totalShortfallMinutes: Number(totalShortfallMinutes.toFixed(2)),
             deductibleLateDays,
             shortfallHours: Number(totalShortfallHours.toFixed(2)),
             absentDeduction: autoAbsentDeduction,
             shortfallDeduction: autoShortfallDeduction,
+            manualOtherDeduction,
+            finalOtherDeduction,
+            pfDeduction: pf,
+            advanceDeduction: adv,
+            taxDeduction: tax,
             otPay: autoCalculatedOtPay,
           },
         },
@@ -4699,12 +4761,19 @@ export async function POST(req: NextRequest) {
         breakdown: {
           presentDays,
           absentDays,
+          absenceCalculationDays,
+          totalShortfallMinutes: Number(totalShortfallMinutes.toFixed(2)),
           leaveDays,
           lateDays,
           deductibleLateDays,
           shortfallHours: Number(totalShortfallHours.toFixed(2)),
           absentDeduction: autoAbsentDeduction,
           shortfallDeduction: autoShortfallDeduction,
+          manualOtherDeduction,
+          finalOtherDeduction,
+          pfDeduction: pf,
+          advanceDeduction: adv,
+          taxDeduction: tax,
           otHours: Number(totalOtHours.toFixed(2)),
           otPay: finalOtPay,
         },
