@@ -26,6 +26,7 @@ import {
 import { exportToCSV, exportToPDFPrint } from "@/lib/export-utils";
 import { calculateFinancialDashboardMetrics } from "@/lib/financial-metrics";
 import { fixBanglaEncoding } from "./FinanceAdminViews";
+import { LivePayrollBoard } from "./LivePayrollBoard";
 
 // ============================================================================
 // 🛠️ Helpers & Constants (বাংলাদেশ রিয়েল-টাইম ইঞ্জিন — Asia/Dhaka)
@@ -441,6 +442,7 @@ export function DashboardView({
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeMsg, setNoticeMsg] = useState("");
   const [noticePriority, setNoticePriority] = useState("High");
+  const [noticeDurationDays, setNoticeDurationDays] = useState("7");
   const [attendanceDate, setAttendanceDate] = useState(today);
   const [liveTime, setLiveTime] = useState(getNowTimeBD());
 
@@ -613,6 +615,10 @@ export function DashboardView({
             </Link>
           </div>
         </div>
+
+        {/* LivePayrollBoard computes this employee's live salary from salary settings and attendance.
+            The API limits Staff data to their own employee, attendance and payroll records. */}
+        <LivePayrollBoard data={data} />
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <StatPill
@@ -1519,6 +1525,7 @@ export function DashboardView({
                 title: noticeTitle,
                 message: noticeMsg,
                 priority: noticePriority,
+                durationDays: Number(noticeDurationDays),
                 assignedPersonOrTeam: "All Staff",
               });
               setNoticeTitle("");
@@ -1545,7 +1552,19 @@ export function DashboardView({
               onChange={(e) => setNoticeMsg(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500"
             />
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <select
+                aria-label="Announcement মেয়াদ"
+                value={noticeDurationDays}
+                onChange={(e) => setNoticeDurationDays(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs"
+              >
+                <option value="1">১ দিন</option>
+                <option value="3">৩ দিন</option>
+                <option value="7">৭ দিন</option>
+                <option value="15">১৫ দিন</option>
+                <option value="30">৩০ দিন</option>
+              </select>
               <select
                 value={noticePriority}
                 onChange={(e) => setNoticePriority(e.target.value)}

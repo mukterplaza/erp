@@ -79,6 +79,32 @@ const num = (v: any) => {
 
 };
 
+// If older attendance rows have punch times but no workingHours value,
+// calculate completed session durations from the four punch fields.
+const punchMinutes = (value: any): number | null => {
+  if (value === undefined || value === null || value === "") return null;
+  const match = String(value).match(/(?:T|\s)?(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+};
+
+const deriveWorkingHours = (a: any): number => {
+  const stored = num(a?.workingHours);
+  if (stored > 0) return stored;
+  let totalMinutes = 0;
+  const addPair = (start: any, end: any) => {
+    const from = punchMinutes(start);
+    const to = punchMinutes(end);
+    if (from !== null && to !== null && to >= from) totalMinutes += to - from;
+  };
+  addPair(a?.checkIn, a?.checkOut);
+  addPair(a?.checkIn2, a?.checkOut2);
+  return totalMinutes / 60;
+};
+
 const taka = (n: number) => "৳" + Math.round(n).toLocaleString("en-IN");
 
 const bdToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
@@ -325,7 +351,7 @@ export function LivePayrollBoard({ data }: { data: any }) {
 
           const dayEnded = Boolean(a?.checkOut2) || (Boolean(a?.checkOut) && !a?.checkIn2);
 
-          const wh = num(a?.workingHours);
+          const wh = deriveWorkingHours(a);
 
           const ot = num(a?.overtimeHours);
 

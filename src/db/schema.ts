@@ -1,4 +1,4 @@
-import {
+﻿import {
   pgTable,
   serial,
   text,
@@ -1070,6 +1070,7 @@ export const announcements = pgTable("announcements", {
   published: boolean("published").notNull().default(true),
   attachmentUrl: text("attachment_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at"),
 });
 
 export const announcementReads = pgTable("announcement_reads", {
