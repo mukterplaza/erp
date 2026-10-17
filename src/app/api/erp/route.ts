@@ -43,7 +43,7 @@ import {
   announcementReads,
   workFiles,
 } from "@/db";
-import { eq, desc, and, isNull, sql, gte } from "drizzle-orm";
+import { eq, desc, and, isNull, sql, gte, lt } from "drizzle-orm";
 import {
   getCurrentUser,
   hasPermission,
@@ -157,6 +157,11 @@ export async function GET(req: NextRequest) {
   if (!currentUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Server-side retention: permanently remove notifications older than 7 days.
+  // This is additive and does not delete announcements or payroll records.
+  const notificationExpiryCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  await db.delete(notifications).where(lt(notifications.createdAt, notificationExpiryCutoff));
 
   const section = req.nextUrl.searchParams.get("section") || "all";
   const requestedEmpId = req.nextUrl.searchParams.get("employeeId");
@@ -517,7 +522,7 @@ export async function GET(req: NextRequest) {
     return {
       leadId: l.id,
       leadCode: l.leadCode,
-      companyId: l.companyId,
+      companyId: Number(l.companyId) === 2 ? "IREL" : "IBDC",
       clientName: l.name,
       phone: l.phone,
       category: l.companyId === 2 ? l.propertyType : l.service,
@@ -569,7 +574,7 @@ export async function GET(req: NextRequest) {
     }).map((l) => ({
       leadId: l.id,
       leadCode: l.leadCode,
-      companyId: l.companyId,
+      companyId: Number(l.companyId) === 2 ? "IREL" : "IBDC",
       clientName: l.name,
       phone: l.phone,
       assignedStaffName: l.assignedStaffId ? empDirMap.get(l.assignedStaffId) || "Unassigned" : "Unassigned",
@@ -683,27 +688,39 @@ export async function GET(req: NextRequest) {
       isFullAccess || isHR
         ? allCorrections
         : allCorrections.filter((c) => c.employeeId === myEmpId),
-    leads: (() => {
-      const access = leadCompanyAccess(currentUser);
-      if (access === "NONE") return [];
-      if (access === "BOTH") return allLeads;
-      return allLeads.filter((l) => (l.companyId || "IBDC") === access);
-    })(),
-    leadFollowups: (() => {
-      const access = leadCompanyAccess(currentUser);
-      if (access === "NONE") return [];
-      if (access === "BOTH") return allFollowups;
-      const allowedIds = new Set(
-        allLeads.filter((l) => (l.companyId || "IBDC") === access).map((l) => l.id)
-      );
-      return allFollowups.filter((f) => allowedIds.has(f.leadId));
-    })(),
-    announcements: allAnnouncements.map((a) => ({
-      ...a,
-      isRead: allAnnouncementReads.some(
-        (r) => r.announcementId === a.id && r.userId === currentUser.id
-      ),
-    })),
+          leads: (() => {
+        const access = leadCompanyAccess(currentUser);
+        if (access === "NONE") return [];
+
+        // DB-তে companyId সংখ্যা (1 = IBDC, 2 = IREL) — frontend-এর জন্য স্ট্রিং-এ রূপান্তর
+        const normalized = allLeads.map((l) => ({
+          ...l,
+          companyId: Number(l.companyId) === 2 ? "IREL" : "IBDC",
+        }));
+
+        if (access === "BOTH") return normalized;
+        return normalized.filter((l) => l.companyId === access);
+      })(),
+          leadFollowups: (() => {
+        const access = leadCompanyAccess(currentUser);
+        if (access === "NONE") return [];
+        if (access === "BOTH") return allFollowups;
+
+        const allowedIds = new Set(
+          allLeads
+            .filter((l) => (Number(l.companyId) === 2 ? "IREL" : "IBDC") === access)
+            .map((l) => l.id)
+        );
+        return allFollowups.filter((f) => allowedIds.has(f.leadId));
+      })(),
+    announcements: allAnnouncements
+      .filter((a) => !a.expiresAt || new Date(a.expiresAt).getTime() > Date.now())
+      .map((a) => ({
+        ...a,
+        isRead: allAnnouncementReads.some(
+          (r) => r.announcementId === a.id && r.userId === currentUser.id
+        ),
+      })),
     clients: currentUser.role === "Staff" ? [] : allClients,
     projects: enrichedProjects,
     sites: scopedSites,
@@ -766,6 +783,8 @@ export async function POST(req: NextRequest) {
 
     const LEAD_ACTIONS = [
       "createLead",
+      "updateLead",
+      "deleteLead",
       "addLeadFollowup",
       "updateLeadStatus",
       "convertLeadToClient",
@@ -786,9 +805,13 @@ export async function POST(req: NextRequest) {
         );
       }
       const { title, message, attachmentUrl } = body;
+      const allowedDurations = [1, 3, 7, 15, 30];
+      const requestedDuration = Number(body.durationDays ?? 7);
+      const durationDays = allowedDurations.includes(requestedDuration) ? requestedDuration : 7;
       if (!title || !message) {
         return NextResponse.json({ error: "শিরোনাম ও বার্তা আবশ্যক" }, { status: 400 });
       }
+      const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
       const [ann] = await db
         .insert(announcements)
         .values({
@@ -798,6 +821,7 @@ export async function POST(req: NextRequest) {
           createdByUserId: currentUser.id,
           published: true,
           attachmentUrl: attachmentUrl || null,
+          expiresAt,
         })
         .returning();
       await createNotification({
@@ -817,7 +841,7 @@ export async function POST(req: NextRequest) {
         action: "ANNOUNCEMENT_CREATE",
         entity: "Announcement",
         recordId: String(ann.id),
-        afterData: { title },
+        afterData: { title, durationDays, expiresAt: expiresAt.toISOString() },
       });
       return NextResponse.json({ success: true, announcement: ann });
     }
@@ -836,7 +860,7 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ success: true });
     }
-
+    
     // =========================================================================
     // SECURITY RULE: FINANCIAL RECORDS CANNOT BE HARD-DELETED
     // =========================================================================
@@ -2607,8 +2631,6 @@ export async function POST(req: NextRequest) {
     if (action === "createLead") {
       const {
         companyId,
-        name,
-        phone,
         whatsapp,
         location,
         source,
@@ -2628,15 +2650,33 @@ export async function POST(req: NextRequest) {
         expectedPurchaseDate,
         clientRequirement,
         priority,
+        status,
         assignedStaffId,
         nextFollowUpDate,
+        nextFollowUpTime,
       } = body;
+      // Accept the canonical UI payload and common legacy aliases without writing
+      // unknown properties into the Drizzle insert object.
+      const name = String(body.name ?? body.clientName ?? body.leadName ?? "").trim();
+      const phone = String(body.phone ?? body.mobile ?? body.contactNo ?? "").trim();
 
       if (!name || !phone) {
         return NextResponse.json({ error: "Lead Name and Phone are required" }, { status: 400 });
       }
-
-      const resolvedCompany = companyId === "IREL" ? "IREL" : "IBDC";
+      const normalizedBudget = Number(budget ?? 0);
+      if (!Number.isFinite(normalizedBudget) || normalizedBudget < 0) {
+        return NextResponse.json({ error: "Budget must be a valid non-negative number." }, { status: 400 });
+      }
+      const requestedCompany = String(companyId ?? "IBDC").trim().toUpperCase();
+      const resolvedCompany = requestedCompany === "IREL" || requestedCompany === "2" ? "IREL" : "IBDC";
+      const normalizedNextDate = nextFollowUpDate ? String(nextFollowUpDate).slice(0, 10) : today;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedNextDate)) {
+        return NextResponse.json({ error: "Next Follow-up Date must use YYYY-MM-DD format." }, { status: 400 });
+      }
+      const normalizedNextTime = nextFollowUpTime ? String(nextFollowUpTime) : "10:00";
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(normalizedNextTime)) {
+        return NextResponse.json({ error: "Next Follow-up Time must use HH:mm format." }, { status: 400 });
+      }
       const access = leadCompanyAccess(currentUser);
       if (access !== "BOTH" && access !== resolvedCompany) {
         return NextResponse.json(
@@ -2729,7 +2769,7 @@ export async function POST(req: NextRequest) {
             companyId: resolvedCompany === "IREL" ? 2 : 1,
             name,
             phone,
-            whatsapp: whatsapp || phone,
+            whatsapp: String(whatsapp || phone).trim(),
             location: location || "",
             source: source || "Direct",
             service: finalService,
@@ -2746,11 +2786,16 @@ export async function POST(req: NextRequest) {
             requirement: resolvedCompany === "IBDC" ? requirement || "" : "",
             landSize: resolvedCompany === "IBDC" ? landSize || "" : "",
             roadWidth: resolvedCompany === "IBDC" ? roadWidth || "" : "",
-            budget: Number(budget || 0).toFixed(2),
+            budget: normalizedBudget.toFixed(2),
             priority: ["Hot", "Warm", "Cold"].includes(priority) ? priority : "Warm",
-            status: "New",
-            assignedStaffId: assignedStaffId ? Number(assignedStaffId) : currentUser.employeeId,
-            nextFollowUpDate: nextFollowUpDate || today,
+            status: ["New", "Contacted", "Follow-up", "Qualified", "Quotation", "Negotiating", "Won", "Lost", "On Hold"].includes(String(status))
+              ? String(status)
+              : "New",
+            assignedStaffId: assignedStaffId !== undefined && assignedStaffId !== null && assignedStaffId !== ""
+              ? Number(assignedStaffId)
+              : currentUser.employeeId,
+            nextFollowUpDate: normalizedNextDate,
+            nextFollowUpTime: normalizedNextTime,
           })
           .returning();
         return createdLead;
@@ -2915,6 +2960,131 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, followup: createdFollowup });
     }
 
+    if (action === "updateLead") {
+      const leadId = Number(body.leadId ?? body.id);
+      if (!Number.isInteger(leadId) || leadId <= 0) {
+        return NextResponse.json({ error: "A valid Lead ID is required." }, { status: 400 });
+      }
+      const [existingLead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+      if (!existingLead) return NextResponse.json({ error: "Lead not found." }, { status: 404 });
+
+      const access = leadCompanyAccess(currentUser);
+      const existingCompany = Number(existingLead.companyId) === 2 ? "IREL" : "IBDC";
+      if (access !== "BOTH" && access !== existingCompany) {
+        return NextResponse.json({ error: "এই কোম্পানির লিড সম্পাদনার অনুমতি নেই।" }, { status: 403 });
+      }
+
+      const requestedCompany = String(body.companyId ?? existingCompany).trim().toUpperCase();
+      const nextCompany = requestedCompany === "IREL" || requestedCompany === "2" ? "IREL" : "IBDC";
+      if (access !== "BOTH" && access !== nextCompany) {
+        return NextResponse.json({ error: "অন্য কোম্পানিতে লিড স্থানান্তরের অনুমতি নেই।" }, { status: 403 });
+      }
+      const validStatuses = ["New", "Contacted", "Follow-up", "Qualified", "Quotation", "Negotiating", "Won", "Lost", "On Hold"];
+      const validPriorities = ["Hot", "Warm", "Cold"];
+      const nextName = String(body.name ?? existingLead.name).trim();
+      const nextPhone = String(body.phone ?? existingLead.phone).trim();
+      const nextBudget = Number(body.budget ?? existingLead.budget ?? 0);
+      if (!nextName || !nextPhone) {
+        return NextResponse.json({ error: "Lead Name and Phone are required." }, { status: 400 });
+      }
+      if (!Number.isFinite(nextBudget) || nextBudget < 0) {
+        return NextResponse.json({ error: "Budget must be a valid non-negative number." }, { status: 400 });
+      }
+      const nextDateRaw = body.nextFollowUpDate === undefined
+        ? existingLead.nextFollowUpDate
+        : body.nextFollowUpDate;
+      const nextDate = nextDateRaw ? String(nextDateRaw).slice(0, 10) : null;
+      if (nextDate && !/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) {
+        return NextResponse.json({ error: "Next Follow-up Date must use YYYY-MM-DD format." }, { status: 400 });
+      }
+      const nextTime = body.nextFollowUpTime === undefined
+        ? existingLead.nextFollowUpTime
+        : String(body.nextFollowUpTime || "10:00");
+      if (nextTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(nextTime)) {
+        return NextResponse.json({ error: "Next Follow-up Time must use HH:mm format." }, { status: 400 });
+      }
+      const closed = ["Won", "Lost", "On Hold"].includes(String(body.status ?? existingLead.status));
+      const updateValues = {
+        companyId: nextCompany === "IREL" ? 2 : 1,
+        name: nextName,
+        phone: nextPhone,
+        whatsapp: String(body.whatsapp ?? existingLead.whatsapp ?? nextPhone).trim(),
+        location: String(body.location ?? existingLead.location ?? "").trim(),
+        source: String(body.source ?? existingLead.source ?? "Direct"),
+        service: nextCompany === "IBDC"
+          ? (typeof body.service === "string" && body.service.trim() ? body.service : existingLead.service)
+          : "Other",
+        propertyType: nextCompany === "IREL"
+          ? (typeof body.propertyType === "string" && body.propertyType.trim() ? body.propertyType : existingLead.propertyType)
+          : "Other",
+        projectName: nextCompany === "IREL" ? String(body.projectName ?? existingLead.projectName ?? "") : "",
+        unitFlatShop: nextCompany === "IREL" ? String(body.unitFlatShop ?? existingLead.unitFlatShop ?? "") : "",
+        preferredLocation: nextCompany === "IREL" ? String(body.preferredLocation ?? existingLead.preferredLocation ?? "") : "",
+        size: nextCompany === "IREL" ? String(body.size ?? existingLead.size ?? "") : "",
+        floor: nextCompany === "IREL" ? String(body.floor ?? existingLead.floor ?? "") : "",
+        bedrooms: nextCompany === "IREL" ? String(body.bedrooms ?? existingLead.bedrooms ?? "") : "",
+        purpose: nextCompany === "IREL" ? String(body.purpose ?? existingLead.purpose ?? "") : "",
+        expectedPurchaseDate: nextCompany === "IREL" ? String(body.expectedPurchaseDate ?? existingLead.expectedPurchaseDate ?? "") : "",
+        clientRequirement: nextCompany === "IREL" ? String(body.clientRequirement ?? existingLead.clientRequirement ?? "") : "",
+        requirement: nextCompany === "IBDC" ? String(body.requirement ?? existingLead.requirement ?? "") : "",
+        landSize: nextCompany === "IBDC" ? String(body.landSize ?? existingLead.landSize ?? "") : "",
+        roadWidth: nextCompany === "IBDC" ? String(body.roadWidth ?? existingLead.roadWidth ?? "") : "",
+        budget: nextBudget.toFixed(2),
+        priority: validPriorities.includes(String(body.priority)) ? String(body.priority) : existingLead.priority,
+        status: validStatuses.includes(String(body.status)) ? String(body.status) : existingLead.status,
+        assignedStaffId: body.assignedStaffId === undefined
+          ? existingLead.assignedStaffId
+          : (body.assignedStaffId === null || body.assignedStaffId === "" ? null : Number(body.assignedStaffId)),
+        nextFollowUpDate: closed ? null : nextDate,
+        nextFollowUpTime: nextTime || "10:00",
+      };
+      const [updatedLead] = await db.update(leads).set(updateValues).where(eq(leads.id, leadId)).returning();
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "UPDATE",
+        entity: "Lead",
+        recordId: updatedLead.leadCode,
+        beforeData: existingLead,
+        afterData: updatedLead,
+      });
+      return NextResponse.json({ success: true, lead: updatedLead });
+    }
+          if (action === "deleteLead") {
+        const { leadId } = body;
+        if (!leadId) {
+          return NextResponse.json({ error: "Lead ID প্রয়োজন" }, { status: 400 });
+        }
+
+        const [lead] = await db.select().from(leads).where(eq(leads.id, Number(leadId)));
+        if (!lead) {
+          return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+        }
+
+        const access = leadCompanyAccess(currentUser);
+        const leadCompany = Number(lead.companyId) === 2 ? "IREL" : "IBDC";
+        if (access !== "BOTH" && access !== leadCompany) {
+          return NextResponse.json({ error: "এই কোম্পানির লিড মোছার অনুমতি নেই।" }, { status: 403 });
+        }
+
+        await db.delete(leadFollowups).where(eq(leadFollowups.leadId, lead.id));
+        await db.delete(leads).where(eq(leads.id, lead.id));
+
+        await logAudit({
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          action: "DELETE",
+          entity: "Lead",
+          recordId: lead.leadCode,
+          beforeData: lead,
+          afterData: null,
+        });
+
+        return NextResponse.json({ success: true, deletedId: lead.id });
+      }
+
     if (action === "updateLeadStatus") {
       const { leadId, status } = body;
       if (!leadId || !status) {
@@ -2952,13 +3122,19 @@ export async function POST(req: NextRequest) {
 
     if (action === "sendFollowUpReminders") {
       // Idempotent follow-up reminders (never duplicated for the same follow-up)
-      const allLeadRows = await db.select().from(leads);
+      const access = leadCompanyAccess(currentUser);
+      const rawLeadRows = await db.select().from(leads);
+      const allLeadRows = access === "BOTH"
+        ? rawLeadRows
+        : rawLeadRows.filter((lead) => (Number(lead.companyId) === 2 ? "IREL" : "IBDC") === access);
       const allFollowUps = await db.select().from(leadFollowups);
       const allEmpRows = await db.select().from(employees);
       const empNameMap = new Map(allEmpRows.map((e) => [e.id, e.name]));
+      const empById = new Map(allEmpRows.map((e) => [e.id, e]));
 
       let dueToday = 0;
       let overdueSent = 0;
+      let alreadyNotified = 0;
 
       for (const lead of allLeadRows) {
         if (!lead.nextFollowUpDate) continue;
@@ -2972,7 +3148,23 @@ export async function POST(req: NextRequest) {
           .filter((f) => f.leadId === lead.id)
           .sort((a, b) => b.followUpNumber - a.followUpNumber);
         const latest = leadFUs[0];
-        if (latest && latest.reminderNotified) continue;
+        const reminderType = isOverdue ? "Approval Required" : "Follow-up Due";
+        // Deduplicate by lead + scheduled date + reminder category. This also
+        // works for newly collected leads that do not have a follow-up row yet.
+        const [alreadySent] = await db
+          .select({ id: notifications.id })
+          .from(notifications)
+          .where(and(
+            eq(notifications.relatedEntityCode, lead.leadCode),
+            eq(notifications.dueDate, lead.nextFollowUpDate),
+            eq(notifications.type, reminderType),
+            eq(notifications.createdBy, "Follow-up Automation"),
+          ))
+          .limit(1);
+        if (alreadySent) {
+          alreadyNotified++;
+          continue;
+        }
 
         const daysOverdue = isOverdue
           ? Math.round(
@@ -2980,9 +3172,11 @@ export async function POST(req: NextRequest) {
             )
           : 0;
 
+        const assignedEmployee = lead.assignedStaffId ? empById.get(lead.assignedStaffId) : undefined;
         await createNotification({
-          targetRole: "All",
-          type: isOverdue ? "Approval Required" : "Follow-up Due",
+          userId: assignedEmployee?.userId ?? null,
+          targetRole: assignedEmployee?.userId ? "All" : "Owner",
+          type: reminderType,
           title: isOverdue
             ? `Follow-up overdue: ${lead.name} — ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue`
             : `Follow-up due today: ${lead.name}`,
@@ -3010,7 +3204,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        dispatched: { dueToday, overdue: overdueSent },
+        dispatched: { dueToday, overdue: overdueSent, alreadyNotified },
       });
     }
 
@@ -4499,7 +4693,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ success: true, journalEntry: jv });
     }
-
+    
     // =========================================================================
     // 13. PAYROLL MODULE (৮.৭৫ ঘণ্টা কর্মসময় অনুযায়ী)
     // =========================================================================

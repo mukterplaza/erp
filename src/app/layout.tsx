@@ -63,7 +63,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <meta charSet="utf-8" />
       </head>
-      <body className="bg-slate-100 text-slate-900 antialiased overflow-x-hidden font-sans">
+      <body
+  suppressHydrationWarning
+  className="bg-slate-100 text-slate-900 antialiased overflow-x-hidden font-sans"
+>
+  
         {children}
         <PwaRegistration />
       </body>

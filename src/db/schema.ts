@@ -282,6 +282,7 @@ export const leads = pgTable(
     nextFollowUpDate: text("next_follow_up_date"),
     convertedClientId: integer("converted_client_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
+    
   },
   (table) => [
     uniqueIndex("leads_code_idx").on(table.leadCode),
@@ -357,6 +358,7 @@ export const leadFollowups = pgTable(
     nextAction: text("next_action").notNull().default(""),
     nextFollowUpDate: text("next_follow_up_date"),
     nextFollowUpTime: text("next_follow_up_time").notNull().default("10:00"),
+    
     attachmentName: text("attachment_name"),
     attachmentType: text("attachment_type"),
     attachmentSize: text("attachment_size"),

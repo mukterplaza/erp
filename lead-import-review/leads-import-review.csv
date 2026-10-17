@@ -1,0 +1,777 @@
+﻿sourceLeadId,sourceDate,companyId,name,phone,whatsapp,location,source,service,requirement,landSize,roadWidth,budget,priority,status,nextFollowUpDate,nextFollowUpTime,originalStatus,originalPriority,originalServiceType,originalClientRequirement,originalInsafResponse,originalRemarks,originalReminder1,originalReminder2,originalReminder3,needsReview,duplicateSourceId,possibleDuplicateNamePhone
+L-0001,2026-08-19,IBDC,Md. Abu Sayed,01753224744,01753224744,Mirpur,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan pass দরকার কোটেশন দিতে হবে
+Insaf Response: ৭ তলা পাবে, কোটেশন দেওয়া হইছে
+Reminder 1: ফোনে কথা হয়েছে কোটেশন দেখে জানাবে
+Reminder 2: আপডেট জানার জন্য ম্যাসেজ করা হয়েছে",,,0.00,Warm,Qualified,2026-08-27,10:00,Mid Stage,🟡 Warm,RAJUK Approval,Rajuk plan pass দরকার কোটেশন দিতে হবে,"৭ তলা পাবে, কোটেশন দেওয়া হইছে",,ফোনে কথা হয়েছে কোটেশন দেখে জানাবে,আপডেট জানার জন্য ম্যাসেজ করা হয়েছে,,False,False,False
+L-0002,2026-08-19,IBDC,Evergreen Multi Source Limited,01302236363,01302236363,Romna,Facebook,RAJUK Plan Approval,"Client Requirement: কত তলা পাবে জানতে চাইছে
+Insaf Response: ৪/৫ তলা
+Remarks: তাদের জায়গা সরকারি গণপূর্ত মধ্যে পড়ছে, এখন তারা চাচ্ছে গণপূর্ত থেকে কিছু  জায়গা পাবে সেটি নিয়ে দেওয়ার জন্, আমরা বলছি জমি উনি নিয়ে দিলে আমরা রাজউকের প্ল্যান করে দিতে পারবো, কেমন ইউনিট পাবে এই সব বিষয়ে কথা হইছে",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,কত তলা পাবে জানতে চাইছে,৪/৫ তলা,"তাদের জায়গা সরকারি গণপূর্ত মধ্যে পড়ছে, এখন তারা চাচ্ছে গণপূর্ত থেকে কিছু  জায়গা পাবে সেটি নিয়ে দেওয়ার জন্, আমরা বলছি জমি উনি নিয়ে দিলে আমরা রাজউকের প্ল্যান করে দিতে পারবো, কেমন ইউনিট পাবে এই সব বিষয়ে কথা হইছে",,,,False,False,False
+L-0003,2026-08-19,IBDC,Nexora Structure Limited,01766913185,01766913185,,Facebook,RAJUK Plan Approval,"Client Requirement: 12.80 শতাংশে ১০ তলা চায়
+Insaf Response: পাবে না বলে দিয়েছি
+Remarks: কত তলা জানানো হয়েছে",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,RAJUK Approval,12.80 শতাংশে ১০ তলা চায়,পাবে না বলে দিয়েছি,কত তলা জানানো হয়েছে,,,,False,False,False
+L-0004,2026-08-19,IBDC,Sajib,01681392440,01681392440,Konapara,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan Design
+Remarks: অফিসে এসে কোটেশন নিয়ে গিয়েছে
+Reminder 1: কল দিয়েছি পাইনি ভয়েস দিয়ে রাখছি
+Reminder 2: পরে কল দিবে",,,0.00,Warm,Quotation,2026-08-29,10:00,Proposal Sent,🟡 Warm,RAJUK Approval,Rajuk plan Design,,অফিসে এসে কোটেশন নিয়ে গিয়েছে,কল দিয়েছি পাইনি ভয়েস দিয়ে রাখছি,পরে কল দিবে,,False,False,False
+L-0005,2026-08-19,IBDC,Mofazzl,01936960333,01936960333,,Facebook,Other,Remarks: No respons,,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,Other,,,No respons,,,,False,False,False
+L-0006,2026-08-19,IBDC,Hasanmuhib,https://call.whatsapp.com/voice/hxQ4Fhzw4cqzip0hRyw63E,https://call.whatsapp.com/voice/hxQ4Fhzw4cqzip0hRyw63E,,Facebook,Other,Reminder 1: কল দিয়েছি পাইনি ভয়েস দিয়ে রাখছি,,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,Other,,,,কল দিয়েছি পাইনি ভয়েস দিয়ে রাখছি,,,True,False,False
+L-0007,2026-08-19,IBDC,Md. Monir Hossain,01941222241,01941222241,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0008,2026-08-19,IBDC,Shafiullah Khan,01819115455,01819115455,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0009,2026-08-19,IBDC,Md Titu,01913962580,01913962580,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0010,2026-08-19,IBDC,Abdur Rosid,966558263392,966558263392,Saudi,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0011,2026-08-19,IBDC,Fahim Chowdhury,01307549457,01307549457,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0012,2026-08-19,IBDC,Architect Roman,01306565374,01306565374,,Facebook,3D Visualization & VR,Client Requirement: Arch.Roman Architectural 3D Visualization & Rendering নিয়ে কাজ করি,,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,3D Visualization & VR,Arch.Roman Architectural 3D Visualization & Rendering নিয়ে কাজ করি,,,,,,False,False,False
+L-0013,2026-08-19,IBDC,Md. Razu,01675560165,01675560165,Basabo,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan & working sample drawing, digital survey
+Remarks: 30000 টাকা দিলে এই কাজ গুলো করে দিব বলা হয়েছে",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,"Rajuk plan & working sample drawing, digital survey",,30000 টাকা দিলে এই কাজ গুলো করে দিব বলা হয়েছে,,,,False,False,False
+L-0014,2026-08-20,IBDC,Rubel Miah,01824180668,01824180668,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0015,2026-08-19,IBDC,Sumon,01711187549,01711187549,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0016,2026-08-18,IBDC,Ahosan Joerdder prem,01703089468,01703089468,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0017,2026-08-18,IBDC,Ariful Islam,01780369144,01780369144,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0018,2026-08-20,IBDC,Md Faizuzzaman Rasel,01712465519,01712465519,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0019,2026-08-18,IBDC,Kfar Bangla,01714451784,01714451784,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0020,2026-08-18,IBDC,Mahibur Rahman,966540489365,966540489365,Iskaton,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan & design
+Insaf Response: ডিজিটাল সার্ভে করে আসবো সাথে সাইট ভিজিট ৮ হাজার টাকা বলা হইছে
+Remarks: সাইট ভিজিট করে তথ্য দিতে হবে
+Reminder 1: ২৭ তারিখে কল হয়, পরে জানাবে করে সাইট ভিজিটে যেতে হবে",,,0.00,Hot,Contacted,2026-08-21,10:00,Conversation Started,🔥 Hot,RAJUK Approval,Rajuk plan & design,ডিজিটাল সার্ভে করে আসবো সাথে সাইট ভিজিট ৮ হাজার টাকা বলা হইছে,সাইট ভিজিট করে তথ্য দিতে হবে,"২৭ তারিখে কল হয়, পরে জানাবে করে সাইট ভিজিটে যেতে হবে",,,False,False,False
+L-0021,2026-08-18,IBDC,Ehsan,01711528530,01711528530,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0022,2026-08-18,IBDC,,01611905593,01611905593,,Facebook,Architectural Design,"Client Requirement: Design
+Insaf Response: অফিসের লোকেশন দেওয়া হইছে
+Remarks: অফিসে আসার কথা ছিল
+Reminder 1: ফোনে কথা হয়েছে কোটেশন দেখে জানাবে",,,0.00,Warm,Contacted,2026-08-27,10:00,Conversation Started,🟡 Warm,Architectural Design,Design,অফিসের লোকেশন দেওয়া হইছে,অফিসে আসার কথা ছিল,ফোনে কথা হয়েছে কোটেশন দেখে জানাবে,,,True,False,False
+L-0023,2026-08-18,IBDC,Jannatul Ferdosh,01742226105,01742226105,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0024,2026-08-18,IBDC,Sakib,01991248777,01991248777,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0025,2026-08-18,IBDC,Asma,01861178367,01861178367,"Vasantek, deoyanpara",Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ১০ তলা পাবে কথা হইছে, পরে কথা বলবে বলছে
+Remarks: কত তলা পাবে
+Reminder 1: developer Rehab member নিজেরাই কাজ করে আমাদের কাছ থেকে তথ্য নিয়েছে",,,0.00,Warm,Contacted,2026-08-27,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,"১০ তলা পাবে কথা হইছে, পরে কথা বলবে বলছে",কত তলা পাবে,developer Rehab member নিজেরাই কাজ করে আমাদের কাছ থেকে তথ্য নিয়েছে,,,False,False,False
+L-0026,2026-08-18,IBDC,Monower Ahmed,966561139741,966561139741,"Chatiany , Bangodda",Facebook,Architectural Design,"Client Requirement: plan pass & design
+Insaf Response: দেওয়া হইছে ও প্ল্যান ডিজাইন করার জন্য আগ্রহি কি না জানতে চাওয়া হয় কিছু বলে নি
+Remarks: ডিজাইন sample চাইছে
+Reminder 1: ফোনে পাইনি ভয়েস দিয়ে রাখছি",,,0.00,Warm,Contacted,2026-08-27,10:00,Conversation Started,🟡 Warm,Architectural Design,plan pass & design,দেওয়া হইছে ও প্ল্যান ডিজাইন করার জন্য আগ্রহি কি না জানতে চাওয়া হয় কিছু বলে নি,ডিজাইন sample চাইছে,ফোনে পাইনি ভয়েস দিয়ে রাখছি,,,False,False,False
+L-0027,2026-08-18,IBDC,MD. didar,96878071431,96878071431,chottogram,Facebook,Architectural Design,"Client Requirement: plan pass & design
+Insaf Response: বিস্তারিত কথা বলে কোটেশন দেওয়া হইছে
+Remarks: খরচ জানতে চায়",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Architectural Design,plan pass & design,বিস্তারিত কথা বলে কোটেশন দেওয়া হইছে,খরচ জানতে চায়,,,,False,False,False
+L-0028,2026-08-17,IBDC,M A Samad,01810519789,01810519789,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0029,2026-08-17,IBDC,Kh Abdus Salim,01730729112,01730729112,"Saver, Bank Colony",Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: বাকি ইনফরমেশন চাইছি, জানায়নি
+Remarks: 10 শতাংশ জমিতে কত খরচ হবে?",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,"বাকি ইনফরমেশন চাইছি, জানায়নি",10 শতাংশ জমিতে কত খরচ হবে?,,,,False,False,False
+L-0030,2026-08-17,IBDC,Pappo sir,01911380501,01911380501,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0031,2026-08-17,IBDC,Md Kamal,01973006749,01973006749,Rupgonj,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: DAP Issue Plan Not Available",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,,DAP Issue Plan Not Available,,,,False,False,False
+L-0032,2026-08-17,IBDC,Sebli Amran,01924494446,01924494446,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0033,2026-08-17,IBDC,Prince Prodhan,01611187775,01611187775,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0034,2026-08-17,IBDC,Salam,966595392110,966595392110,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan & design
+Insaf Response: অন্য কোন ইনফরমেশন দেয় নি জানতে চাইছি
+Remarks: 5 তলা খরচ কত জানতে চাইছে
+Reminder 1: কল রিসিভ করে কেটে দিয়েছে ভয়েস দিয়ে রাখছি",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan & design,অন্য কোন ইনফরমেশন দেয় নি জানতে চাইছি,5 তলা খরচ কত জানতে চাইছে,কল রিসিভ করে কেটে দিয়েছে ভয়েস দিয়ে রাখছি,,,False,False,False
+L-0035,2026-08-17,IBDC,Imtiaz Ahmed,966578451867,966578451867,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: ভবিষ্যতের জন্য নক করছে দরকার হলে জানাবে",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,,ভবিষ্যতের জন্য নক করছে দরকার হলে জানাবে,,,,False,False,False
+L-0036,2026-08-17,IBDC,Md. Galib kutub Saroz,01986066157,01986066157,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: প্ল্যান পাস ১০ তলা করা আছে আরও বাড়াবো",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,,প্ল্যান পাস ১০ তলা করা আছে আরও বাড়াবো,,,,False,False,False
+L-0037,2026-08-17,IBDC,Md Ali,01716020757,01716020757,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: পাবে না
+Remarks: G+11 দিয়াবারি",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,পাবে না,G+11 দিয়াবারি,,,,False,False,False
+L-0038,2026-08-17,IBDC,Zahidur Rahman khan,01718027681,01718027681,"Uttora, diyabari",Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ৬ তলা পাবে জানানো হইছে
+Remarks: 2.5 কাঠাতে কত তলা পাবে
+Reminder 1: ফোনে পাইনি ভয়েস দিয়ে রাখছি",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,৬ তলা পাবে জানানো হইছে,2.5 কাঠাতে কত তলা পাবে,ফোনে পাইনি ভয়েস দিয়ে রাখছি,,,False,False,False
+L-0039,2026-08-20,IBDC,Salman Abdullah,01840002282,01840002282,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: ৩৫ শতাংশ ৪০ ফিট রাস্তা উত্তরা ৮ নং সেক্টর
+Reminder 1: জানাতে হবে কত তলা পাবে কেমন খরচ হবে",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,,৩৫ শতাংশ ৪০ ফিট রাস্তা উত্তরা ৮ নং সেক্টর,জানাতে হবে কত তলা পাবে কেমন খরচ হবে,,,False,False,False
+L-0040,2026-08-15,IBDC,Ariful Islam,96871894765,96871894765,Netrokona,Facebook,Architectural Design,"Client Requirement: design
+Insaf Response: ২০ হাজার টাকা দিয়ে ডিজাইন করাতে পারবে বলছি, ফাইনালি কিছু বলে নাই
+Remarks: ৬ বেড রুম দিয়ে ডিজাইন
+Reminder 1: ফোনে পাইনি ভয়েস দিয়ে রাখছি",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,Architectural Design,design,"২০ হাজার টাকা দিয়ে ডিজাইন করাতে পারবে বলছি, ফাইনালি কিছু বলে নাই",৬ বেড রুম দিয়ে ডিজাইন,ফোনে পাইনি ভয়েস দিয়ে রাখছি,,,False,False,False
+L-0041,2026-08-15,IBDC,Nahar,01709654315,01709654315,Basundhora,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan & design
+Insaf Response: দেওয়া হইছে, আর কোন আপডেট পাইনি
+Remarks: Qutation চাইছে
+Reminder 1: অন্য জায়গায় কাজ দিয়ে দিয়েছে",,,0.00,Cold,Contacted,2026-08-29,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan & design,"দেওয়া হইছে, আর কোন আপডেট পাইনি",Qutation চাইছে,অন্য জায়গায় কাজ দিয়ে দিয়েছে,,,False,False,False
+L-0042,2026-08-15,IBDC,Md Mahfuzul haque,01966020681,01966020681,,Facebook,Architectural Design,"Client Requirement: Interior Design
+Insaf Response: ইন্টেরিওর ডিজাইন আমারা করে দিতে পারবো
+Remarks: টিন শেড বিল্ডিং  নির্মাণ কাজ শেষ করে পরে কথা বলবে",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Architectural Design,Interior Design,ইন্টেরিওর ডিজাইন আমারা করে দিতে পারবো,টিন শেড বিল্ডিং  নির্মাণ কাজ শেষ করে পরে কথা বলবে,,,,False,False,False
+L-0043,2026-08-11,IBDC,Abdul Hannan,971568982011,971568982011,"Ramgonj, Lakkhipur",Facebook,Architectural Design,"Client Requirement: design
+Insaf Response: আলোচনা করে জানাবে
+Remarks: 2 তলা প্ল্যান ডিজাইনএর কোটেশন দেওয়া হইছে
+Reminder 1: কল দিয়েছি কেটে দিয়েছে ম্যাসেজ করে রাখছি
+Reminder 2: সরাসরি সাইট ভিসিট করার জন্য বলছে কিন্তু কবে যেতে হবে সেটি বলে নি জিজ্ঞাসা করছি বলেনি
+Reminder 3: ফলোআপ ম্যাসেজ দেওয়া হইছে",,,0.00,Hot,Negotiating,2026-08-29,10:00,Final Stage,🔥 Hot,Architectural Design,design,আলোচনা করে জানাবে,2 তলা প্ল্যান ডিজাইনএর কোটেশন দেওয়া হইছে,কল দিয়েছি কেটে দিয়েছে ম্যাসেজ করে রাখছি,সরাসরি সাইট ভিসিট করার জন্য বলছে কিন্তু কবে যেতে হবে সেটি বলে নি জিজ্ঞাসা করছি বলেনি,ফলোআপ ম্যাসেজ দেওয়া হইছে,False,False,False
+L-0044,2026-07-30,IBDC,Rafiur srijon,1711334625,1711334625,Purbachol,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ৭ তলা পাবে, অফিস লোকেশন দেওয়া হইছে
+Remarks: 3 কাঠাতে  কত তলা পাবে কেমন খরচ
+Reminder 1: ম্যাসেজ করে রাখছি",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,"৭ তলা পাবে, অফিস লোকেশন দেওয়া হইছে",3 কাঠাতে  কত তলা পাবে কেমন খরচ,ম্যাসেজ করে রাখছি,,,False,False,False
+L-0045,2026-08-22,IBDC,Abdul Jalil Sumon,01743787540,01743787540,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons
+Reminder 1: ফোন নাম্বার অফ ম্যাসেজ দিয়ে রাখছি",,,0.00,Cold,Contacted,2026-08-29,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,ফোন নাম্বার অফ ম্যাসেজ দিয়ে রাখছি,,,False,False,False
+L-0046,2026-08-22,IBDC,Md Rabbi Hossain,01816648188,01816648188,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0047,2026-08-22,IBDC,Masud,01402245372,01402245372,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0048,2026-08-22,IBDC,Md Selim Hossain,01912581683,01912581683,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0049,2026-08-22,IBDC,Mohammed Hasan,01811583046,01811583046,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0050,2026-08-22,IBDC,Ayub Sujon,01819628151,01819628151,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0051,2026-08-22,IBDC,Jonaid ovi,01751666010,01751666010,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0052,2026-08-22,IBDC,Engr. Md Mehedi Hasan,01917138854,01917138854,,Facebook,Other,Client Requirement: ECPS ENG.,,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Other,ECPS ENG.,,,,,,False,False,False
+L-0053,2026-08-21,IBDC,Nayim,01795357500,01795357500,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: 9 তলা পাবে জানানো হয়েছে
+Remarks: Basundhora, 5 khata 25 & 40 ft road
+Reminder 1: দেশের বাহিরে আছে দেশে ফিরে কথা বলবে",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,9 তলা পাবে জানানো হয়েছে,"Basundhora, 5 khata 25 & 40 ft road",দেশের বাহিরে আছে দেশে ফিরে কথা বলবে,,,False,False,False
+L-0054,2026-08-21,IBDC,Ahsan Habib,01913744431,01913744431,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0055,2026-08-21,IBDC,Manik,01781333555,01781333555,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: বিস্তারিত ইনফরমেশন চাইছি দেয়নি
+Remarks: 1.66 শতাংশ জায়গায় কত তলা পাবে
+Reminder 1: কথা হয়েছে রাস্তার মাপ জেনে জানাবে",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,বিস্তারিত ইনফরমেশন চাইছি দেয়নি,1.66 শতাংশ জায়গায় কত তলা পাবে,কথা হয়েছে রাস্তার মাপ জেনে জানাবে,,,False,False,False
+L-0056,2026-08-21,IBDC,Winnerint51,01834266366,01834266366,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons
+Reminder 1: পরে কথা বলবে মিটিং এ আছে",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,,No respons,পরে কথা বলবে মিটিং এ আছে,,,False,False,False
+L-0057,2026-08-21,IBDC,Nizamuddin,01819199208,01819199208,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0058,2026-08-21,IBDC,Md Fahad Hossain,1786242552,1786242552,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons
+Reminder 1: ফোনে কথা হয়েছে বসুন্ধরা যেতে বলছে গেলে কল দিব বলছি",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,,No respons,ফোনে কথা হয়েছে বসুন্ধরা যেতে বলছে গেলে কল দিব বলছি,,,False,False,False
+L-0059,2026-08-21,IBDC,Omar Faruk,01728741713,01728741713,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0060,2026-08-21,IBDC,Rifat Hossain,01642292467,01642292467,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0061,2026-08-21,IBDC,Siddique,01718545949,01718545949,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,,,,False,False,False
+L-0062,2026-08-21,IBDC,A,971551336859,971551336859,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons
+Reminder 1: ফোন করেছি ধরে নি ভয়েস দিয়ে রাখছি",,,0.00,Cold,Contacted,2026-08-29,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,,No respons,ফোন করেছি ধরে নি ভয়েস দিয়ে রাখছি,,,False,False,False
+L-0063,2026-08-20,IBDC,Md dulal,01819119637,01819119637,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ৮/৯ তলা দিতে পারবো অফিসে আসার কথা বলছি
+Remarks: পূর্বাচল, ৫ কাঠা ৪০ ফিট
+Reminder 1: ফোন ধরে কথা বলে না, ভয়েস  দিয়েছি",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,৮/৯ তলা দিতে পারবো অফিসে আসার কথা বলছি,"পূর্বাচল, ৫ কাঠা ৪০ ফিট","ফোন ধরে কথা বলে না, ভয়েস  দিয়েছি",,,False,False,False
+L-0064,2026-08-20,IBDC,Mahbubur Rahman,1611391877,1611391877,Basundhora L block,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ৭/৮ তলা পাবে
+Remarks: 3 কাঠা রাস্তা ২৫ ফিট কত তলা পাবে
+Reminder 1: প্ল্যান তলা আরও বাড়াবে",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,৭/৮ তলা পাবে,3 কাঠা রাস্তা ২৫ ফিট কত তলা পাবে,প্ল্যান তলা আরও বাড়াবে,,,False,False,False
+L-0065,2026-08-17,IBDC,Md Tajmul Islam Rimu,1716872949,1716872949,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ৬ তলা পাবে
+Remarks: ফোনে কথা হয়েছে
+Reminder 1: plan পাসের বিষয়ে ম্যাসেজ করা হয়েছে",,,0.00,Warm,Contacted,2026-08-29,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,৬ তলা পাবে,ফোনে কথা হয়েছে,plan পাসের বিষয়ে ম্যাসেজ করা হয়েছে,,,False,False,False
+L-0066,2026-08-17,IBDC,Abdul Kaiyum,1954605040,1954605040,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: No respons
+Reminder 1: ভুলে নক করছে",,,0.00,Cold,Contacted,2026-08-29,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,,No respons,ভুলে নক করছে,,,False,False,False
+L-0067,2026-08-17,IBDC,Nomani,1811971612,1811971612,Bonosri,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: Google link দিয়েছে আর কোন ইনফো দেয়নি
+Remarks: https://maps.app.goo.gl/tUAWZQciV8sVtus16
+Reminder 1: ফোন রিসিভ করে কথা শেষ না করে কেটে দিয়েছে",,,0.00,Cold,Contacted,2026-08-29,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,Google link দিয়েছে আর কোন ইনফো দেয়নি,https://maps.app.goo.gl/tUAWZQciV8sVtus16,ফোন রিসিভ করে কথা শেষ না করে কেটে দিয়েছে,,,False,False,False
+L-0068,2026-08-17,IBDC,Deloar,1986312393,1986312393,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Remarks: No respons
+Reminder 1: ফোন করেছি ধরে নি ভয়েস দিয়ে রাখছি",,,0.00,Cold,Contacted,2026-08-29,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,No respons,ফোন করেছি ধরে নি ভয়েস দিয়ে রাখছি,,,False,False,False
+L-0069,2026-08-15,IBDC,Pervez,1886660276,1886660276,Demra,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: জি+৫ আমরা দিতে পারবো কথা হইছে উনি জি+৬ যেখানে পাবে সেখানে কথা বলবে আমাদের ৬ তলার খরচ কেমন হবে বিস্তারিত জানানো হয়েছে
+Remarks: g+6 পাবে কিনা",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,জি+৫ আমরা দিতে পারবো কথা হইছে উনি জি+৬ যেখানে পাবে সেখানে কথা বলবে আমাদের ৬ তলার খরচ কেমন হবে বিস্তারিত জানানো হয়েছে,g+6 পাবে কিনা,,,,False,False,False
+L-0070,2026-08-17,IBDC,Mujibor,1576914694,1576914694,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: ফোন করেছি ধরে নি ভয়েস দিয়ে রাখছি",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,ফোন করেছি ধরে নি ভয়েস দিয়ে রাখছি,,,False,False,False
+L-0071,2026-08-17,IBDC,Ripon Molla,1712581945,1712581945,,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ফোনে কথা বলছি প্ল্যান ডিজাইন করতে আগ্রহি না
+Remarks: ৫৪৪ স্কয়ার ফিট জায়গা ইস্টিমেট জানতে চায়",,,0.00,Cold,Contacted,2026-08-30,10:00,No Response,🔴 Lost,Architectural Design,Plan design,ফোনে কথা বলছি প্ল্যান ডিজাইন করতে আগ্রহি না,৫৪৪ স্কয়ার ফিট জায়গা ইস্টিমেট জানতে চায়,,,,False,False,False
+L-0072,2026-08-16,IBDC,Md. Kajal Howlader,1621127221,1621127221,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: অফিস লোকেশন দেওয়া হইছে
+Remarks: Office Location কোথায়?
+Reminder 1: ফোন দিয়েছি ধরে নি, ম্যাসেজ দিয়েছি দেখছে কোন রেস্পন্স করে নি",,,0.00,Warm,Contacted,2026-08-30,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,অফিস লোকেশন দেওয়া হইছে,Office Location কোথায়?,"ফোন দিয়েছি ধরে নি, ম্যাসেজ দিয়েছি দেখছে কোন রেস্পন্স করে নি",,,False,False,False
+L-0073,2026-08-16,IBDC,Fatema Akter,1797225692,1797225692,Badda,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: এখানে রাজউক প্ল্যান পাবে না তাই সঠিক পরামর্শ দেওয়া হইছে
+Remarks: 720 sft Rajuk plan lagbe",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,এখানে রাজউক প্ল্যান পাবে না তাই সঠিক পরামর্শ দেওয়া হইছে,720 sft Rajuk plan lagbe,,,,False,False,False
+L-0074,2026-08-16,IBDC,ASM Sayem,1789170655,1789170655,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: ফোন দিয়েছি ধরে নি, ম্যাসেজ দিয়েছি",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,"ফোন দিয়েছি ধরে নি, ম্যাসেজ দিয়েছি",,,False,False,False
+L-0075,2026-08-16,IBDC,Lehaz Uddin Ahmed,1911627354,1911627354,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: ফোন দিয়েছি কল হয়নি, ম্যাসেজ দিয়েছি",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,"ফোন দিয়েছি কল হয়নি, ম্যাসেজ দিয়েছি",,,False,False,False
+L-0076,2026-08-16,IBDC,Md Kamruzzaman Joy,1912421005,1912421005,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: ম্যাসেজ দিয়েছি",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,ম্যাসেজ দিয়েছি,,,False,False,False
+L-0077,2026-08-16,IBDC,Emdadul,1673841671,1673841671,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: এখন মিটিংএ আছে পরে কল করবে",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,এখন মিটিংএ আছে পরে কল করবে,,,False,False,False
+L-0078,2026-08-17,IBDC,Md Shopon Chowdhury,1345768680,1345768680,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: ম্যাসেজ দিয়েছি",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,ম্যাসেজ দিয়েছি,,,False,False,False
+L-0079,2026-08-17,IBDC,Md Safi,1610445253,1610445253,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: ফোন দিয়েছি কল হয়নি, ম্যাসেজ দিয়েছি",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,"ফোন দিয়েছি কল হয়নি, ম্যাসেজ দিয়েছি",,,False,False,False
+L-0080,2026-08-17,IBDC,Moin,966557347260,966557347260,Saudi,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: phone কথা হয়েছে ইনফরমেশন নিয়েছি দেখে জানাবো তারা ১২ তলা চাচ্ছে, আমরা ৬/৭ তলা দিতে পারবো বলে দিয়েছি",,,0.00,Warm,Contacted,2026-08-30,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,"phone কথা হয়েছে ইনফরমেশন নিয়েছি দেখে জানাবো তারা ১২ তলা চাচ্ছে, আমরা ৬/৭ তলা দিতে পারবো বলে দিয়েছি",,,False,False,False
+L-0081,2026-08-07,IBDC,Md Yeasin,1675314043,1675314043,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: কথা হয়েছে,  ৩০ ফিট রাস্তার পাশে উনার জমি ১০.৮ কাঠা , ৩০০ ফিটের ৩ নং সেক্টরে , উনি মূলত জানতে চাচ্ছিলেন জেনারেল প্লেইন ফ্লাড জোনে উনি প্ল্যান পাস পাবেন কি না? ডকুমেন্টস চেয়েছি দিয়েছেন, এগুলা দেখে বিস্তারিত জানাবো FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,"কথা হয়েছে,  ৩০ ফিট রাস্তার পাশে উনার জমি ১০.৮ কাঠা , ৩০০ ফিটের ৩ নং সেক্টরে , উনি মূলত জানতে চাচ্ছিলেন জেনারেল প্লেইন ফ্লাড জোনে উনি প্ল্যান পাস পাবেন কি না? ডকুমেন্টস চেয়েছি দিয়েছেন, এগুলা দেখে বিস্তারিত জানাবো FMZ",,,False,False,False
+L-0082,2026-08-17,IBDC,Monir,1912302890,1912302890,Aftabnogar,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: সম্ভব না তারপরও লাস্ট আপডেট জানবো
+Remarks: 6 katha 30 feet road block L Aftabnogor g+9 possible kina
+Reminder 1: ১। ফোন দিয়েছি, পিক করেন নি FMZ ২। অন্য নাম্বার দিয়ে কল ব্যাক করেছেন, আফতাবনগর হাউজিং এ ৩০ ফিট রাস্তার পাশে ৬ কাঠা জমি প্রতি ফ্লোরে ২ টি ইউনিট করে (জি+৯) ১০ তলা করতে চায়, প্যাকেজ প্ল্যান ডিজাইন, সয়েল টেস্ট ও রাজউকের প্ল্যান পাস সহ কোটেশন দিতে বলেছেন FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,সম্ভব না তারপরও লাস্ট আপডেট জানবো,6 katha 30 feet road block L Aftabnogor g+9 possible kina,"১। ফোন দিয়েছি, পিক করেন নি FMZ ২। অন্য নাম্বার দিয়ে কল ব্যাক করেছেন, আফতাবনগর হাউজিং এ ৩০ ফিট রাস্তার পাশে ৬ কাঠা জমি প্রতি ফ্লোরে ২ টি ইউনিট করে (জি+৯) ১০ তলা করতে চায়, প্যাকেজ প্ল্যান ডিজাইন, সয়েল টেস্ট ও রাজউকের প্ল্যান পাস সহ কোটেশন দিতে বলেছেন FMZ",,,False,False,False
+L-0083,2026-08-15,IBDC,Arif Islam,1722657786,1722657786,,Facebook,Other,"Client Requirement: Want a job
+Reminder 1: ভুলে কল দিয়েছেন সম্ভবত, উনি আমাদের এড দেখে প্রয়োজন হলে পরে যোগাযোগ করবে FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,No Response,🔴 Lost,Other,Want a job,,,"ভুলে কল দিয়েছেন সম্ভবত, উনি আমাদের এড দেখে প্রয়োজন হলে পরে যোগাযোগ করবে FMZ",,,False,False,False
+L-0084,2026-08-16,IBDC,Anis,1729368373,1729368373,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: উনারা কয়েকজন মিলে কাজ করেন, আমাদের অফিসের ঠিকানা নিয়ে রাখলেন, সময় করে অফিসে আসবেন একদিন FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,"উনারা কয়েকজন মিলে কাজ করেন, আমাদের অফিসের ঠিকানা নিয়ে রাখলেন, সময় করে অফিসে আসবেন একদিন FMZ",,,False,False,False
+L-0085,2026-08-16,IBDC,@oflinebd,,,,WhatsApp,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: নাম্বার  ? FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,নাম্বার  ? FMZ,,,True,False,False
+L-0086,2026-08-16,IBDC,1721307361,1674999207,1674999207,,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: ভুলে কল দিয়েছেন FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,No Response,🔴 Lost,Architectural Design,Plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,ভুলে কল দিয়েছেন FMZ,,,False,False,False
+L-0087,2026-08-16,IBDC,Abu Said,1851375353,1851375353,"Rupgonj, Vulta",Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ৭ লাখ টাকা লাগবে টোটাল প্যাকেজ বলা হয়েছে এত টাকা দেখে মাথা গুরাচ্ছে উনার
+Remarks: 11 decimal 20 ft road rajuk plan and design costing",,,0.00,Warm,Quotation,,10:00,Proposal Sent,🟡 Warm,RAJUK Approval,Rajuk plan,৭ লাখ টাকা লাগবে টোটাল প্যাকেজ বলা হয়েছে এত টাকা দেখে মাথা গুরাচ্ছে উনার,11 decimal 20 ft road rajuk plan and design costing,,,,False,False,False
+L-0088,2026-08-16,IBDC,হাসবুনাল্লাহি নিওমাল ওকিল,971524143825,971524143825,,Facebook,Other,"Client Requirement: Building Work
+Remarks: 500 sft টিন শেড ঘর করতে চাই",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Building Work,,500 sft টিন শেড ঘর করতে চাই,,,,False,False,False
+L-0089,2026-07-29,IBDC,Faruk Miya,971507944351,971507944351,United Arab Emirates,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0090,2026-08-16,IBDC,Abdul Rohim,966509201586,966509201586,Saudi Arabia,Facebook,Other,"Client Requirement: Lone
+Insaf Response: Lone নিয়ে বাড়ি করতে চায়",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Lone,Lone নিয়ে বাড়ি করতে চায়,,,,,False,False,False
+L-0091,2026-08-15,IBDC,mda900622,966568804196,966568804196,"Bramonbariya, Bijoynogar",Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: Redesign দেওয়া যাবে কথা বলা হইছে, নিবে কিনা কিছু বলে নি
+Remarks: Floor plan redesign",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,"Redesign দেওয়া যাবে কথা বলা হইছে, নিবে কিনা কিছু বলে নি",Floor plan redesign,,,,False,False,False
+L-0092,2026-08-16,IBDC,Md Masum Billah,1732583570,1732583570,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ফোনে কথা হইছে বাকি ইনফো দেওয়ার কথা ছিল দেয়নি",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,ফোনে কথা হইছে বাকি ইনফো দেওয়ার কথা ছিল দেয়নি,,,,,False,False,False
+L-0093,2026-08-16,IBDC,Shahkayat,96879229364,96879229364,,Facebook,Other,"Client Requirement: Building Work
+Insaf Response: আমরা এই ধরনের কাজ করি না প্ল্যান ডিজাইন নেওয়ার জন্য পরামর্শ দেওয়া হয়েছে
+Remarks: Lone বাড়ি নির্মাণ কাজ করার জন্য",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Building Work,আমরা এই ধরনের কাজ করি না প্ল্যান ডিজাইন নেওয়ার জন্য পরামর্শ দেওয়া হয়েছে,Lone বাড়ি নির্মাণ কাজ করার জন্য,,,,False,False,False
+L-0094,2026-08-16,IBDC,Md Azizur Rahman,1915679055,1915679055,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: ১। ফোনে কথা হয়েছে, হোয়াটস এপে সার্ভে রিপোর্ট পাঠাবেন পরে বিস্তারিত কথা বলবেন। FMZ ২। শনির আখড়ার পাটেরবাগ এলাকায় দুই পাশে ১২ ফিট ও একপাশে ৬ ফিটের রাস্তা, ১৫ কাঠা জমি, সর্বোচ্চ ১০ তলা পাবে জানিয়েছি কিন্তু উনাদের চাহিদা ১২/১৪ তলা, উনারা মূলত ডেভেলপার, উনারাও জানে যে এখানে ১০ তলার বেশি হবে না তবে জমির মালিকদের চাহিদা বেশি। একান্তই ১৪ তলা যদি করতে চায় তবে, ১০ তলা প্ল্যান পাস নিয়ে বাকীটা ডেভিয়েশন  করার পরামর্শ দিয়েছি। সবশেষে, আমার নাম, অফিস লোকেশন জিজ্ঞেস করে আমাকে দাওয়াত দিয়েছেন, যদি কখনো ওইদিকে যাই তবে যেন ফোন দিয়ে উনার সাথে দেখা করি। FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,"১। ফোনে কথা হয়েছে, হোয়াটস এপে সার্ভে রিপোর্ট পাঠাবেন পরে বিস্তারিত কথা বলবেন। FMZ ২। শনির আখড়ার পাটেরবাগ এলাকায় দুই পাশে ১২ ফিট ও একপাশে ৬ ফিটের রাস্তা, ১৫ কাঠা জমি, সর্বোচ্চ ১০ তলা পাবে জানিয়েছি কিন্তু উনাদের চাহিদা ১২/১৪ তলা, উনারা মূলত ডেভেলপার, উনারাও জানে যে এখানে ১০ তলার বেশি হবে না তবে জমির মালিকদের চাহিদা বেশি। একান্তই ১৪ তলা যদি করতে চায় তবে, ১০ তলা প্ল্যান পাস নিয়ে বাকীটা ডেভিয়েশন  করার পরামর্শ দিয়েছি। সবশেষে, আমার নাম, অফিস লোকেশন জিজ্ঞেস করে আমাকে দাওয়াত দিয়েছেন, যদি কখনো ওইদিকে যাই তবে যেন ফোন দিয়ে উনার সাথে দেখা করি। FMZ",,,False,False,False
+L-0095,2026-08-16,IBDC,Md Kibria Haoladar,966507022023,966507022023,Barguna,Facebook,Other,"Client Requirement: Building Work
+Insaf Response: আমরা এই ধরনের কাজ করি না প্ল্যান ডিজাইন নেওয়ার জন্য পরামর্শ দেওয়া হয়েছে
+Remarks: ফুল প্যাকেজে বাড়ি নির্মাণ করতে চায়",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Building Work,আমরা এই ধরনের কাজ করি না প্ল্যান ডিজাইন নেওয়ার জন্য পরামর্শ দেওয়া হয়েছে,ফুল প্যাকেজে বাড়ি নির্মাণ করতে চায়,,,,False,False,False
+L-0096,2026-08-15,IBDC,Md Ali,1969161786,1969161786,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: আমরা কত তলা দিতে পারবো আরও ইনফো দরকার ছিল বলা হইছে দেয় নি
+Remarks: 3 কাঠা জি+৬ চায় ফুল প্যাকেজ খরচ জানতে চাই",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,আমরা কত তলা দিতে পারবো আরও ইনফো দরকার ছিল বলা হইছে দেয় নি,3 কাঠা জি+৬ চায় ফুল প্যাকেজ খরচ জানতে চাই,,,,False,False,False
+L-0097,2026-08-13,IBDC,Aioub bachuchu,971509784705,971509784705,Shoriyatpur,Facebook,Other,"Client Requirement: Building Work
+Insaf Response: আমরা এই ধরনের কাজ করি না প্ল্যান ডিজাইন নেওয়ার জন্য পরামর্শ দেওয়া হয়েছে
+Remarks: বাড়ি নির্মাণ কাজ করার জন্য",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Building Work,আমরা এই ধরনের কাজ করি না প্ল্যান ডিজাইন নেওয়ার জন্য পরামর্শ দেওয়া হয়েছে,বাড়ি নির্মাণ কাজ করার জন্য,,,,False,False,False
+L-0098,2026-08-16,IBDC,Mejan,971547861288,971547861288,United Arab Emirates,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0099,2026-08-16,IBDC,551709,971568017899,971568017899,United Arab Emirates,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0100,2026-08-16,IBDC,Md Omar Faruk,1819142827,1819142827,"Kamarpara, Turag",Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ডিজিটাল সার্ভে দিয়েছে বাকি ইনফো চাইছি
+Reminder 1: ফোন দিয়েছি কিন্তু ধরে নি FMZ",,,0.00,Warm,Contacted,2026-08-30,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,ডিজিটাল সার্ভে দিয়েছে বাকি ইনফো চাইছি,,ফোন দিয়েছি কিন্তু ধরে নি FMZ,,,False,False,False
+L-0101,2026-08-16,IBDC,Mehedi Hasan,1822767698,1822767698,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: ফোন দিয়েছি কিন্তু ধরে নি FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,ফোন দিয়েছি কিন্তু ধরে নি FMZ,,,False,False,False
+L-0102,2026-08-16,IBDC,HM Sohel,96892769547,96892769547,,Facebook,Other,"Client Requirement: Building Work
+Insaf Response: আমরা এই ধরনের কাজ করি না প্ল্যান ডিজাইন নেওয়ার জন্য পরামর্শ দেওয়া হয়েছে
+Remarks: বাড়ি নির্মাণ কাজ করার জন্য",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Building Work,আমরা এই ধরনের কাজ করি না প্ল্যান ডিজাইন নেওয়ার জন্য পরামর্শ দেওয়া হয়েছে,বাড়ি নির্মাণ কাজ করার জন্য,,,,False,False,False
+L-0103,2026-08-15,IBDC,Noyon,966531083693,966531083693,Noakhali,Facebook,Architectural Design,"Client Requirement: Building Work
+Insaf Response: সাইট ভিজিট খরচ ও ডিজাইন খরচ জানানো হইছে
+Remarks: দুই তলা ডিজাইন করে এক তলা কমপ্লিট করবে",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Architectural Design,Building Work,সাইট ভিজিট খরচ ও ডিজাইন খরচ জানানো হইছে,দুই তলা ডিজাইন করে এক তলা কমপ্লিট করবে,,,,False,False,False
+L-0104,2026-08-21,IBDC,Md Rabbi Hossain,1816648188,1816648188,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: কথা হয়েছে উনার ক্লায়েন্ট এর কাজ অন্য জায়গা থেকে করে ফেলছে",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,কথা হয়েছে উনার ক্লায়েন্ট এর কাজ অন্য জায়গা থেকে করে ফেলছে,,,,,False,False,False
+L-0105,2026-08-12,IBDC,Masud Rana,966558602314,966558602314,Norsindi,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: বেস্ত থাকার কারনে কথা হচ্ছে না, প্ল্যান ডিজাইন এর কাজের জন্য ফ্রি হয়ে কল দিবে",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,"বেস্ত থাকার কারনে কথা হচ্ছে না, প্ল্যান ডিজাইন এর কাজের জন্য ফ্রি হয়ে কল দিবে",,,,,False,False,False
+L-0106,2026-07-27,IBDC,Md Abdus Sattar,96893316244,96893316244,,Facebook,Other,"Client Requirement: Plan design
+Insaf Response: ফোনে কথা হইছে বাকি ইনফো দেওয়ার কথা ছিল দেয়নি",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Other,Plan design,ফোনে কথা হইছে বাকি ইনফো দেওয়ার কথা ছিল দেয়নি,,,,,False,False,False
+L-0107,2026-08-14,IBDC,Rabiul auwal,971508840682,971508840682,,Facebook,Other,"Client Requirement: Building Work
+Insaf Response: আমাদের কাজের সিস্টেম জানানো হয়েছে আর কোন রেস্পন্স পাইনি
+Remarks: আপনারা কি ভাবে কাজ করেন",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Other,Building Work,আমাদের কাজের সিস্টেম জানানো হয়েছে আর কোন রেস্পন্স পাইনি,আপনারা কি ভাবে কাজ করেন,,,,False,False,False
+L-0108,2026-08-15,IBDC,Md ahsan Ullah,1727049699,1727049699,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: সাাজেশন দেওয়ার জন্য তথ্য চেয়েছি পাইনি
+Remarks: I need some suggestion
+Reminder 1: কথা হয়েছে, যেটার জন্য সাজেশন চেয়েছিলেন সেটা সলভড হয়ে গেছে, যোগাযোগ করার জন্য ধন্যবাদ জানিয়েছেন। FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,সাাজেশন দেওয়ার জন্য তথ্য চেয়েছি পাইনি,I need some suggestion,"কথা হয়েছে, যেটার জন্য সাজেশন চেয়েছিলেন সেটা সলভড হয়ে গেছে, যোগাযোগ করার জন্য ধন্যবাদ জানিয়েছেন। FMZ",,,False,False,False
+L-0109,2026-08-15,IBDC,Abdul Rouf Molla,1745136687,1745136687,Rajbari,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: আমাদের কাজের সিস্টেম জানানো হয়েছে আর কোন রেস্পন্স পাইনি
+Remarks: দুই তলা বাড়ি করবো",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,আমাদের কাজের সিস্টেম জানানো হয়েছে আর কোন রেস্পন্স পাইনি,দুই তলা বাড়ি করবো,,,,False,False,False
+L-0110,2026-08-15,IBDC,Kamal,96892074759,96892074759,Oman,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0111,2026-08-03,IBDC,Md Mridul Hossain,1310905026,1310905026,,Facebook,Other,"Client Requirement: Want a job
+Insaf Response: Interior কাজ চায়",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Want a job,Interior কাজ চায়,,,,,False,False,False
+L-0112,2026-08-15,IBDC,Shydul Islam,966502586010,966502586010,Saudi Arabia,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: অফিসের ঠিকানা ও ওয়েবসাইট লিঙ্ক দেওয়া হইছে
+Remarks: আপনাদের অফিস কোথায়?",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,অফিসের ঠিকানা ও ওয়েবসাইট লিঙ্ক দেওয়া হইছে,আপনাদের অফিস কোথায়?,,,,False,False,False
+L-0113,2026-08-15,IBDC,...A...,966509665365,966509665365,Saudi Arabia,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: Design সম্পর্কে জানার জন্য ম্যাসেজ করা হয়েছে রেস্পন্স নাই",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,Design সম্পর্কে জানার জন্য ম্যাসেজ করা হয়েছে রেস্পন্স নাই,,,,,False,False,False
+L-0114,2026-08-16,IBDC,Amran Kajol,971522669574,971522669574,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0115,2026-08-16,IBDC,Monirul Islam Sajol,1818594781,1818594781,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: সাইনবোর্ড সানারপাড় এলাকায় ১২ ফিট রাস্তার পাশে ৪.৮৪ কাঠা জমিতে ৭ তলা পাবে জানিয়েছি, প্যাকেজ প্ল্যান ডিজাইন, সয়েল টেস্ট ও রাজউক প্ল্যান পাসের একটি কোটেশন রেডি করে দিবো বলে জানিয়েছি। FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,"সাইনবোর্ড সানারপাড় এলাকায় ১২ ফিট রাস্তার পাশে ৪.৮৪ কাঠা জমিতে ৭ তলা পাবে জানিয়েছি, প্যাকেজ প্ল্যান ডিজাইন, সয়েল টেস্ট ও রাজউক প্ল্যান পাসের একটি কোটেশন রেডি করে দিবো বলে জানিয়েছি। FMZ",,,False,False,False
+L-0116,2026-08-16,IBDC,Shopmail,1761468583,1761468583,,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: নাম্বার বন্ধ FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,নাম্বার বন্ধ FMZ,,,False,False,False
+L-0117,2026-08-16,IBDC,Emran Mehedi,1711226770,1711226770,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে
+Reminder 1: উনারা একটা সমিতি, নিজেরা নিজেরা ছাড়পত্র করছে এবং এখন ছাড়পত্রে উল্লেখিত ইজমেন্ট রেজিস্ট্রির কাজ আমাদের মাধ্যমে করাতে চাচ্ছে। আমি জানিয়েছি, শুধু ইজমেন্ট রেজিস্ট্রির কাজ আমরা করবো না যদি রাজউক  প্ল্যান পাসের পরবর্তী সকল কাজ আমাদেরকে দেয় তাহলে আমরা কাজ নিবো, উনারা সমিতির শেয়ারহোল্ডারদের সাথে আলোচনা করে জানাবেন। ইজমেন্ট কি, কেন প্রয়োজন এবং শুধু ইজমেন্ট রেজিস্ট্রির কাজ কীভাবে করবে সেটার ব্যাপারেও সম্যক ধারণা প্রদান করা হয়েছে।FMZ",,,0.00,Cold,Contacted,2026-08-30,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,"উনারা একটা সমিতি, নিজেরা নিজেরা ছাড়পত্র করছে এবং এখন ছাড়পত্রে উল্লেখিত ইজমেন্ট রেজিস্ট্রির কাজ আমাদের মাধ্যমে করাতে চাচ্ছে। আমি জানিয়েছি, শুধু ইজমেন্ট রেজিস্ট্রির কাজ আমরা করবো না যদি রাজউক  প্ল্যান পাসের পরবর্তী সকল কাজ আমাদেরকে দেয় তাহলে আমরা কাজ নিবো, উনারা সমিতির শেয়ারহোল্ডারদের সাথে আলোচনা করে জানাবেন। ইজমেন্ট কি, কেন প্রয়োজন এবং শুধু ইজমেন্ট রেজিস্ট্রির কাজ কীভাবে করবে সেটার ব্যাপারেও সম্যক ধারণা প্রদান করা হয়েছে।FMZ",,,False,False,False
+L-0118,2026-08-16,IBDC,Md Parveez,971529734250,971529734250,United Arab Emirates,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: আমরা ৮ তলা দিতে পারবো, জানানো হয়েছে কোন রেস্পন্স নাই
+Remarks: ১২ ফিট রাস্তা ১০ কাঠা, ডগাইর",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,"আমরা ৮ তলা দিতে পারবো, জানানো হয়েছে কোন রেস্পন্স নাই","১২ ফিট রাস্তা ১০ কাঠা, ডগাইর",,,,False,False,False
+L-0119,2026-08-16,IBDC,Dedarul Alom,1973142283,1973142283,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: Plan পাবে না ড্যাপ ইসু",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,Plan পাবে না ড্যাপ ইসু,,,,,False,False,False
+L-0120,2026-08-16,IBDC,Riyad Hossain,966505936307,966505936307,Saudi Arabia,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0121,2026-08-15,IBDC,Fashion,1883908947,1883908947,Fatullah,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: Backdate Plan for Bank lone",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,Backdate Plan for Bank lone,,,,,False,False,False
+L-0122,2026-08-16,IBDC,Arif,1755430592,1755430592,,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0123,2026-08-16,IBDC,Md Mohasin Molla,966572343546,966572343546,,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: বাড়ি করতে চায় ইনফরমেশন চেয়েছি দেয়নি",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,বাড়ি করতে চায় ইনফরমেশন চেয়েছি দেয়নি,,,,,False,False,False
+L-0124,2026-08-16,IBDC,Dubai,971502845440,971502845440,Dubai,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: বাড়ি করতে চায় ইনফরমেশন চেয়েছি দেয়নি",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,বাড়ি করতে চায় ইনফরমেশন চেয়েছি দেয়নি,,,,,False,False,False
+L-0125,2026-08-10,IBDC,Sultan,1712890446,1712890446,Badda,Facebook,Other,"Client Requirement: Want a job
+Insaf Response: soil test survey firm",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Want a job,soil test survey firm,,,,,False,False,False
+L-0126,2026-08-13,IBDC,HMS Group,1404522456,1404522456,Diabari,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: কোটেশন দেওয়া হইছে, ফলোআপ ম্যাসেজ দেওয়া হইছে রেস্পন্স নাই
+Remarks: b+g+12 চায়
+Reminder 1: নাম্বারে ফোন ডুকে না, ভয়েস দিয়ে রাখছি",,,0.00,Hot,Quotation,2026-08-27,10:00,Proposal Sent,🔥 Hot,RAJUK Approval,Rajuk plan,"কোটেশন দেওয়া হইছে, ফলোআপ ম্যাসেজ দেওয়া হইছে রেস্পন্স নাই",b+g+12 চায়,"নাম্বারে ফোন ডুকে না, ভয়েস দিয়ে রাখছি",,,False,False,False
+L-0127,2026-08-15,IBDC,Md Rasel,966535259150,966535259150,Pirujpur,Facebook,Architectural Design,"Client Requirement: Building Work
+Insaf Response: বিস্তারিত জানানো হয়েছে বাড়ি নির্মাণ ও প্ল্যান ডিজাইন এর কি ভাবে করা হয় কোন রেস্পন্স পাওয়া যায়নি
+Remarks: বাড়ি নিমানের কাজ কি ভাবে করেন",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Architectural Design,Building Work,বিস্তারিত জানানো হয়েছে বাড়ি নির্মাণ ও প্ল্যান ডিজাইন এর কি ভাবে করা হয় কোন রেস্পন্স পাওয়া যায়নি,বাড়ি নিমানের কাজ কি ভাবে করেন,,,,False,False,False
+L-0128,2026-08-15,IBDC,Md Samsuddin,1690226402,1690226402,,Facebook,Other,"Client Requirement: Want a job
+Remarks: MEP engineear",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Want a job,,MEP engineear,,,,False,False,False
+L-0129,2026-08-24,IBDC,Md. Salah Uddin,1751447117,1751447117,,Google,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ধারনা দেওয়া হইছে ও প্ল্যান ডিজাইন নেওয়ার জন্য পরামর্শ দেওয়া হইছে
+Remarks: 3 তলা ফাউন্ডেশন ২ তলা করতে কত খরচ হবে?",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,ধারনা দেওয়া হইছে ও প্ল্যান ডিজাইন নেওয়ার জন্য পরামর্শ দেওয়া হইছে,3 তলা ফাউন্ডেশন ২ তলা করতে কত খরচ হবে?,,,,False,False,False
+L-0130,2026-08-12,IBDC,Shk Majid,971543284157,971543284157,Cumillah Barua,Facebook,Architectural Design,"Client Requirement: Building Work
+Insaf Response: সকল ডিজাইন ৩০ টাকা করে দিতে পারবো জানানো হয়েছে ও পূর্বের ৩ডি ভিউ ইত্যাদি দেখানো হয়েছে
+Remarks: 2 তলা ৬০০ স্কয়ার ফিট",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Architectural Design,Building Work,সকল ডিজাইন ৩০ টাকা করে দিতে পারবো জানানো হয়েছে ও পূর্বের ৩ডি ভিউ ইত্যাদি দেখানো হয়েছে,2 তলা ৬০০ স্কয়ার ফিট,,,,False,False,False
+L-0131,2026-08-08,IBDC,Kawser Shikder,1715635073,1715635073,kodomtoli Muhammadbag,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan design
+Insaf Response: কোটেশন দেওয়া হইছে ৫ লাখ টাকার উনি বলছে ৩ লাখ টাকা, রেট বেশি কাজ করাবে না
+Remarks: 5/6 তলা প্ল্যান পাস ও ডিজাইন",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan design,"কোটেশন দেওয়া হইছে ৫ লাখ টাকার উনি বলছে ৩ লাখ টাকা, রেট বেশি কাজ করাবে না",5/6 তলা প্ল্যান পাস ও ডিজাইন,,,,False,False,False
+L-0132,2026-08-14,IBDC,Kamrul Zaman Sheikh,966549153066,966549153066,,Facebook,Other,"Client Requirement: Building Work
+Insaf Response: ব্লক দিয়ে কয়েকটি কোম্পানি করে
+Remarks: 6/7 লাখ টাকার মধ্যে বাড়ির ফুল কাজ চায়",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Building Work,ব্লক দিয়ে কয়েকটি কোম্পানি করে,6/7 লাখ টাকার মধ্যে বাড়ির ফুল কাজ চায়,,,,False,False,False
+L-0133,2026-08-15,IBDC,Md Billal Hossain,1753716264,1753716264,,Facebook,Other,"Client Requirement: plan design
+Insaf Response: আমাদের কাজ সম্পর্কে অবগত করা হয়েছে কোন রেস্পন্স নাই
+Remarks: শুধু সালাম দিসে",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,Other,plan design,আমাদের কাজ সম্পর্কে অবগত করা হয়েছে কোন রেস্পন্স নাই,শুধু সালাম দিসে,,,,False,False,False
+L-0134,2026-08-01,IBDC,At,1517828458,1517828458,Meradia,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ৭/৮ তলা পাবে
+Remarks: 20 ফিট রাস্তা ৭০০ অজুতাংশ",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,৭/৮ তলা পাবে,20 ফিট রাস্তা ৭০০ অজুতাংশ,,,,False,False,False
+L-0135,2026-08-14,IBDC,AR Abir,966595314027,966595314027,,Facebook,Other,"Client Requirement: plan design
+Insaf Response: এই ধরনেের সার্ভিস আমরা দেই না আমরা যেই সিস্টেমে কাজ করি সে বিষয়ে জানিয়েছি
+Remarks: কিস্তিতে বাড়ি নির্মাণ করেন?",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,plan design,এই ধরনেের সার্ভিস আমরা দেই না আমরা যেই সিস্টেমে কাজ করি সে বিষয়ে জানিয়েছি,কিস্তিতে বাড়ি নির্মাণ করেন?,,,,False,False,False
+L-0136,2026-08-13,IBDC,Md Shaha Ali,966504176629,966504176629,,Facebook,Other,"Client Requirement: Building Work
+Insaf Response: এই ধরনেের সার্ভিস আমরা দেই না আমরা যেই সিস্টেমে কাজ করি সে বিষয়ে জানিয়েছি
+Remarks: 1200 স্কয়ার ফিট কিস্তিতে বাড়ি নির্মাণ করে দেন",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Building Work,এই ধরনেের সার্ভিস আমরা দেই না আমরা যেই সিস্টেমে কাজ করি সে বিষয়ে জানিয়েছি,1200 স্কয়ার ফিট কিস্তিতে বাড়ি নির্মাণ করে দেন,,,,False,False,False
+L-0137,2026-08-13,IBDC,Zahed,1673989910,1673989910,Mirpur,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ৩২.৫০ লাখ টাকা দিয়ে আমরা কাজ টি করে দিতে পারবো
+Remarks: ১৩ কাঠা ৩০/১০ ফিট রাস্তা  প্ল্যান পাস ও ডিজাইন",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,৩২.৫০ লাখ টাকা দিয়ে আমরা কাজ টি করে দিতে পারবো,১৩ কাঠা ৩০/১০ ফিট রাস্তা  প্ল্যান পাস ও ডিজাইন,,,,False,False,False
+L-0138,2026-08-13,IBDC,Salim Mondol,966505255293,966505255293,Saudi,Facebook,Architectural Design,"Client Requirement: plan design
+Insaf Response: পরে কল দিবে",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Architectural Design,plan design,পরে কল দিবে,,,,,False,False,False
+L-0139,2026-08-13,IBDC,Sumaya,1712775240,1712775240,"khilgao, nondipara",Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ৮/৯ তলা দিতে পারব কিছু জানায়নি
+Remarks: 16 ফিট রাস্তা ১৪ শতাংশ",,,0.00,Warm,Contacted,2026-08-25,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,৮/৯ তলা দিতে পারব কিছু জানায়নি,16 ফিট রাস্তা ১৪ শতাংশ,,,,False,False,False
+L-0140,2026-08-13,IBDC,Shofik sakh,966500154912,966500154912,,Facebook,Other,"Client Requirement: plan design
+Insaf Response: সালাম দিসে, অন্যান্য আরও তথ্য চাইলাম দেয়নি",,,0.00,Cold,Contacted,2026-08-25,10:00,Conversation Started,🔵 Cold,Other,plan design,"সালাম দিসে, অন্যান্য আরও তথ্য চাইলাম দেয়নি",,,,,False,False,False
+L-0141,2026-08-13,IBDC,Shuvo,966571372664,966571372664,,Facebook,Other,"Client Requirement: plan design
+Insaf Response: সালাম দিসে, অন্যান্য আরও তথ্য চাইলাম দেয়নি",,,0.00,Cold,Contacted,2026-08-25,10:00,Conversation Started,🔵 Cold,Other,plan design,"সালাম দিসে, অন্যান্য আরও তথ্য চাইলাম দেয়নি",,,,,False,False,False
+L-0142,2026-08-13,IBDC,Md Imran,966578359267,966578359267,Saudi,Facebook,Other,"Client Requirement: plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,2026-08-25,10:00,Conversation Started,🔵 Cold,Other,plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0143,2026-08-13,IBDC,Shimul Badsa,60176548931,60176548931,Malaysia,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: নো টেক্স ও কল বলে দিছে",,,0.00,Cold,Contacted,2026-08-25,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,নো টেক্স ও কল বলে দিছে,,,,,False,False,False
+L-0144,2026-08-13,IBDC,UU,96895715935,96895715935,Oman,Facebook,Architectural Design,"Client Requirement: plan design
+Insaf Response: রাতে কথা বলবে",,,0.00,Warm,Contacted,2026-08-25,10:00,Conversation Started,🟡 Warm,Architectural Design,plan design,রাতে কথা বলবে,,,,,False,False,False
+L-0145,2026-08-13,IBDC,Khan Mamun,1920782463,1920782463,Gazipur,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: প্ল্যান পাস দিতে পারবো কিনা জানার জন্য আরও ইনফো চাইছি দেয়নি
+Remarks: বাসন ইউনিয়নে ৩ তলার প্ল্যান পাস করতে কত খরচ হবে",,,0.00,Warm,Contacted,2026-08-25,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,প্ল্যান পাস দিতে পারবো কিনা জানার জন্য আরও ইনফো চাইছি দেয়নি,বাসন ইউনিয়নে ৩ তলার প্ল্যান পাস করতে কত খরচ হবে,,,,False,False,False
+L-0146,2026-08-14,IBDC,Oman,96879584952,96879584952,Oman,Facebook,Architectural Design,"Client Requirement: plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,2026-08-25,10:00,Conversation Started,🔵 Cold,Architectural Design,plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0147,2026-08-14,IBDC,Rohit,966541162871,966541162871,Saudi,Facebook,Architectural Design,"Client Requirement: plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,2026-08-25,10:00,Conversation Started,🔵 Cold,Architectural Design,plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0148,2026-08-14,IBDC,M Nasir Uddin,1701953341,1701953341,Dinajpur,Facebook,Other,"Client Requirement: Building Work
+Insaf Response: এই ধরনেের সার্ভিস আমরা দেই না আমরা যেই সিস্টেমে কাজ করি সে বিষয়ে জানিয়েছি
+Remarks: ব্লক দিয়ে  অর্ধেক খরচে বাড়ি নির্মাণ করতে চায়",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Building Work,এই ধরনেের সার্ভিস আমরা দেই না আমরা যেই সিস্টেমে কাজ করি সে বিষয়ে জানিয়েছি,ব্লক দিয়ে  অর্ধেক খরচে বাড়ি নির্মাণ করতে চায়,,,,False,False,False
+L-0149,2026-08-14,IBDC,Md Osim,1345893767,1345893767,,Facebook,Architectural Design,"Client Requirement: plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,2026-08-25,10:00,Conversation Started,🔵 Cold,Architectural Design,plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0150,2026-08-14,IBDC,Md Samim,966578018829,966578018829,Saudi,Facebook,Other,"Client Requirement: plan design
+Insaf Response: ফোনে কথা হয়েছে আমাদের কাজের অবস্থা বলা হয়েছে ও উনি কি করতে চায় জানাতে বলছি, কিন্তু উনি কিছু জানায়নি",,,0.00,Cold,Contacted,2026-08-26,10:00,Conversation Started,🔵 Cold,Other,plan design,"ফোনে কথা হয়েছে আমাদের কাজের অবস্থা বলা হয়েছে ও উনি কি করতে চায় জানাতে বলছি, কিন্তু উনি কিছু জানায়নি",,,,,False,False,False
+L-0151,2026-08-14,IBDC,Nurul Islam,971505199482,971505199482,United Arab Emirates,Facebook,Architectural Design,"Client Requirement: plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,2026-08-26,10:00,Conversation Started,🔵 Cold,Architectural Design,plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0152,2026-08-08,IBDC,Abdur Rahim,1726149762,1726149762,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: তথ্য নিয়ে আপডেট জানাবো",,,0.00,Warm,Contacted,2026-08-26,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,তথ্য নিয়ে আপডেট জানাবো,,,,,False,False,False
+L-0153,2026-08-14,IBDC,Md Sujon,966596704668,966596704668,Saudi,Facebook,Architectural Design,"Client Requirement: plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,2026-08-26,10:00,Conversation Started,🔵 Cold,Architectural Design,plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে,,,,,False,False,False
+L-0154,2026-08-05,IBDC,Monzur H Bhuiyan,966566293820,966566293820,Saudi,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই",,,0.00,Cold,Contacted,2026-08-26,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,,,,False,False,False
+L-0155,2026-08-15,IBDC,Kobir,96899586105,96899586105,Oman,Facebook,Architectural Design,"Client Requirement: plan design
+Insaf Response: উনাকে আমাদের কাজের বিষয়ে ও খরচ সম্পকে জানানো হয়েছে ও কাজের প্রমান সরুপ অনেক কিছু দেওয়া হয়েছে
+Remarks: 7 শতাংশ ৫ তলা প্ল্যান ডিজাইন",,,0.00,Cold,Contacted,2026-08-26,10:00,Conversation Started,🔵 Cold,Architectural Design,plan design,উনাকে আমাদের কাজের বিষয়ে ও খরচ সম্পকে জানানো হয়েছে ও কাজের প্রমান সরুপ অনেক কিছু দেওয়া হয়েছে,7 শতাংশ ৫ তলা প্ল্যান ডিজাইন,,,,False,False,False
+L-0156,2026-08-14,IBDC,Md Farid,966578001923,966578001923,Saudi,Facebook,Architectural Design,"Client Requirement: plan design
+Insaf Response: কল করেছি কেটে দিয়েছে, আমাদের কাজের অবস্থা ভয়েসে বলছি
+Reminder 1: ফুল প্যাকেজে বাড়ি করতে চায় টাঙ্গাইল যা আমাদের দ্বারা সম্ভব না",,,0.00,Cold,Contacted,2026-08-27,10:00,No Response,🔴 Lost,Architectural Design,plan design,"কল করেছি কেটে দিয়েছে, আমাদের কাজের অবস্থা ভয়েসে বলছি",,ফুল প্যাকেজে বাড়ি করতে চায় টাঙ্গাইল যা আমাদের দ্বারা সম্ভব না,,,False,False,False
+L-0157,2026-08-14,IBDC,Chunnu Munshi,142499393,142499393,,Facebook,Architectural Design,"Client Requirement: plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই
+Reminder 1: কল করছি, কিন্তু ফোনে ঢুকছে না।",,,0.00,Cold,Contacted,2026-08-27,10:00,Conversation Started,🔵 Cold,Architectural Design,plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,"কল করছি, কিন্তু ফোনে ঢুকছে না।",,,False,False,False
+L-0158,2026-08-14,IBDC,Iqbal,1712670796,1712670796,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই
+Reminder 1: তারিখঃ  ৩০.০৮.২০২৬ ইং উত্তরখানে ২৫ ফিট রাস্তার পাশে ৫ কাঠা জমিতে (জি+৭) ৮ তলা পাবে বলে জানিয়েছি, উনি এখন ঢাকার বাইরে আছেন পরবর্তীতে আমাদের সাথে যোগাযোগ করবেন বলে জানিয়েছেন।",,,0.00,Cold,Contacted,2026-08-27,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,"তারিখঃ  ৩০.০৮.২০২৬ ইং উত্তরখানে ২৫ ফিট রাস্তার পাশে ৫ কাঠা জমিতে (জি+৭) ৮ তলা পাবে বলে জানিয়েছি, উনি এখন ঢাকার বাইরে আছেন পরবর্তীতে আমাদের সাথে যোগাযোগ করবেন বলে জানিয়েছেন।",,,False,False,False
+L-0159,2026-08-30,IBDC,,1961262993,1961262993,Munsiganj,Website,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ফোনে বিস্তারিত কথা হয়েছে প্ল্যান ডিজাইন খরচ জানানো হয়েছে
+Remarks: 1463 স্কয়ার ফিট জায়গায় দুই তলা কমপ্লিট করতে কেমন কি খরচ হবে",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,ফোনে বিস্তারিত কথা হয়েছে প্ল্যান ডিজাইন খরচ জানানো হয়েছে,1463 স্কয়ার ফিট জায়গায় দুই তলা কমপ্লিট করতে কেমন কি খরচ হবে,,,,True,False,False
+L-0160,2026-07-29,IBDC,Architect Imran,1613831110,1613831110,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই
+Reminder 1: ফোন দিয়েছি, ধরেন নি",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,"ফোন দিয়েছি, ধরেন নি",,,False,False,False
+L-0161,2026-08-15,IBDC,Md Abu Hanif,1910116083,1910116083,,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই
+Remarks: বাড়ির প্ল্যান ডিজাইন চায়
+Reminder 1: প্ল্যান ডিজাইন লাগবে না ফোন কেটে দিয়েছে",,,0.00,Cold,Contacted,2026-08-30,10:00,No Response,🔴 Lost,Architectural Design,Plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,বাড়ির প্ল্যান ডিজাইন চায়,প্ল্যান ডিজাইন লাগবে না ফোন কেটে দিয়েছে,,,False,False,False
+L-0162,2026-08-15,IBDC,Mohammad halal,96878979056,96878979056,Oman,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই
+Reminder 1: ফোন দিয়েছি, ধরেন নি",,,0.00,Cold,Contacted,2026-08-31,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,"ফোন দিয়েছি, ধরেন নি",,,False,False,False
+L-0163,2026-08-15,IBDC,Md Omar Faruk Rony,1711288244,1711288244,Demra,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই
+Reminder 1: কথা হয়েছে ৬/৭ তলা পাবে ৬ লাখ টাকা বলে দিয়েছি, পরে যোগাযোগ করবে",,,0.00,Cold,Contacted,2026-08-31,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,"কথা হয়েছে ৬/৭ তলা পাবে ৬ লাখ টাকা বলে দিয়েছি, পরে যোগাযোগ করবে",,,False,False,False
+L-0164,2026-08-01,IBDC,Rahad Hossain,1740296969,1740296969,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই",,,0.00,Cold,Contacted,2026-08-31,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,,,,False,False,False
+L-0165,2026-08-15,IBDC,Mazibur Rahman,1711742707,1711742707,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই",,,0.00,Cold,Contacted,2026-08-31,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,,,,False,False,False
+L-0166,2026-08-15,IBDC,Md Bellal Hossain,966532397113,966532397113,,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই",,,0.00,Cold,Contacted,2026-08-31,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,,,,False,False,False
+L-0167,2026-08-15,IBDC,Amirul Islam,1799794355,1799794355,keraniganj,Facebook,Architectural Design,"Client Requirement: Building Work
+Insaf Response: আমরা  করে দিতে পারবো জানানো হয়েছে
+Remarks: 2 শতক জমি ১ তলা বাড়ি করবে
+Reminder 1: কিস্তিতে বাড়ি নির্মাণ করতে চায় ডিজাইন নেওয়ার পরামর্শ দেওয়া হইছে ও নিজে কোয়ালিটি সম্পন্ন কাজ করার কথা বলা হইছে। ডিজাইন এর বিষয়ে উনার নিজের লোক আছে ডিজাইন লাগবে না",,,0.00,Cold,Contacted,2026-08-31,10:00,No Response,🔴 Lost,Architectural Design,Building Work,আমরা  করে দিতে পারবো জানানো হয়েছে,2 শতক জমি ১ তলা বাড়ি করবে,কিস্তিতে বাড়ি নির্মাণ করতে চায় ডিজাইন নেওয়ার পরামর্শ দেওয়া হইছে ও নিজে কোয়ালিটি সম্পন্ন কাজ করার কথা বলা হইছে। ডিজাইন এর বিষয়ে উনার নিজের লোক আছে ডিজাইন লাগবে না,,,False,False,False
+L-0168,2026-08-15,IBDC,Habibullah Nayem,1733157773,1733157773,,Facebook,Other,Client Requirement: Want a job,,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Want a job,,,,,,False,False,False
+L-0169,2026-08-14,IBDC,Digivate it,,,,Facebook,Other,Client Requirement: Website developer,,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,Other,Website developer,,,,,,True,False,False
+L-0170,2026-08-10,IBDC,Godhuly logonee,1873461322,1873461322,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: রাজউকের কাজ করার রেট জানতে চাইছে তারা মুলত ইঞ্জিনিয়ারিং ফার্ম মিডিয়া হিসাবে কাজ করে আমাদের কাছ থেকে রাজউকের কাজের দাম জানার জন্য ম্যাসেজ করছে, ১০ তলা একটি কাজের জন্য বলছে পাবে ৯ তলা আমরা ৩০ লাখ বলছি তখন বলতাছে এত টাকা না এই বিষয়ে আরও কথা হয়েছে, বলছে পরে কল দিবে",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,,"রাজউকের কাজ করার রেট জানতে চাইছে তারা মুলত ইঞ্জিনিয়ারিং ফার্ম মিডিয়া হিসাবে কাজ করে আমাদের কাছ থেকে রাজউকের কাজের দাম জানার জন্য ম্যাসেজ করছে, ১০ তলা একটি কাজের জন্য বলছে পাবে ৯ তলা আমরা ৩০ লাখ বলছি তখন বলতাছে এত টাকা না এই বিষয়ে আরও কথা হয়েছে, বলছে পরে কল দিবে",,,,False,False,False
+L-0171,2026-08-13,IBDC,Md Hasib Mahmud,1927526656,1927526656,,Facebook,Architectural Design,"Client Requirement: Building Work
+Insaf Response: ধারনা দেওয়া হইছে ও প্ল্যান ডিজাইন করার জন্য পরামর্শ দেওয়া হইছে
+Remarks: 1 তলা বাড়ি নির্মাণ করতে কত টাকা খরচ হবে
+Reminder 1: ম্যাসেজ দেওয়া হইছে",,,0.00,Warm,Contacted,2026-08-31,10:00,Conversation Started,🟡 Warm,Architectural Design,Building Work,ধারনা দেওয়া হইছে ও প্ল্যান ডিজাইন করার জন্য পরামর্শ দেওয়া হইছে,1 তলা বাড়ি নির্মাণ করতে কত টাকা খরচ হবে,ম্যাসেজ দেওয়া হইছে,,,False,False,False
+L-0172,2026-08-12,IBDC,Abbas Ali,966542372393,966542372393,Saudi,Facebook,Other,"Client Requirement: Building Work
+Insaf Response: নির্মাণ কাজ করাতে চায়, আমাদের কাজের সিস্টেম বলা হয়েছে পরে কিছু বলে নি
+Reminder 1: কল দেওয়া হয়েছে পাইনি ভয়েস দিয়ে রাখছি",,,0.00,Warm,Contacted,2026-08-31,10:00,Conversation Started,🟡 Warm,Other,Building Work,"নির্মাণ কাজ করাতে চায়, আমাদের কাজের সিস্টেম বলা হয়েছে পরে কিছু বলে নি",,কল দেওয়া হয়েছে পাইনি ভয়েস দিয়ে রাখছি,,,False,False,False
+L-0173,2026-08-13,IBDC,Sabuj Islam,96879083382,96879083382,Oman,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: বিস্তারিত কথা হয়েছে ২/৪ হাজার টাকা দিয়ে বাড়ির প্ল্যান ডিজাইন নিতে চায়
+Remarks: plan ডিজাইন লাগবে
+Reminder 1: ২/৪ হাজার টাকায় কি প্ল্যান পাইছেন?",,,0.00,Cold,Contacted,2026-08-31,10:00,No Response,🔴 Lost,Architectural Design,Plan design,বিস্তারিত কথা হয়েছে ২/৪ হাজার টাকা দিয়ে বাড়ির প্ল্যান ডিজাইন নিতে চায়,plan ডিজাইন লাগবে,২/৪ হাজার টাকায় কি প্ল্যান পাইছেন?,,,False,False,False
+L-0174,2026-08-13,IBDC,Miraj Hasan,966563273792,966563273792,Saudi,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই
+Reminder 1: কল দেওয়া হয়েছে পাইনি ম্যাসেজ দিয়ে রাখছি",,,0.00,Cold,Contacted,2026-08-31,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,কল দেওয়া হয়েছে পাইনি ম্যাসেজ দিয়ে রাখছি,,,False,False,False
+L-0175,2026-08-13,IBDC,Sayful,1712849292,1712849292,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই",,,0.00,Cold,Contacted,2026-09-01,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,,,,False,False,False
+L-0176,2026-08-13,IBDC,Siddiki Store,1739189859,1739189859,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: বাড়ি নির্মাণ করা এখন প্ল্যান চাচ্ছে রাস্তা ৫ ফিট আমাদের পক্ষে সম্ভব না",,,0.00,Cold,Contacted,2026-09-01,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,বাড়ি নির্মাণ করা এখন প্ল্যান চাচ্ছে রাস্তা ৫ ফিট আমাদের পক্ষে সম্ভব না,,,,,False,False,False
+L-0177,2026-08-11,IBDC,Mohammad Qhasan Chowdhury,97466360645,97466360645,Feni,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: দুই তলা প্ল্যান ডিজাইন এর জন্য ৩০ হাজার টাকার কোটেশন দেওয়া হইছে
+Reminder 1: কল দেওয়া হইছে ফোন রিসিভ করেনি, ভয়েস দিয়ে রাখছি",,,0.00,Warm,Contacted,2026-09-01,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,দুই তলা প্ল্যান ডিজাইন এর জন্য ৩০ হাজার টাকার কোটেশন দেওয়া হইছে,,"কল দেওয়া হইছে ফোন রিসিভ করেনি, ভয়েস দিয়ে রাখছি",,,False,False,False
+L-0178,2026-08-13,IBDC,Tawfik Uddin,1720566005,1720566005,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,,,,False,False,False
+L-0179,2026-08-07,IBDC,Opal Engineers,1622222330,1622222330,Saver,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: অবাস্তব চাওয়া আমরা যা পারবো জানাইছি
+Remarks: ৫.২৪ কাঠা প্লট ২২ ও ২০ ফুট রাস্তা মৌজ- কান্দি বৈলারপুর তেঁতুলঝোড়া ইউনিয়ন হেমায়েতপুর সাভার আর.এস ২১৮ দাগ
+১০ তলা করতে চাই বিস্তারিত জানাবেন প্ল্যান পাস খরচ কত হবে  জমি- ৩.৬৮ কাঠা বা ২৬৪৯.৬ বর্গ ফুট রাস্তা-৩০ ফুট পশ্চিমে এবং দক্ষিণে ২৫ ফুট জি+৮ তলা প্ল্যান পাস করতে হবে, সিঙ্গেল ইউনিট। 
+জানাবেন প্লিজ",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,অবাস্তব চাওয়া আমরা যা পারবো জানাইছি,"৫.২৪ কাঠা প্লট ২২ ও ২০ ফুট রাস্তা মৌজ- কান্দি বৈলারপুর তেঁতুলঝোড়া ইউনিয়ন হেমায়েতপুর সাভার আর.এস ২১৮ দাগ
+১০ তলা করতে চাই বিস্তারিত জানাবেন প্ল্যান পাস খরচ কত হবে  জমি- ৩.৬৮ কাঠা বা ২৬৪৯.৬ বর্গ ফুট রাস্তা-৩০ ফুট পশ্চিমে এবং দক্ষিণে ২৫ ফুট জি+৮ তলা প্ল্যান পাস করতে হবে, সিঙ্গেল ইউনিট। 
+জানাবেন প্লিজ",,,,False,False,False
+L-0180,2026-08-13,IBDC,Md Shoukat Hossain,1921210639,1921210639,Gazipur,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ৫.৫০ হাজার ফুল প্যাকেজ জানানো হয়েছে
+Remarks: 25 ফিট রাস্তার পাশে ৩ কাঠা জমি
+Reminder 1: ম্যাসেজ করা হয়েছে",,,0.00,Warm,Contacted,2026-09-02,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,৫.৫০ হাজার ফুল প্যাকেজ জানানো হয়েছে,25 ফিট রাস্তার পাশে ৩ কাঠা জমি,ম্যাসেজ করা হয়েছে,,,False,False,False
+L-0181,2026-08-12,IBDC,Kawser Rashid,1730326221,1730326221,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই
+Reminder 1: ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,2026-09-02,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,ম্যাসেজ করা হয়েছে,,,False,False,False
+L-0182,2026-08-13,IBDC,,966552895624,966552895624,Saudi,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: কল দিয়েছি ধরে না, ম্যাসেজ দিয়ে রাখছি
+Reminder 1: ম্যাসেজ করা হয়েছে",,,0.00,Cold,Contacted,2026-09-03,10:00,Conversation Started,🔵 Cold,Architectural Design,Plan design,"কল দিয়েছি ধরে না, ম্যাসেজ দিয়ে রাখছি",,ম্যাসেজ করা হয়েছে,,,True,False,False
+L-0183,2026-08-13,IBDC,Protap Kundu,1927990266,1927990266,Gazipur,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: DAP Issue প্ল্যান পাবে না",,,0.00,Cold,Contacted,,10:00,No Response,🔴 Lost,RAJUK Approval,Rajuk plan,DAP Issue প্ল্যান পাবে না,,,,,False,False,False
+L-0184,2026-08-12,IBDC,Tamim Bhuiyan,1614460665,1614460665,Demra,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: 8/9 তলা দেওয়া যাবে ডিজাইন ও প্ল্যান পাস খরচ জানানো হয়েছে
+Reminder 1: ম্যাসেজ করা হয়েছে",,,0.00,Warm,Contacted,2026-09-03,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,8/9 তলা দেওয়া যাবে ডিজাইন ও প্ল্যান পাস খরচ জানানো হয়েছে,,ম্যাসেজ করা হয়েছে,,,False,False,False
+L-0185,2026-08-12,IBDC,Tanim Khandaker,966554183267,966554183267,,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: plan design নিয়ে কথা হইছে ও কাজের স্যাম্পল দেখানো হইছে
+Reminder 1: ম্যাসেজ করা হয়েছে",,,0.00,Warm,Contacted,2026-09-03,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,plan design নিয়ে কথা হইছে ও কাজের স্যাম্পল দেখানো হইছে,,ম্যাসেজ করা হয়েছে,,,False,False,False
+L-0186,2026-08-11,IBDC,szxz34670,`966509874290,`966509874290,Saudi,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: প্ল্যান ডিজাইন খরচ ও নির্মাণ খরচ আইডিয়া দেওয়া হইছে , তারপর উত্তর নাই ম্যাসেজ দেওয়া হইছে
+Remarks: 4 বেড রুম এক তলা বাড়ি করবে
+Reminder 1: কল দেওয়া হইছে রিসিভ করে নি ম্যাসেজ দেওয়া হইছে",,,0.00,Warm,Contacted,2026-09-05,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,"প্ল্যান ডিজাইন খরচ ও নির্মাণ খরচ আইডিয়া দেওয়া হইছে , তারপর উত্তর নাই ম্যাসেজ দেওয়া হইছে",4 বেড রুম এক তলা বাড়ি করবে,কল দেওয়া হইছে রিসিভ করে নি ম্যাসেজ দেওয়া হইছে,,,False,False,False
+L-0187,2026-08-11,IBDC,Dolon Ahmed,1999499280,1999499280,Keraniganj,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: প্ল্যান ডিজাইন খরচ ও নির্মাণ খরচ আইডিয়া দেওয়া হইছে , তারপর উত্তর নাই ম্যাসেজ দেওয়া হইছে
+Remarks: 47/25 এক তলা প্ল্যান ডিজাইন
+Reminder 1: কল দেওয়া হইছে রিসিভ করে নি ম্যাসেজ দেওয়া হইছে",,,0.00,Warm,Contacted,2026-09-05,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,"প্ল্যান ডিজাইন খরচ ও নির্মাণ খরচ আইডিয়া দেওয়া হইছে , তারপর উত্তর নাই ম্যাসেজ দেওয়া হইছে",47/25 এক তলা প্ল্যান ডিজাইন,কল দেওয়া হইছে রিসিভ করে নি ম্যাসেজ দেওয়া হইছে,,,False,False,False
+L-0188,2026-07-29,IBDC,S M Jahidul Islam MBA,1713083699,1713083699,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ম্যাসেজের কোন উত্তর না পেয়ে কল দেওয়া হয়েছে বলছে মিটিং এ আছে পরে কথা বলবে",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,ম্যাসেজের কোন উত্তর না পেয়ে কল দেওয়া হয়েছে বলছে মিটিং এ আছে পরে কথা বলবে,,,,,False,False,False
+L-0189,2026-08-01,IBDC,Rohan,1846161042,1846161042,,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ম্যাসেজের কোন উত্তর না পেয়ে কল দেওয়া হয়েছে বলছে পরে কথা বলবে
+Reminder 1: কল দেওয়া হইছে রিসিভ করে নি ম্যাসেজ দেওয়া হইছে",,,0.00,Warm,Contacted,2026-09-05,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,ম্যাসেজের কোন উত্তর না পেয়ে কল দেওয়া হয়েছে বলছে পরে কথা বলবে,,কল দেওয়া হইছে রিসিভ করে নি ম্যাসেজ দেওয়া হইছে,,,False,False,False
+L-0190,2026-08-13,IBDC,Muhammad Yousuf Patwary,96878160876,96878160876,,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: বিস্তারিত কথা হয়েছে দেশে ফিরে আমাদের সাথে যোগাযোগ করবে
+Remarks: 31/30 এক তলা প্ল্যান ডিজাইন
+Reminder 1: ফলো আপ ম্যাসেজ দেওয়া হইছে",,,0.00,Warm,Contacted,2026-09-05,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,বিস্তারিত কথা হয়েছে দেশে ফিরে আমাদের সাথে যোগাযোগ করবে,31/30 এক তলা প্ল্যান ডিজাইন,ফলো আপ ম্যাসেজ দেওয়া হইছে,,,False,False,False
+L-0191,2026-08-10,IBDC,Ismail,96894318485,96894318485,Oman,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Insaf Response: ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই",,,0.00,Cold,Contacted,,10:00,Conversation Started,🔵 Cold,RAJUK Approval,Rajuk plan,ইনফো চেয়ে ম্যাসেজ করা হয়েছে কোন রেস্পন্স নাই,,,,,False,False,False
+L-0192,2026-08-13,IBDC,Amzad Hossain,966572655060,966572655060,Saudi,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: বিস্তারিত ফোনে কথা হয়েছে  ১০ হাজার টাকা দিলে আর্কিটেক্ট প্ল্যান করে দিব
+Remarks: ৩৩/৪২ ৬ বেড রুম দিয়ে প্ল্যান ডিজাইন
+Reminder 1: বিস্তারিত ফোনে কথা হয়েছে  ১০ হাজার টাকা দিলে আর্কিটেক্ট প্ল্যান করে দিব , কোটেশন দেওয়া হইছে",,,0.00,Warm,Contacted,2026-09-05,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,বিস্তারিত ফোনে কথা হয়েছে  ১০ হাজার টাকা দিলে আর্কিটেক্ট প্ল্যান করে দিব,৩৩/৪২ ৬ বেড রুম দিয়ে প্ল্যান ডিজাইন,"বিস্তারিত ফোনে কথা হয়েছে  ১০ হাজার টাকা দিলে আর্কিটেক্ট প্ল্যান করে দিব , কোটেশন দেওয়া হইছে",,,False,False,False
+L-0193,2026-08-13,IBDC,Md Ataur Rahman shuvo,966540745804,966540745804,Rangpur,Facebook,RAJUK Plan Approval,"Client Requirement: Plan design
+Insaf Response: কাজে আছে পরে কথা বলবে
+Remarks: ৪ শতাংশ ৩ তলা",,,0.00,Warm,Contacted,,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Plan design,কাজে আছে পরে কথা বলবে,৪ শতাংশ ৩ তলা,,,,False,False,False
+L-0194,2026-08-13,IBDC,Ismailbd,971554349157,971554349157,,Facebook,Architectural Design,"Client Requirement: Plan design
+Insaf Response: উনার সাথে কথা হয়েছে, দেশে এসে যোগাযোগ করবে সাইট ভিজিট করে প্ল্যান ডিজাইন করতে হবে
+Remarks: পুরাতন বাড়ির সাথে নতুন ডিজাইন এড করে ডিজাইন
+Reminder 1: ফলো আপ ম্যাসেজ দেওয়া হইছে",,,0.00,Warm,Contacted,2026-09-05,10:00,Conversation Started,🟡 Warm,Architectural Design,Plan design,"উনার সাথে কথা হয়েছে, দেশে এসে যোগাযোগ করবে সাইট ভিজিট করে প্ল্যান ডিজাইন করতে হবে",পুরাতন বাড়ির সাথে নতুন ডিজাইন এড করে ডিজাইন,ফলো আপ ম্যাসেজ দেওয়া হইছে,,,False,False,False
+L-0195,2026-08-12,IBDC,Md Mosaraf,966557253298,966557253298,"Bramonbariya, bancharampur",Facebook,Architectural Design,"Client Requirement: Building Work
+Insaf Response: আমাদের কাজের সিস্টেম উনাকে জানানো হইছে
+Remarks: দুই তলা ফাউন্ডেশন দিয়ে এক তলা করবে, আমাদের কাজের সিস্টেম জানতে চাইছে
+Reminder 1: ফলো আপ ম্যাসেজ দেওয়া হইছে",,,0.00,Warm,Contacted,2026-09-05,10:00,Conversation Started,🟡 Warm,Architectural Design,Building Work,আমাদের কাজের সিস্টেম উনাকে জানানো হইছে,"দুই তলা ফাউন্ডেশন দিয়ে এক তলা করবে, আমাদের কাজের সিস্টেম জানতে চাইছে",ফলো আপ ম্যাসেজ দেওয়া হইছে,,,False,False,False
+L-0196,2026-07-15,IBDC,Abul Basar,966550581823,966550581823,Gopalganj,Facebook,Architectural Design,"Client Requirement: 3 তলা প্ল্যান ডিজাইন লাগবে
+Insaf Response: কোটেশন দেওয়া হইছে দেশে এসে কথা বলবে",,,0.00,Hot,Qualified,2026-09-07,10:00,Mid Stage,🔥 Hot,Architectural Design,3 তলা প্ল্যান ডিজাইন লাগবে,কোটেশন দেওয়া হইছে দেশে এসে কথা বলবে,,,,,False,False,False
+L-0197,2026-07-22,IBDC,BA,966534056292,966534056292,Bramonbariya,Facebook,Architectural Design,"Client Requirement: 5 তলা প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কয়েকবার কল দেওয়া হইছে ও ম্যাসেজ দেওয়া হইছে  উত্তর পাইনি",,,0.00,Warm,Quotation,2026-09-07,10:00,Proposal Sent,🟡 Warm,Architectural Design,5 তলা প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কয়েকবার কল দেওয়া হইছে ও ম্যাসেজ দেওয়া হইছে  উত্তর পাইনি,,,,False,False,False
+L-0198,2026-07-31,IBDC,Akter,1405456407,1405456407,Naria,Facebook,Architectural Design,"Client Requirement: Approval Sheet & plan design
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কাজ অন্য জায়গায় দিয়ে দিয়েছে, কাছে ছিল তাই",,,0.00,Cold,Quotation,2026-09-07,10:00,Proposal Sent,🔴 Lost,Architectural Design,Approval Sheet & plan design,কোটেশন দেওয়া হইছে,"কাজ অন্য জায়গায় দিয়ে দিয়েছে, কাছে ছিল তাই",,,,False,False,False
+L-0199,2026-07-21,IBDC,Alamin,966561491826,966561491826,Sylet,Facebook,Architectural Design,"Client Requirement: Site visit
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই",,,0.00,Warm,Quotation,2026-09-07,10:00,Proposal Sent,🟡 Warm,Architectural Design,Site visit,কোটেশন দেওয়া হইছে,কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই,,,,False,False,False
+L-0200,2026-07-15,IBDC,1631647422,96895283674,96895283674,Chittagong,Facebook,Architectural Design,"Client Requirement: 3 তলা প্ল্যান ডিজাইনের কাজ
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই",,,0.00,Warm,Quotation,2026-09-07,10:00,Proposal Sent,🟡 Warm,Architectural Design,3 তলা প্ল্যান ডিজাইনের কাজ,কোটেশন দেওয়া হইছে,কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই,,,,False,False,False
+L-0201,2026-07-15,IBDC,Asad Mir,966505724836,966505724836,Moymonshing,Facebook,Architectural Design,"Client Requirement: দুই তলা ফাউন্ডেশন দিয়ে এক তলা করবে
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই",,,0.00,Warm,Quotation,2026-09-07,10:00,Proposal Sent,🟡 Warm,Architectural Design,দুই তলা ফাউন্ডেশন দিয়ে এক তলা করবে,কোটেশন দেওয়া হইছে,কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই,,,,False,False,False
+L-0202,2026-07-14,IBDC,Bacchu,966577191305,966577191305,Foridpur,Facebook,Architectural Design,"Client Requirement: 2 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: রেট বেশি বলছে মাত্র ৩০ হাজার টাকা দেওয়া হইছে প্ল্যান ডিজাইন খরচ , কোয়ালিটি ও ভ্যালু সম্পর্কে বুঝানো হয়েছে",,,0.00,Hot,Qualified,2026-09-07,10:00,Mid Stage,🔥 Hot,Architectural Design,2 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,"রেট বেশি বলছে মাত্র ৩০ হাজার টাকা দেওয়া হইছে প্ল্যান ডিজাইন খরচ , কোয়ালিটি ও ভ্যালু সম্পর্কে বুঝানো হয়েছে",,,,False,False,False
+L-0203,2026-07-14,IBDC,Billal hosen,966500186572,966500186572,Laksimpur,Facebook,Architectural Design,"Client Requirement: 2 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই",,,0.00,Warm,Quotation,2026-09-07,10:00,Proposal Sent,🟡 Warm,Architectural Design,2 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই,,,,False,False,False
+L-0204,2026-08-10,IBDC,Didar,96878071431,96878071431,Chattogram,Facebook,RAJUK Plan Approval,"Client Requirement: 4 তলা প্ল্যান পাস ও ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: ৪ লাখ ৫০ হাজার কোটেশন দিয়েছিলাম এই বাজেট নাই বলছে কাজ করাবে না",,,0.00,Cold,Quotation,2026-09-07,10:00,Proposal Sent,🔴 Lost,RAJUK Approval,4 তলা প্ল্যান পাস ও ডিজাইন,কোটেশন দেওয়া হইছে,৪ লাখ ৫০ হাজার কোটেশন দিয়েছিলাম এই বাজেট নাই বলছে কাজ করাবে না,,,,False,False,False
+L-0205,2026-07-22,IBDC,Forhad Mohammd,971505945091,971505945091,Laksimpur,Facebook,Architectural Design,"Client Requirement: 2 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: উনি ফুল বিল্ডিং এর  কাজের কথা বলছে, উনাকে আমরা প্ল্যান ডিজাইন এর পরামর্শ দিয়ে কোটেশন দিয়েছি, এর পর কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি",,,0.00,Warm,Quotation,2026-09-08,10:00,Proposal Sent,🟡 Warm,Architectural Design,2 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,"উনি ফুল বিল্ডিং এর  কাজের কথা বলছে, উনাকে আমরা প্ল্যান ডিজাইন এর পরামর্শ দিয়ে কোটেশন দিয়েছি, এর পর কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি",,,,False,False,False
+L-0206,2026-07-17,IBDC,Faruk,966544337647,966544337647,Cumilla,Facebook,Architectural Design,"Client Requirement: 2 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি",,,0.00,Warm,Quotation,2026-09-08,10:00,Proposal Sent,🟡 Warm,Architectural Design,2 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0207,2026-07-19,IBDC,Hridoy Hossain,971588408598,971588408598,"Bramonbariya,",Facebook,Architectural Design,"Client Requirement: 4 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি",,,0.00,Warm,Quotation,2026-09-08,10:00,Proposal Sent,🟡 Warm,Architectural Design,4 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0208,2026-07-16,IBDC,Iqbal Mahmud,966560515094,966560515094,Netrokona,Facebook,Architectural Design,"Client Requirement: 5 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি",,,0.00,Warm,Quotation,2026-09-08,10:00,Proposal Sent,🟡 Warm,Architectural Design,5 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0209,2026-07-14,IBDC,Md Jalil,96878322191,96878322191,Shariyatpur,Facebook,Architectural Design,"Client Requirement: 1 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: পরিবারের সাথে কথা বলে জানাবে বলছে, আরেকটি বিষয় হল উনার শরিয়তপুর ও গাজীপুর জায়গা আছে উনি কোথায় কাজ করবে এইটা এখনো নিশ্চিত করতে পারছে না তাই সময় নিয়েছে",,,0.00,Warm,Qualified,2026-09-08,10:00,Mid Stage,🟡 Warm,Architectural Design,1 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,"পরিবারের সাথে কথা বলে জানাবে বলছে, আরেকটি বিষয় হল উনার শরিয়তপুর ও গাজীপুর জায়গা আছে উনি কোথায় কাজ করবে এইটা এখনো নিশ্চিত করতে পারছে না তাই সময় নিয়েছে",,,,False,False,False
+L-0210,2026-07-18,IBDC,Johirul,966542954651,966542954651,Cumilla,Facebook,Architectural Design,"Client Requirement: 3 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কথা চলমান আছে",,,0.00,Warm,Qualified,2026-09-08,10:00,Mid Stage,🟡 Warm,Architectural Design,3 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কথা চলমান আছে,,,,False,False,False
+L-0211,2026-07-15,IBDC,Kobir Hossain,97430589970,97430589970,"Bramonbariya,",Facebook,Architectural Design,"Client Requirement: 6 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি",,,0.00,Warm,Quotation,2026-09-08,10:00,Proposal Sent,🟡 Warm,Architectural Design,6 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0212,2026-07-27,IBDC,Kajol Hossain,966599638128,966599638128,Jhenaidah,Facebook,Architectural Design,"Client Requirement: 1 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি",,,0.00,Warm,Quotation,2026-09-08,10:00,Proposal Sent,🟡 Warm,Architectural Design,1 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0213,2026-07-22,IBDC,Kawser ahmed,1604762882,1604762882,Sonarga,Facebook,Architectural Design,"Client Requirement: 1 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: মামাকে দিয়ে কাজ করায় ফেলছে",,,0.00,Cold,Quotation,2026-09-08,10:00,Proposal Sent,🔴 Lost,Architectural Design,1 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,মামাকে দিয়ে কাজ করায় ফেলছে,,,,False,False,False
+L-0214,2026-07-21,IBDC,Md Mahfuzor,1917911099,1917911099,Mymonshing,Facebook,Architectural Design,"Client Requirement: 2 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: উনি ভাবছে কিস্তিতে বাড়ি নির্মাণ করে দেই বিস্তারিত কথা বলছি এখন উনি নিজেই কাজ করবে প্ল্যান ডিজাইন আমাদের দ্বারা করার আগ্রহ প্রকাশ করছে তবে পরে কাজ করবে",,,0.00,Warm,Qualified,2026-09-08,10:00,Mid Stage,🟡 Warm,Architectural Design,2 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,উনি ভাবছে কিস্তিতে বাড়ি নির্মাণ করে দেই বিস্তারিত কথা বলছি এখন উনি নিজেই কাজ করবে প্ল্যান ডিজাইন আমাদের দ্বারা করার আগ্রহ প্রকাশ করছে তবে পরে কাজ করবে,,,,False,False,False
+L-0215,2026-07-14,IBDC,Ab. Mannan,96896491660,96896491660,Chattogram,Facebook,Architectural Design,"Client Requirement: 4 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কল দরে কেটে দিয়েছে ম্যাসেজ দিয়ে রাখছি",,,0.00,Warm,Quotation,2026-09-08,10:00,Proposal Sent,🟡 Warm,Architectural Design,4 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কল দরে কেটে দিয়েছে ম্যাসেজ দিয়ে রাখছি,,,,False,False,False
+L-0216,2026-07-15,IBDC,Md Masud Rana,1817241624,1817241624,Laksimpur,Facebook,Architectural Design,"Client Requirement: duplex ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: প্রজেক্টের ছবি ভিডিও সব কিছু পাঠাইছে কোটেশন দেওয়া হইছে। পরে কল দিবে বলছে",,,0.00,Warm,Quotation,2026-09-08,10:00,Proposal Sent,🟡 Warm,Architectural Design,duplex ডিজাইন,কোটেশন দেওয়া হইছে,প্রজেক্টের ছবি ভিডিও সব কিছু পাঠাইছে কোটেশন দেওয়া হইছে। পরে কল দিবে বলছে,,,,False,False,False
+L-0217,2026-07-14,IBDC,Mohiuddin,966532487803,966532487803,Shariyatpur,Facebook,Architectural Design,"Client Requirement: 2 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: বলছিল পরে জানাবে পরে আবার কল দিলে ফোন কেটে দিয়েছে কথা বলে নাই ভয়েস দিয়ে রাখছি",,,0.00,Warm,Quotation,2026-09-08,10:00,Proposal Sent,🟡 Warm,Architectural Design,2 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,বলছিল পরে জানাবে পরে আবার কল দিলে ফোন কেটে দিয়েছে কথা বলে নাই ভয়েস দিয়ে রাখছি,,,,False,False,False
+L-0218,2026-07-15,IBDC,Moniruzzaman,966501057152,966501057152,Dinajpur,Facebook,Architectural Design,"Client Requirement: 2 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কথা চলমান আছে",,,0.00,Warm,Quotation,2026-09-08,10:00,Proposal Sent,🟡 Warm,Architectural Design,2 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কথা চলমান আছে,,,,False,False,False
+L-0219,2026-07-28,IBDC,Nazmul,971551496270,971551496270,,Facebook,Architectural Design,"Client Requirement: 1 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: সে কাজ ফাইনাল করছে তার পর আর কথা বলছে না কল দিলে ধরে না ম্যাসেজের উত্তর দেয় না",,,0.00,Warm,Negotiating,2026-09-08,10:00,Final Stage,🟡 Warm,Architectural Design,1 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,সে কাজ ফাইনাল করছে তার পর আর কথা বলছে না কল দিলে ধরে না ম্যাসেজের উত্তর দেয় না,,,,False,False,False
+L-0220,2026-07-16,IBDC,Polas,971525045701,971525045701,Barishal,Facebook,Architectural Design,"Client Requirement: 2 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: 30 হাজার টাকা দিয়ে প্ল্যান ডিজাইন করবে সম্ভবত মিস্তিরিকে দিয়ে কাজ করিয়ে নিবে প্ল্যান ডিজাইন না করে কথা থেকে যা বুঝলাম",,,0.00,Cold,Quotation,2026-09-08,10:00,Proposal Sent,🔴 Lost,Architectural Design,2 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,30 হাজার টাকা দিয়ে প্ল্যান ডিজাইন করবে সম্ভবত মিস্তিরিকে দিয়ে কাজ করিয়ে নিবে প্ল্যান ডিজাইন না করে কথা থেকে যা বুঝলাম,,,,False,False,False
+L-0221,2026-07-20,IBDC,Rasel Hossen,966582198653,966582198653,Faridpur,Facebook,Architectural Design,"Client Requirement: 5 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কাজ টি পরে করাবে মাঝে মাঝে কল দিব বলছি",,,0.00,Warm,Qualified,2026-09-08,10:00,Mid Stage,🟡 Warm,Architectural Design,5 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কাজ টি পরে করাবে মাঝে মাঝে কল দিব বলছি,,,,False,False,False
+L-0222,2026-07-18,IBDC,RG Rasel Rana,966571862442,966571862442,Cumilla,Facebook,Architectural Design,"Client Requirement: 2 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কাজ টি পরে করাবে মাঝে মাঝে কল দিব বলছি",,,0.00,Warm,Qualified,2026-09-08,10:00,Mid Stage,🟡 Warm,Architectural Design,2 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কাজ টি পরে করাবে মাঝে মাঝে কল দিব বলছি,,,,False,False,False
+L-0223,2026-07-24,IBDC,Md Sagor,96879796967,96879796967,Keraniganj,Facebook,Architectural Design,"Client Requirement: 5 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: ডিজাইন ফুল প্যাকেজ ও মাটি পরীক্ষা সহ  ৭২ হাজার টাকা দেওয়া হইছিল উনি আমাকে কাজ টি দেওয়ার জন্য আগ্রহি ছিলেন কিন্তু উনার বাড়ির লোক জন ৩৫ হাজার টাকায় প্ল্যান পাস সহ ডিজাইন করে দিবে এমন ইঞ্জিনিয়ার পাইছে উনাদের এলাকায় তাই আর কাজ টি পাইনি",,,0.00,Cold,Quotation,2026-09-08,10:00,Proposal Sent,🔴 Lost,Architectural Design,5 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,ডিজাইন ফুল প্যাকেজ ও মাটি পরীক্ষা সহ  ৭২ হাজার টাকা দেওয়া হইছিল উনি আমাকে কাজ টি দেওয়ার জন্য আগ্রহি ছিলেন কিন্তু উনার বাড়ির লোক জন ৩৫ হাজার টাকায় প্ল্যান পাস সহ ডিজাইন করে দিবে এমন ইঞ্জিনিয়ার পাইছে উনাদের এলাকায় তাই আর কাজ টি পাইনি,,,,False,False,False
+L-0224,2026-07-13,IBDC,Sahin,966500568752,966500568752,"Rajapur, Jhalakathi",Facebook,Architectural Design,"Client Requirement: 4 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই",,,0.00,Warm,Quotation,2026-09-09,10:00,Proposal Sent,🟡 Warm,Architectural Design,4 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই,,,,False,False,False
+L-0225,2026-07-27,IBDC,Saidur Rahman,96877224637,96877224637,Pabna,Facebook,Package Building Work,"Client Requirement: 2 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: যিনি নির্মাণ কাজ সহ করবে তাকে দিয়ে ডিজাইন করাবে",,,0.00,Cold,Quotation,2026-09-09,10:00,Proposal Sent,🔴 Lost,Package Building Work,2 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,যিনি নির্মাণ কাজ সহ করবে তাকে দিয়ে ডিজাইন করাবে,,,,False,False,False
+L-0226,2026-08-24,IBDC,Sala Uddin,1751447117,1751447117,Gopalganj,Facebook,Architectural Design,"Client Requirement: 3 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: আগ্রহ আছে কিন্তু কবে কাজ শুরু করবে এই বিষয়ে কিছু বলে না",,,0.00,Warm,Quotation,2026-09-09,10:00,Proposal Sent,🟡 Warm,Architectural Design,3 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,আগ্রহ আছে কিন্তু কবে কাজ শুরু করবে এই বিষয়ে কিছু বলে না,,,,False,False,False
+L-0227,2026-07-30,IBDC,MD Salauddin Mahmud,1324901878,1324901878,Chittagong,Facebook,Architectural Design,"Client Requirement: 9 তলা প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই",,,0.00,Warm,Quotation,2026-09-09,10:00,Proposal Sent,🟡 Warm,Architectural Design,9 তলা প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই,,,,False,False,False
+L-0228,2026-08-27,IBDC,Shahinur Rahman Shahinsh,1315401731,1315401731,Manikgonj,Facebook,Architectural Design,"Client Requirement: 7 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই",,,0.00,Warm,Quotation,2026-09-09,10:00,Proposal Sent,🟡 Warm,Architectural Design,7 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই,,,,False,False,False
+L-0229,2026-07-22,IBDC,Md Shahjahan Hossan,966571356120,966571356120,Saudi,Facebook,Architectural Design,"Client Requirement: 2 তলা প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কিছু দিন পর কাজ করাবে",,,0.00,Hot,Qualified,2026-09-09,10:00,Mid Stage,🔥 Hot,Architectural Design,2 তলা প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কিছু দিন পর কাজ করাবে,,,,False,False,False
+L-0230,2026-07-16,IBDC,Showkat Ali Gonj,966559538797,966559538797,Manikgonj,Facebook,Architectural Design,"Client Requirement: 6 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কিছু দিন পর কাজ করাবে কথা চলমান আছে",,,0.00,Hot,Qualified,2026-09-09,10:00,Mid Stage,🔥 Hot,Architectural Design,6 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কিছু দিন পর কাজ করাবে কথা চলমান আছে,,,,False,False,False
+L-0231,2026-07-15,IBDC,Shipar,971552458238,971552458238,Sylet,Facebook,Architectural Design,"Client Requirement: 3 তলা প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: ভিসা প্রবলেম দেশে কিছু দিন পর এসে কথা বলবে",,,0.00,Hot,Qualified,2026-09-09,10:00,Mid Stage,🔥 Hot,Architectural Design,3 তলা প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,ভিসা প্রবলেম দেশে কিছু দিন পর এসে কথা বলবে,,,,False,False,False
+L-0232,2026-07-16,IBDC,Tofial Ahmed,966505395239,966505395239,Bramonbaria,Facebook,Architectural Design,"Client Requirement: 5 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই",,,0.00,Warm,Quotation,2026-09-09,10:00,Proposal Sent,🟡 Warm,Architectural Design,5 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই,,,,False,False,False
+L-0233,2026-07-15,IBDC,Ks7713705,966506616020,966506616020,Pabna,Facebook,Architectural Design,"Client Requirement: 6 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই",,,0.00,Warm,Quotation,2026-09-09,10:00,Proposal Sent,🟡 Warm,Architectural Design,6 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই,,,,False,False,False
+L-0234,2026-07-15,IBDC,Zakir Ahmed Tuhin,97477729216,97477729216,Keraniganj,Facebook,Architectural Design,"Client Requirement: 5 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কোটেশন দেওয়ার পর বলছে পরিবারের সাথে কথা বলে জানাবে কিন্তু পরে ফোন ভয়েসে কোন রেস্পন্স নাই",,,0.00,Hot,Qualified,2026-09-09,10:00,Mid Stage,🔥 Hot,Architectural Design,5 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কোটেশন দেওয়ার পর বলছে পরিবারের সাথে কথা বলে জানাবে কিন্তু পরে ফোন ভয়েসে কোন রেস্পন্স নাই,,,,False,False,False
+L-0235,2026-08-07,IBDC,Etylin,1628905952,1628905952,Gazipur,Facebook,Architectural Design,"Client Requirement: 2 তলা প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই",,,0.00,Warm,Quotation,2026-09-09,10:00,Proposal Sent,🟡 Warm,Architectural Design,2 তলা প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কোটেশন দেওয়ার পর ফোন ভয়েসে কোন রেস্পন্স নাই,,,,False,False,False
+L-0236,2026-07-15,IBDC,Kanym,966530250790,966530250790,Kisorgonj,Facebook,Architectural Design,"Client Requirement: 5 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: দেশে এসে কথা বলবে ইন শা আল্লাহ
+Reminder 1: Novembar deshe asbe",,,0.00,Hot,Qualified,2026-09-09,10:00,Mid Stage,🔥 Hot,Architectural Design,5 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,দেশে এসে কথা বলবে ইন শা আল্লাহ,Novembar deshe asbe,,,False,False,False
+L-0237,2026-08-11,IBDC,Hk Miazi,971551335052,971551335052,United Arab,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-13,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0238,2026-07-31,IBDC,Mohammad Aktar Hossain,14054560407,14054560407,Shariatpur,Facebook,Architectural Design,"Client Requirement: 7 তলা বাড়ির প্ল্যান ডিজাইন
+Insaf Response: কোটেশন দেওয়া হইছে
+Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি",,,0.00,Warm,Quotation,2026-09-13,10:00,Proposal Sent,🟡 Warm,Architectural Design,7 তলা বাড়ির প্ল্যান ডিজাইন,কোটেশন দেওয়া হইছে,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0239,2026-07-31,IBDC,Mehedi Mohammad Towkir,1755520542,1755520542,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-13,10:00,No Response,🔵 Cold,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0240,2026-07-13,IBDC,Kamrul Islam,966564157176,966564157176,,Facebook,Architectural Design,Client Requirement: 2 তলা বাড়ি করবে ব্লক দিয়ে ৩৫২ স্কয়ার ফিট,,,0.00,Cold,Contacted,2026-09-13,10:00,Conversation Started,🔴 Lost,Architectural Design,2 তলা বাড়ি করবে ব্লক দিয়ে ৩৫২ স্কয়ার ফিট,,,,,,False,False,False
+L-0241,2026-08-12,IBDC,Sayed,971565327952,971565327952,Bramonbaria,Facebook,Architectural Design,"Client Requirement: 2 তলা প্ল্যান ডিজাইন
+Remarks: ডিউটি শেষ করে কথা বলবে",,,0.00,Warm,Contacted,2026-09-13,10:00,Conversation Started,🟡 Warm,Architectural Design,2 তলা প্ল্যান ডিজাইন,,ডিউটি শেষ করে কথা বলবে,,,,False,False,False
+L-0242,2026-08-12,IBDC,Kabir Miah,966570025416,966570025416,,Facebook,Other,Remarks: ব্লক ইটা নিতে চায়,,,0.00,Cold,Contacted,2026-09-13,10:00,Conversation Started,🔴 Lost,Other,,,ব্লক ইটা নিতে চায়,,,,False,False,False
+L-0243,2026-08-12,IBDC,Md. Masud Rana,966502115274,966502115274,,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-13,10:00,Conversation Started,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0244,2026-08-12,IBDC,Ismail,1610596628,1610596628,Karanigonj,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan design
+Remarks: ফাহিম ভাইকে নাম্বার দেওয়া হইছে উনি কথা বলবে",,,0.00,Warm,Contacted,2026-09-13,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan design,,ফাহিম ভাইকে নাম্বার দেওয়া হইছে উনি কথা বলবে,,,,False,False,False
+L-0245,2026-08-10,IBDC,Maeem Uddin,971506419621,971506419621,United Arab,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে,,,0.00,Cold,Contacted,2026-09-13,10:00,Conversation Started,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে,,,,False,False,False
+L-0246,2026-08-12,IBDC,Ahmed Ahsan,16313345938,16313345938,USA,Facebook,RAJUK Plan Approval,"Client Requirement: Rajuk plan
+Remarks: রাজউকের কত তলা প্ল্যান পাবে পূর্বাচলে এই বিষয়ে কথা হয়ে ৭/৮ তলা পাবে জানানো হয়েছে এখন কাজের বিষয়ে আগ্রহী আছে কিনা ম্যাসেজ দেওয়া হয়েছে।",,,0.00,Warm,Contacted,2026-09-13,10:00,Conversation Started,🟡 Warm,RAJUK Approval,Rajuk plan,,রাজউকের কত তলা প্ল্যান পাবে পূর্বাচলে এই বিষয়ে কথা হয়ে ৭/৮ তলা পাবে জানানো হয়েছে এখন কাজের বিষয়ে আগ্রহী আছে কিনা ম্যাসেজ দেওয়া হয়েছে।,,,,False,False,False
+L-0247,2026-08-11,IBDC,Bilas,96874109093,96874109093,Oman,Facebook,Architectural Design,"Client Requirement: 4/5 তলা প্ল্যান ডিজাইন
+Remarks: বিস্তারিত আলোচনা করা হয়েছে নভেম্বরে দেশে এসে কথা বলবে",,,0.00,Warm,Qualified,2026-09-13,10:00,Mid Stage,🟡 Warm,Architectural Design,4/5 তলা প্ল্যান ডিজাইন,,বিস্তারিত আলোচনা করা হয়েছে নভেম্বরে দেশে এসে কথা বলবে,,,,False,False,False
+L-0248,2026-08-11,IBDC,Kazi Afjol Hossain,1614630692,1614630692,,Facebook,RAJUK Plan Approval,Remarks: রাজউকের ইনফরমেশন চাওয়া হইছে দেয় নি,,,0.00,Warm,Contacted,2026-09-13,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,রাজউকের ইনফরমেশন চাওয়া হইছে দেয় নি,,,,False,False,False
+L-0249,2026-08-11,IBDC,Omar Faruk,1817104794,1817104794,Narayangonj,Facebook,RAJUK Plan Approval,"Client Requirement: 6 তলা রাজউক প্ল্যান পাস ও ডিজাইন
+Remarks: রেট নিয়ে কথা চলমান আছে",,,0.00,Warm,Contacted,2026-09-14,10:00,Conversation Started,🟡 Warm,RAJUK Approval,6 তলা রাজউক প্ল্যান পাস ও ডিজাইন,,রেট নিয়ে কথা চলমান আছে,,,,False,False,False
+L-0250,2026-08-11,IBDC,Muhammad Muktadir,1552329211,1552329211,,Facebook,RAJUK Plan Approval,Remarks: উনি বেস্ত ছিল বলছিল কল দিবে এর কল দেয়নি ফাহিম ভাইকে কথা বলার জন্য নাম্বার দেওয়া হইছে,,,0.00,Warm,Contacted,2026-09-14,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,উনি বেস্ত ছিল বলছিল কল দিবে এর কল দেয়নি ফাহিম ভাইকে কথা বলার জন্য নাম্বার দেওয়া হইছে,,,,False,False,False
+L-0251,2026-08-11,IBDC,Abdul Hoque,1969065900,1969065900,,Facebook,RAJUK Plan Approval,Remarks: উনি বেস্ত ছিল বলছিল কল দিবে এর কল দেয়নি ফাহিম ভাইকে কথা বলার জন্য নাম্বার দেওয়া হইছে,,,0.00,Warm,Contacted,2026-09-14,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,উনি বেস্ত ছিল বলছিল কল দিবে এর কল দেয়নি ফাহিম ভাইকে কথা বলার জন্য নাম্বার দেওয়া হইছে,,,,False,False,False
+L-0252,2026-08-11,IBDC,Lipi,1925577893,1925577893,,Facebook,RAJUK Plan Approval,Remarks: উনি  কোন রেস্পন্স করে নি ফাহিম ভাইকে কথা বলার জন্য নাম্বার দেওয়া হইছে,,,0.00,Warm,Contacted,2026-09-14,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,উনি  কোন রেস্পন্স করে নি ফাহিম ভাইকে কথা বলার জন্য নাম্বার দেওয়া হইছে,,,,False,False,False
+L-0253,2026-07-28,IBDC,Saddam,96872032529,96872032529,Oman,Facebook,Architectural Design,Remarks: অনলাইনে নাই ম্যাসেজ দেওয়া দিয়ে রাখছি,,,0.00,Cold,Contacted,2026-09-19,10:00,Conversation Started,🔵 Cold,Architectural Design,,,অনলাইনে নাই ম্যাসেজ দেওয়া দিয়ে রাখছি,,,,False,False,False
+L-0254,2026-08-11,IBDC,Juma Al Azizi,971552018899,971552018899,United Arab,Facebook,RAJUK Plan Approval,Remarks: ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-19,10:00,No Response,🔵 Cold,RAJUK Approval,,,ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0255,2026-08-11,IBDC,Nasir Uddin,971562656710,971562656710,United Arab,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-19,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0256,2026-08-11,IBDC,Montaj,966561210671,966561210671,Saudi Arabia,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-19,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0257,2026-08-10,IBDC,,1607804907,1607804907,,Facebook,RAJUK Plan Approval,Remarks: ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-19,10:00,No Response,🔵 Cold,RAJUK Approval,,,ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,True,False,False
+L-0258,2026-08-10,IBDC,Md Riyadul Islam,96896271397,96896271397,Oman,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-19,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0259,2026-08-10,IBDC,Md Nuramin Shaik,966575992851,966575992851,Saudi,Facebook,Package Building Work,"Remarks: কাশিয়ানি গোপালগঞ্জ, ফুল বিল্ডিং এর কাজ করাবে সাইট ভিজিট নিয়ে আলোচনা হয়েছে ৬ হাজার টাকা বলছি, উনি এখনো যাওয়ার জন্য ফাইনাল  করে নি",,,0.00,Warm,Qualified,2026-09-19,10:00,Mid Stage,🟡 Warm,Package Building Work,,,"কাশিয়ানি গোপালগঞ্জ, ফুল বিল্ডিং এর কাজ করাবে সাইট ভিজিট নিয়ে আলোচনা হয়েছে ৬ হাজার টাকা বলছি, উনি এখনো যাওয়ার জন্য ফাইনাল  করে নি",,,,False,False,False
+L-0260,2026-08-11,IBDC,Delower Hossain,96590026472,96590026472,Kuwait,Facebook,RAJUK Plan Approval,"Remarks: নিজে নিজেই রাজউক এর প্ল্যান পাশের আবেদন করছে এখন এইটা পাচ্ছে না বলছে ২০-৮-২৬ তারিখে একটা রেসাল্ট পাবে, সেটি যদি ভালো না হয় তখন আমাদের দিয়ে কাজ করাবে আজকে ম্যাসেজ দেওয়া হয়েছে দেখছে কোন রেস্পন্স করে নি",,,0.00,Warm,Contacted,2026-09-19,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,"নিজে নিজেই রাজউক এর প্ল্যান পাশের আবেদন করছে এখন এইটা পাচ্ছে না বলছে ২০-৮-২৬ তারিখে একটা রেসাল্ট পাবে, সেটি যদি ভালো না হয় তখন আমাদের দিয়ে কাজ করাবে আজকে ম্যাসেজ দেওয়া হয়েছে দেখছে কোন রেস্পন্স করে নি",,,,False,False,False
+L-0261,2026-08-12,IBDC,Mnesar,1674553184,1674553184,Laksimpur,Facebook,Architectural Design,Remarks: আমাদের কাজের সিস্টেম জানতে চাইছে জানানো হয়েছে এর পর আর কোন রেস্পন্স নাই আজকে আবার ম্যাসেজ দেওয়া হইছে,,,0.00,Warm,Contacted,2026-09-19,10:00,Conversation Started,🟡 Warm,Architectural Design,,,আমাদের কাজের সিস্টেম জানতে চাইছে জানানো হয়েছে এর পর আর কোন রেস্পন্স নাই আজকে আবার ম্যাসেজ দেওয়া হইছে,,,,False,False,False
+L-0262,2026-08-12,IBDC,Md Zakir Hossain,1714085639,1714085639,Nondipara,Facebook,RAJUK Plan Approval,"Client Requirement: 4900 sft জায়গা আছে ১৬ ফিট রাস্তা আছে নন্দিপারা কত তলা করা যাবে
+Insaf Response: ৯ তলা পাবে উনাকে জানানো হয়েছে উনি বলছে যোগাযোগ রাখার জন্য
+Remarks: ৪ কাঠা দিয়ে ৬ তলা পাইছিল এখন ৮ কাঠা দিয়ে বারানোর ফিকির করছে  কথা বার্তা চলমান আছে",,,0.00,Warm,Contacted,2026-09-19,10:00,Conversation Started,🟡 Warm,RAJUK Approval,4900 sft জায়গা আছে ১৬ ফিট রাস্তা আছে নন্দিপারা কত তলা করা যাবে,৯ তলা পাবে উনাকে জানানো হয়েছে উনি বলছে যোগাযোগ রাখার জন্য,৪ কাঠা দিয়ে ৬ তলা পাইছিল এখন ৮ কাঠা দিয়ে বারানোর ফিকির করছে  কথা বার্তা চলমান আছে,,,,False,False,False
+L-0263,2026-08-10,IBDC,Sahin,1408157514,1408157514,,Facebook,Architectural Design,,,,0.00,Warm,Contacted,2026-09-19,10:00,Conversation Started,🟡 Warm,Architectural Design,,,,,,,False,False,False
+L-0264,2026-08-11,IBDC,Habib,966545824375,966545824375,Saudi,Facebook,Other,"Client Requirement: ১ তলা বাড়ির ছাদ দিয়েছি ডিজাইন পছন্দ না আপডেট করবো
+Insaf Response: ছাদ দেওয়া তাই সাইট ভিজিট করে পরামর্শ দিতে হবে, উনি দুই তিন মাস পরে দেশে আসবে তখন সাইট ভিজিট করাবে",,,0.00,Warm,Qualified,2026-09-19,10:00,Mid Stage,🟡 Warm,Other,১ তলা বাড়ির ছাদ দিয়েছি ডিজাইন পছন্দ না আপডেট করবো,"ছাদ দেওয়া তাই সাইট ভিজিট করে পরামর্শ দিতে হবে, উনি দুই তিন মাস পরে দেশে আসবে তখন সাইট ভিজিট করাবে",,,,,False,False,False
+L-0265,2026-08-10,IBDC,Khairul Islam,1603574477,1603574477,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-19,10:00,No Response,🔵 Cold,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0266,2026-08-10,IBDC,Nadim,1713755076,1713755076,,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-19,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0267,2026-08-12,IBDC,Mosharraf Hussain,966530794665,966530794665,Saudi Arabia,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-19,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0268,2026-08-11,IBDC,,1305509484,1305509484,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-19,10:00,No Response,🔵 Cold,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,True,False,False
+L-0269,2026-08-11,IBDC,Rasel,966573149846,966573149846,Saudi Arabia,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-19,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0270,2026-08-11,IBDC,Limon,1715170870,1715170870,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-19,10:00,No Response,🔵 Cold,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0271,2026-08-12,IBDC,Md Ajijul Islam,971567003419,971567003419,UAE,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-20,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0272,2026-08-12,IBDC,Mosar Fashion,966574781605,966574781605,Saudi Arabia,Facebook,Package Building Work,"Client Requirement: আপনারা কি ভাবে বাড়ি করে বিস্তারিত জানাবেন
+Insaf Response: উনাকে আমাদের কাজ সম্পর্কে বিস্তারিত জানানো হয়েছে",,,0.00,Warm,Contacted,2026-09-20,10:00,Conversation Started,🟡 Warm,Package Building Work,আপনারা কি ভাবে বাড়ি করে বিস্তারিত জানাবেন,উনাকে আমাদের কাজ সম্পর্কে বিস্তারিত জানানো হয়েছে,,,,,False,False,False
+L-0273,2026-08-12,IBDC,Advocate Fahad,1711176059,1711176059,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-20,10:00,No Response,🔵 Cold,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0274,2026-08-12,IBDC,Ahammad,96894721534,96894721534,Oman,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-20,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0275,2026-08-11,IBDC,Md Hannan,971501692542,971501692542,UAE,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-20,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0276,2026-08-12,IBDC,Md Ibrahim,966500928426,966500928426,Saudi Arabia,Facebook,Other,Remarks: 3 রুমের টিন সেড বাড়ি করবে,,,0.00,Cold,Contacted,2026-09-22,10:00,Conversation Started,🔴 Lost,Other,,,3 রুমের টিন সেড বাড়ি করবে,,,,False,False,False
+L-0277,2026-08-12,IBDC,Abdul Matin,1711863295,1711863295,,Facebook,RAJUK Plan Approval,Remarks: ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-22,10:00,No Response,🔵 Cold,RAJUK Approval,,,ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0278,2026-08-12,IBDC,Buriganga,1789994555,1789994555,,Facebook,Other,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-22,10:00,No Response,🔵 Cold,,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0279,2026-08-12,IBDC,Md Abu Shaleh,966500526129,966500526129,Saudi Arabia,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-22,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0280,2026-08-12,IBDC,Md Muttakin,966532601624,966532601624,Saudi Arabia,Facebook,Architectural Design,Remarks: 4 তলা ফাউন্ডেশ্ন দিয়ে এক তলা করতে কেমন খরচ হবে জানতে চাইছে জানিয়েছিলাম ও ডিজাইন বিষয়ে বলছি পরে আবার কল দিয়েছিলাম ফোন কেটে দিয়েছে,,,0.00,Cold,Contacted,2026-09-22,10:00,Conversation Started,🔵 Cold,Architectural Design,,,4 তলা ফাউন্ডেশ্ন দিয়ে এক তলা করতে কেমন খরচ হবে জানতে চাইছে জানিয়েছিলাম ও ডিজাইন বিষয়ে বলছি পরে আবার কল দিয়েছিলাম ফোন কেটে দিয়েছে,,,,False,False,False
+L-0281,2026-08-12,IBDC,Md 6243320,966577206528,966577206528,Saudi Arabia,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-22,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0282,2026-08-12,IBDC,Kobir Hossain,971552893702,971552893702,UAE,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-22,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0283,2026-08-12,IBDC,Muhammad Elias,96899593200,96899593200,Oman,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-22,10:00,No Response,🔵 Cold,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0284,2026-08-11,IBDC,Noor Uddin Mukul,1914201293,1914201293,Rayerbazar,Facebook,RAJUK Plan Approval,Remarks: 3 কাঠা জমিতে ৬ তলা দিতে পারবো জানানো হয়েছে পরে আর কোন রেস্পন্স করে নি,,,0.00,Warm,Contacted,2026-09-22,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,3 কাঠা জমিতে ৬ তলা দিতে পারবো জানানো হয়েছে পরে আর কোন রেস্পন্স করে নি,,,,False,False,False
+L-0285,2026-08-11,IBDC,Soil Engr,1707980806,1707980806,Banosree,Facebook,Other,Remarks: তারা সয়েল টেস্ট এর কাজ করে,,,0.00,Cold,Contacted,2026-09-22,10:00,No Response,🔴 Lost,Other,,,তারা সয়েল টেস্ট এর কাজ করে,,,,False,False,False
+L-0286,2026-08-11,IBDC,Monir Hossain,966547518496,966547518496,Saudi Arabia,Facebook,Architectural Design,"Remarks: ৪ শতাংশ জমিতে এক তলা বাড়ি করতে চায় ডিজাইন খরচ ২৫ হাজার টাকা বলছিলাম, উনি চাচ্ছে নির্মাণ কাজ সহ করতে",,,0.00,Warm,Contacted,2026-09-22,10:00,Conversation Started,🟡 Warm,Architectural Design,,,"৪ শতাংশ জমিতে এক তলা বাড়ি করতে চায় ডিজাইন খরচ ২৫ হাজার টাকা বলছিলাম, উনি চাচ্ছে নির্মাণ কাজ সহ করতে",,,,False,False,False
+L-0287,2026-08-11,IBDC,Md Shajhahan Mridha,966596685940,966596685940,Manikganj,Facebook,Architectural Design,"Remarks: 1 তলা বাড়ি করবে ডিজাইন এর বিষয়ে বলছি, ফাইনালি কাজের বিষয়ে কিছু বলে নাই",,,0.00,Warm,Contacted,2026-09-22,10:00,Conversation Started,🟡 Warm,Architectural Design,,,"1 তলা বাড়ি করবে ডিজাইন এর বিষয়ে বলছি, ফাইনালি কাজের বিষয়ে কিছু বলে নাই",,,,False,False,False
+L-0288,2026-08-11,IBDC,Robin Sikdar,1793350163,1793350163,Tangail,Facebook,Architectural Design,Remarks: উনার প্রজেক্ট ভিজিট করে পরামর্শ দিতে হবে সাইট ভিজিট ফি ১০ হাজার টাকা চাইছিলাম পরে এর কোন রিপ্লাই পাইনি ম্যাসেজ দিয়েছিলাম কোন উত্তর নাই এখনো,,,0.00,Warm,Contacted,2026-09-22,10:00,Conversation Started,🟡 Warm,Architectural Design,,,উনার প্রজেক্ট ভিজিট করে পরামর্শ দিতে হবে সাইট ভিজিট ফি ১০ হাজার টাকা চাইছিলাম পরে এর কোন রিপ্লাই পাইনি ম্যাসেজ দিয়েছিলাম কোন উত্তর নাই এখনো,,,,False,False,False
+L-0289,2026-08-11,IBDC,Aminul Haque,1746951482,1746951482,Basundhora,Facebook,RAJUK Plan Approval,Remarks: 7 তলা প্ল্যান পাস ডিজাইন কোটেশন দেওয়া হইছে উনি বলছিল খুব সিগ্রই অফিসে আসবে,,,0.00,Warm,Qualified,2026-09-22,10:00,Mid Stage,🟡 Warm,RAJUK Approval,,,7 তলা প্ল্যান পাস ডিজাইন কোটেশন দেওয়া হইছে উনি বলছিল খুব সিগ্রই অফিসে আসবে,,,,False,False,False
+L-0290,2026-08-10,IBDC,MD Sultan,966577105010,966577105010,Saudi Arabia,Facebook,Package Building Work,Remarks: দুই তলা ফাউন্ডেশ্ন দিয়ে নির্মাণ কাজ করতে চায় উনার কাছে আগেই ডিজাইন আছে,,,0.00,Cold,Contacted,2026-09-22,10:00,Conversation Started,🔴 Lost,Package Building Work,,,দুই তলা ফাউন্ডেশ্ন দিয়ে নির্মাণ কাজ করতে চায় উনার কাছে আগেই ডিজাইন আছে,,,,False,False,False
+L-0291,2026-08-11,IBDC,K Faisal,966558733123,966558733123,Saudi Arabia,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-22,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0292,2026-08-10,IBDC,Anwar,96878833728,96878833728,Oman,Facebook,Architectural Design,"Remarks: 1 তলা প্ল্যান ডিজাইন ২৫ হাজার টাকা বলছি, কোন রেস্পন্স নাই",,,0.00,Warm,Qualified,2026-09-22,10:00,Mid Stage,🟡 Warm,Architectural Design,,,"1 তলা প্ল্যান ডিজাইন ২৫ হাজার টাকা বলছি, কোন রেস্পন্স নাই",,,,False,False,False
+L-0293,2026-08-10,IBDC,Parvej,966599514863,966599514863,Saudi Arabia,Facebook,Architectural Design,Remarks: 4 তলা পুরাতন বাড়ি নতুন করে ৬ তলা করতে চাচ্ছে আমাদের কাজের সিস্টেম জানানো হয়েছে,,,0.00,Warm,Contacted,2026-09-22,10:00,Conversation Started,🟡 Warm,Architectural Design,,,4 তলা পুরাতন বাড়ি নতুন করে ৬ তলা করতে চাচ্ছে আমাদের কাজের সিস্টেম জানানো হয়েছে,,,,False,False,False
+L-0294,2026-08-10,IBDC,in0663399,966575643724,966575643724,Saudi Arabia,Facebook,Package Building Work,"Remarks: কিস্তিতে বাড়ি নির্মাণ করতে চায়, ডিজাইন করে নিজে  কাজ করার পরামর্শ দেওয়া হয়েছে",,,0.00,Cold,Contacted,2026-09-22,10:00,Conversation Started,🔴 Lost,Package Building Work,,,"কিস্তিতে বাড়ি নির্মাণ করতে চায়, ডিজাইন করে নিজে  কাজ করার পরামর্শ দেওয়া হয়েছে",,,,False,False,False
+L-0295,2026-08-11,IBDC,Jahidul Islam,1300474415,1300474415,,Facebook,Architectural Design,"Remarks: উনার জমির মাপে প্ল্যান ডিজাইন করে দিতাম পছন্দ হলে নিবে, এই ভাবে কাজ করার জন্য আমাদের অফিসিয়াল সিস্টেম এর কথা বলা হয়েছে ও পূর্বের কাজ দেখার জন্য ওয়েবসাইট ও পেজ ভিজিট করার কথা বলা হয়েছে",,,0.00,Warm,Contacted,2026-09-22,10:00,Conversation Started,🟡 Warm,Architectural Design,,,"উনার জমির মাপে প্ল্যান ডিজাইন করে দিতাম পছন্দ হলে নিবে, এই ভাবে কাজ করার জন্য আমাদের অফিসিয়াল সিস্টেম এর কথা বলা হয়েছে ও পূর্বের কাজ দেখার জন্য ওয়েবসাইট ও পেজ ভিজিট করার কথা বলা হয়েছে",,,,False,False,False
+L-0296,2026-08-11,IBDC,Sohag,971566634161,971566634161,UAE,Facebook,Package Building Work,Remarks: ১ তলা বাড়ি করবে কিস্তির মাধ্যমে,,,0.00,Cold,Contacted,2026-09-22,10:00,Conversation Started,🔴 Lost,Package Building Work,,,১ তলা বাড়ি করবে কিস্তির মাধ্যমে,,,,False,False,False
+L-0297,2026-08-10,IBDC,Md Abu Hanif,971564511950,971564511950,UAE,Facebook,RAJUK Plan Approval,Remarks: রাজউক প্ল্যান পাসের ইনফো জানার জন্য বলছি বলছে পরে কথা বলবে,,,0.00,Warm,Contacted,2026-09-22,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,রাজউক প্ল্যান পাসের ইনফো জানার জন্য বলছি বলছে পরে কথা বলবে,,,,False,False,False
+L-0298,2026-08-10,IBDC,Nur Mohammad,1794589125,1794589125,,Facebook,RAJUK Plan Approval,"Remarks: রাজউক প্ল্যান পাসের বিষয়ে জানতে চাইছে কিন্তু সঠিক তথ্য দেয়নি, দিলে আপডেট জানাতে  পারবো",,,0.00,Warm,Contacted,2026-09-22,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,"রাজউক প্ল্যান পাসের বিষয়ে জানতে চাইছে কিন্তু সঠিক তথ্য দেয়নি, দিলে আপডেট জানাতে  পারবো",,,,False,False,False
+L-0299,2026-08-10,IBDC,Ikbal,971588663734,971588663734,UAE,Facebook,Architectural Design,Remarks: ২ তলা প্ল্যান ডিজাইন এর কাজ করার জন্য আলোচনা করছে উনার জন্য ২৫ হাজার টাকা বলে দিয়েছি তারপরও রেস্পন্স করছে না,,,0.00,Warm,Contacted,2026-09-22,10:00,Conversation Started,🟡 Warm,Architectural Design,,,২ তলা প্ল্যান ডিজাইন এর কাজ করার জন্য আলোচনা করছে উনার জন্য ২৫ হাজার টাকা বলে দিয়েছি তারপরও রেস্পন্স করছে না,,,,False,False,False
+L-0300,2026-08-10,IBDC,Md Mokleshur Rahman,1712070834,1712070834,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-22,10:00,Conversation Started,🔵 Cold,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0301,2026-08-11,IBDC,Standard Soil foundation,1914711123,1914711123,,Facebook,Other,Remarks: সয়েল টেস্ট সার্ভিস,,,0.00,Cold,Contacted,2026-09-22,10:00,Conversation Started,🔴 Lost,Other,,,সয়েল টেস্ট সার্ভিস,,,,False,False,False
+L-0302,2026-08-08,IBDC,Rizwan Shikder,1687107879,1687107879,Nondipara,Facebook,Other,Remarks: রিয়েল ইস্টেট কোম্পানি কে খুজতাছে মাহদি ভাইয়ের সাথে কন্টাক্ট করছে,,,0.00,Warm,Contacted,2026-09-22,10:00,Conversation Started,🟡 Warm,Other,,,রিয়েল ইস্টেট কোম্পানি কে খুজতাছে মাহদি ভাইয়ের সাথে কন্টাক্ট করছে,,,,False,False,False
+L-0303,2026-08-10,IBDC,Shariyer Patwary,1876095539,1876095539,Feni,Facebook,RAJUK Plan Approval,Remarks: Feni তে রাজউক প্ল্যান পাস সম্পর্কে জানতে চাইছে জনানো হয়েছে ও ডিজাইন এর বিষয়ে বলা হয়েছে,,,0.00,Warm,Contacted,2026-09-22,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,Feni তে রাজউক প্ল্যান পাস সম্পর্কে জানতে চাইছে জনানো হয়েছে ও ডিজাইন এর বিষয়ে বলা হয়েছে,,,,False,False,False
+L-0304,2026-08-10,IBDC,Md Salim,96890204221,96890204221,Oman,Facebook,Package Building Work,"Remarks: কিস্তিতে বাড়ি নির্মাণ করতে চায়, ডিজাইন করে নিজে  কাজ করার পরামর্শ দেওয়া হয়েছে",,,0.00,Cold,Contacted,2026-09-22,10:00,Conversation Started,🔴 Lost,Package Building Work,,,"কিস্তিতে বাড়ি নির্মাণ করতে চায়, ডিজাইন করে নিজে  কাজ করার পরামর্শ দেওয়া হয়েছে",,,,False,False,False
+L-0305,2026-08-10,IBDC,Ariful Islam,966501049320,966501049320,Saudi Arabia,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-22,10:00,Conversation Started,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0306,2026-07-12,IBDC,Anower Hossain,14374356063,14374356063,Canada,Website,RAJUK Plan Approval,"Insaf Response: রাজউক  ও প্ল্যান ডিজাইন এর কাজ
+Remarks: কোটেশন দেওয়া হইছে আলোচনা চলমান আছে",,,0.00,Warm,Qualified,2026-09-22,10:00,Mid Stage,🟡 Warm,RAJUK Approval,,রাজউক  ও প্ল্যান ডিজাইন এর কাজ,কোটেশন দেওয়া হইছে আলোচনা চলমান আছে,,,,False,False,False
+L-0307,2026-08-10,IBDC,Golam Faruk,1818080281,1818080281,Mirpur,Facebook,RAJUK Plan Approval,"Remarks: রাজউক প্ল্যান পাসের বিষয়ে জানতে চাইছে কিন্তু সঠিক তথ্য দেয়নি, দিলে আপডেট জানাতে  পারবো",,,0.00,Warm,Contacted,2026-09-23,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,"রাজউক প্ল্যান পাসের বিষয়ে জানতে চাইছে কিন্তু সঠিক তথ্য দেয়নি, দিলে আপডেট জানাতে  পারবো",,,,False,False,False
+L-0308,2026-08-09,IBDC,Mohammad Mobin,1813231650,1813231650,Gulsan,Facebook,RAJUK Plan Approval,Remarks: কোটেশন দেওয়া হইছে কোন ফিডব্যাক জানায়নি,,,0.00,Warm,Qualified,2026-09-23,10:00,Mid Stage,🟡 Warm,RAJUK Approval,,,কোটেশন দেওয়া হইছে কোন ফিডব্যাক জানায়নি,,,,False,False,False
+L-0309,2026-08-10,IBDC,T-shirt Event Print,1748197500,1748197500,,Facebook,RAJUK Plan Approval,"Remarks: রাজউক প্ল্যান পাসের বিষয়ে জানতে চাইছে কিন্তু সঠিক তথ্য দেয়নি, দিলে আপডেট জানাতে  পারবো",,,0.00,Warm,Contacted,2026-09-23,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,"রাজউক প্ল্যান পাসের বিষয়ে জানতে চাইছে কিন্তু সঠিক তথ্য দেয়নি, দিলে আপডেট জানাতে  পারবো",,,,False,False,False
+L-0310,2026-08-10,IBDC,Md Rayhan,1339059897,1339059897,,Facebook,RAJUK Plan Approval,"Remarks: রাজউক প্ল্যান পাসের বিষয়ে জানতে চাইছে কিন্তু সঠিক তথ্য দেয়নি, দিলে আপডেট জানাতে  পারবো",,,0.00,Warm,Contacted,2026-09-23,10:00,No Response,🟡 Warm,RAJUK Approval,,,"রাজউক প্ল্যান পাসের বিষয়ে জানতে চাইছে কিন্তু সঠিক তথ্য দেয়নি, দিলে আপডেট জানাতে  পারবো",,,,False,False,False
+L-0311,2026-08-10,IBDC,Sabbir,971558035301,971558035301,UAE,Facebook,RAJUK Plan Approval,"Remarks: রাজউক প্ল্যান পাসের বিষয়ে জানতে চাইছে কিন্তু সঠিক তথ্য দেয়নি, দিলে আপডেট জানাতে  পারবো",,,0.00,Cold,Contacted,2026-09-23,10:00,No Response,🔵 Cold,RAJUK Approval,,,"রাজউক প্ল্যান পাসের বিষয়ে জানতে চাইছে কিন্তু সঠিক তথ্য দেয়নি, দিলে আপডেট জানাতে  পারবো",,,,False,False,False
+L-0312,2026-08-10,IBDC,Monzur Ahamd,1815009935,1815009935,,Facebook,RAJUK Plan Approval,Remarks: রাজউক প্ল্যান নিয়ে কথা হয়েছে,,,0.00,Cold,Contacted,2026-09-23,10:00,Conversation Started,🔵 Cold,RAJUK Approval,,,রাজউক প্ল্যান নিয়ে কথা হয়েছে,,,,False,False,False
+L-0313,2026-08-10,IBDC,ffa250825,966540237847,966540237847,Saudi Arabia,Facebook,Architectural Design,"Remarks: ২ তলা ফাউন্ডেশন দিয়ে এক তলা করবে, অন্যান্য ইনফরমেশন চাইছি দেয়নি",,,0.00,Cold,Contacted,2026-09-23,10:00,Conversation Started,🔵 Cold,Architectural Design,,,"২ তলা ফাউন্ডেশন দিয়ে এক তলা করবে, অন্যান্য ইনফরমেশন চাইছি দেয়নি",,,,False,False,False
+L-0314,2026-08-10,IBDC,Limon Sardar,1771614915,1771614915,,Facebook,RAJUK Plan Approval,"Remarks: রাজউক প্ল্যান নিয়ে কথা হয়েছে, জমি অনেক ছোট তাই পরামর্শ নিয়ে বাদ দিয়েছে পরে জমি কিনে আবার কথা বলবে",,,0.00,Warm,Contacted,2026-09-23,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,"রাজউক প্ল্যান নিয়ে কথা হয়েছে, জমি অনেক ছোট তাই পরামর্শ নিয়ে বাদ দিয়েছে পরে জমি কিনে আবার কথা বলবে",,,,False,False,False
+L-0315,2026-08-10,IBDC,Md Nayamat Ullah,971569970335,971569970335,UAE,Facebook,Architectural Design,"Remarks: plan ডিজাইন করবে, স্যাম্পল দেখতে চাইছে দেখানো  হয়েছে, ফাইনাল কাজের বিষয়ে কিছু বলে নাই",,,0.00,Warm,Contacted,2026-09-23,10:00,Conversation Started,🟡 Warm,Architectural Design,,,"plan ডিজাইন করবে, স্যাম্পল দেখতে চাইছে দেখানো  হয়েছে, ফাইনাল কাজের বিষয়ে কিছু বলে নাই",,,,False,False,False
+L-0316,2026-07-29,IBDC,Al Amin tur's & Travel,1768163887,1768163887,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Warm,Contacted,2026-09-23,10:00,No Response,🟡 Warm,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0317,2026-08-10,IBDC,Saiful Islam Choton,,,Banosree,Facebook,RAJUK Plan Approval,"Insaf Response: 18 katha M block 12 ft road
+Remarks: 10 তলা প্ল্যান পাস করে দিতে পারবো উনার সাথে কথা হয়েছে পরে উনি এর যোগাযোগ করে নি",,,0.00,Warm,Contacted,2026-09-23,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,18 katha M block 12 ft road,10 তলা প্ল্যান পাস করে দিতে পারবো উনার সাথে কথা হয়েছে পরে উনি এর যোগাযোগ করে নি,,,,True,False,False
+L-0318,2026-08-10,IBDC,Md Shohag Mollik,966502448094,966502448094,Gazipur,Facebook,Architectural Design,Remarks: এক তলা বাড়ির ডিজাইন করবে ২৫ হাজার টাকা বলছি উনি ক্ষমার ইমজি দিয়েছে,,,0.00,Warm,Contacted,2026-09-23,10:00,Conversation Started,🟡 Warm,Architectural Design,,,এক তলা বাড়ির ডিজাইন করবে ২৫ হাজার টাকা বলছি উনি ক্ষমার ইমজি দিয়েছে,,,,False,False,False
+L-0319,2026-08-10,IBDC,A. Ahad,1713456871,1713456871,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Warm,Contacted,2026-09-23,10:00,No Response,🟡 Warm,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0320,2026-08-10,IBDC,Abu Yousuf,1819480255,1819480255,,Facebook,Other,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-23,10:00,No Response,🔵 Cold,Other,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0321,2026-08-10,IBDC,Chistee khairul abrar,1714448855,1714448855,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Warm,Contacted,2026-09-23,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0322,2026-07-19,IBDC,Rahman Mizan,966550485003,966550485003,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-23,10:00,No Response,🔵 Cold,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0323,2026-08-09,IBDC,Multi Star,971557891071,971557891071,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-24,10:00,No Response,🔵 Cold,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0324,2026-08-10,IBDC,Shamim Monzoor,1919492640,1919492640,,Facebook,RAJUK Plan Approval,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-24,10:00,No Response,🔵 Cold,RAJUK Approval,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0325,2026-08-10,IBDC,Shamoo al Hoqain,96872868820,96872868820,Oman,Facebook,Architectural Design,"Remarks: টিন শেড বাড়ি করবে, বিস্তারিত জানার জন্য বলছি বলে নি",,,0.00,Warm,Contacted,2026-09-23,10:00,Conversation Started,🟡 Warm,Architectural Design,,,"টিন শেড বাড়ি করবে, বিস্তারিত জানার জন্য বলছি বলে নি",,,,False,False,False
+L-0326,2026-07-16,IBDC,Md Shari,966536737428,966536737428,Saudi Arabia,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-24,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0327,2026-08-10,IBDC,Md Salah Uddin,1818734900,1818734900,,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-24,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0328,2026-08-10,IBDC,Aktar Hossain,966502403167,966502403167,Saudi Arabia,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-24,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0329,2026-08-10,IBDC,Solaiman mia,1710147392,1710147392,,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-24,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0330,2026-07-31,IBDC,Md Enayet Mollah,1729978598,1729978598,Savar,Facebook,RAJUK Plan Approval,Remarks: কাজ মোটামোটি ফাইনাল দেশে এসে দেখা করবে বলছে,,,0.00,Hot,Negotiating,2026-09-24,10:00,Final Stage,🔥 Hot,RAJUK Approval,,,কাজ মোটামোটি ফাইনাল দেশে এসে দেখা করবে বলছে,,,,False,False,False
+L-0331,2026-08-10,IBDC,Ms. SR Traders,1339266678,1339266678,,Facebook,RAJUK Plan Approval,Remarks: ম্যাসেজের রিপ্লাই করছে কোন ইনফো দেয়নি,,,0.00,Cold,Contacted,2026-09-24,10:00,Conversation Started,🔵 Cold,RAJUK Approval,,,ম্যাসেজের রিপ্লাই করছে কোন ইনফো দেয়নি,,,,False,False,False
+L-0332,2026-08-09,IBDC,Md Rubel,966548237402,966548237402,,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-24,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0333,2026-08-09,IBDC,Boadruz Zaman,971567168039,971567168039,Dubai,Facebook,RAJUK Plan Approval,"Remarks: উনি অফিসে আসার জন্য লোকেশন চাইছে উনাকে দেওয়া হইছে পরে আর আসেনি, এখন দুবাই আছে কাজ করার চিন্তা ফিকির নাই",,,0.00,Warm,Contacted,2026-09-24,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,"উনি অফিসে আসার জন্য লোকেশন চাইছে উনাকে দেওয়া হইছে পরে আর আসেনি, এখন দুবাই আছে কাজ করার চিন্তা ফিকির নাই",,,,False,False,False
+L-0334,2026-08-09,IBDC,Raju Khan,971566798454,971566798454,Dubai,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Cold,Contacted,2026-09-24,10:00,No Response,🔵 Cold,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0335,2026-07-28,IBDC,Polash Khondoker,1711027546,1711027546,Isordi,Facebook,Other,"Remarks: 2.5 কাঠা জমিতে ডেভেলপার খুঁজছে, প্ল্যান ডিজাইন লাগলে যেন কথা বলে জানানো হয়েছে",,,0.00,Warm,Contacted,2026-09-24,10:00,Conversation Started,🟡 Warm,Other,,,"2.5 কাঠা জমিতে ডেভেলপার খুঁজছে, প্ল্যান ডিজাইন লাগলে যেন কথা বলে জানানো হয়েছে",,,,False,False,False
+L-0336,2026-08-10,IBDC,Rimon Mahmud,971547010265,971547010265,Dubai,Facebook,Architectural Design,Remarks: কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,0.00,Warm,Contacted,2026-09-24,10:00,No Response,🟡 Warm,Architectural Design,,,কল ও ম্যাসেজ দেওয়া হইছে রেস্পন্স পাইনি,,,,False,False,False
+L-0337,2026-09-24,IBDC,Saidur Rahman,966573455933,966573455933,Saudi Arabia,Direct,RAJUK Plan Approval,Remarks: 6 তলা পাবে কথা চলমান আছে,,,0.00,Warm,Contacted,2026-09-24,10:00,Conversation Started,🟡 Warm,RAJUK Approval,,,6 তলা পাবে কথা চলমান আছে,,,,False,False,False
+L-0338,2026-08-10,IBDC,,,,,Direct,Other,,,,0.00,Warm,New,,10:00,,,,,,,,,,True,False,False
+L-0339,2026-09-24,IBDC,,,,,Direct,Other,,,,0.00,Warm,New,,10:00,,,,,,,,,,True,False,False
+L-0340,2026-08-10,IBDC,,,,,Direct,Other,,,,0.00,Warm,New,,10:00,,,,,,,,,,True,False,False
+L-0341,2026-09-24,IBDC,,,,,Direct,Other,,,,0.00,Warm,New,,10:00,,,,,,,,,,True,False,False
+L-0342,2026-08-10,IBDC,,,,,Direct,Other,,,,0.00,Warm,New,,10:00,,,,,,,,,,True,False,False
