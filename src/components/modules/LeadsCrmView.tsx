@@ -22,6 +22,11 @@ import {
   Undo2,
   Clock,
   CalendarDays,
+  ListFilter,
+  ArrowUpAZ,
+  ArrowDownAZ,
+  Check,
+  Eraser,
 } from "lucide-react";
 import { exportToCSV as exportRecordsToCSV, exportToExcel, exportToPDFPrint as exportRecordsToPDFPrint } from "@/lib/export-utils";
 
@@ -303,6 +308,100 @@ function tally(items: string[]): Array<{ label: string; count: number }> {
 function categoryOfLead(l: any): string {
   const isIREL = (l.companyId || "IBDC") === "IREL";
   return (isIREL ? l.propertyType : l.service) || "Other";
+}
+function isImportDump(text?: string | null) {
+  const t = String(text || "");
+  return (
+    /\[Import Source ID:/i.test(t) ||
+    /Original source date:/i.test(t) ||
+    /Original service type:/i.test(t) ||
+    /Original status:/i.test(t)
+  );
+}
+
+function extractSection(text: string, labels: string[], stopLabels: string[]) {
+  const src = String(text || "").replace(/\r/g, "");
+  const lower = src.toLowerCase();
+  let start = -1;
+  let labelLen = 0;
+
+  for (const label of labels) {
+    const i = lower.indexOf(label.toLowerCase());
+    if (i >= 0 && (start < 0 || i < start)) {
+      start = i;
+      labelLen = label.length;
+    }
+  }
+  if (start < 0) return "";
+
+  const from = start + labelLen;
+  let end = src.length;
+  for (const stop of stopLabels) {
+    const i = lower.indexOf(stop.toLowerCase(), from);
+    if (i >= 0 && i < end) end = i;
+  }
+
+  return src
+    .slice(from, end)
+    .replace(/^[\s:–—-]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Excel-এর মতো পরিষ্কার Requirement / Response / Remarks */
+function leadDisplayTexts(l: any) {
+  const storedClientReq = String(l.clientRequirement || "").trim();
+  const storedReq = String(l.requirement || "").trim();
+  const storedInsaf = String(l.insafResponse || "").trim();
+  const storedRemarks = String(l.remarks || "").trim();
+
+  const dump = isImportDump(storedClientReq)
+    ? storedClientReq
+    : isImportDump(storedReq)
+    ? storedReq
+    : "";
+
+  // নতুন লিড — বক্সে যা লেখা, হুবহু সেটাই
+  if (!dump) {
+    return {
+      requirement: storedClientReq || storedReq,
+      insafResponse: storedInsaf,
+      remarks: storedRemarks,
+    };
+  }
+
+  let requirement = extractSection(
+    dump,
+    ["Client Requirement:"],
+    ["INSAF Response:", "Insaf Response:", "Remarks:", "Source notes:", "Review required:", "[অতিরিক্ত তথ্য]"]
+  );
+
+  let insafResponse =
+    storedInsaf ||
+    extractSection(dump, ["INSAF Response:", "Insaf Response:"], ["Remarks:", "Source notes:", "Review required:", "[অতিরিক্ত তথ্য]"]);
+
+  let remarks =
+    storedRemarks ||
+    extractSection(dump, ["Remarks:"], ["Source notes:", "Review required:", "[অতিরিক্ত তথ্য]"]);
+
+  // dump-এর আবর্জনা বাদ
+  if (
+    !requirement ||
+    isImportDump(requirement) ||
+    /^(original |source notes:|review required:|remarks:)/i.test(requirement)
+  ) {
+    requirement = "";
+  }
+
+  if (isImportDump(insafResponse)) insafResponse = "";
+  if (isImportDump(remarks) || /^source notes:/i.test(remarks)) remarks = "";
+
+  return { requirement, insafResponse, remarks };
+}
+
+function dash(v?: string | null) {
+  const s = String(v || "").trim();
+  return s ? s : "—";
 }
 
 function colorForLabel(label: string, i: number) {
@@ -1137,9 +1236,9 @@ export function LeadsView({
       String(categoryOfLead(l)),
       String(l.priority || ""),
       String(l.status || ""),
-      String(l.clientRequirement || l.requirement || ""),
-      String(l.insafResponse || ""),
-      String(l.remarks || ""),
+      leadDisplayTexts(l).requirement,
+leadDisplayTexts(l).insafResponse,
+leadDisplayTexts(l).remarks,
       String(l.nextFollowUpDate || ""),
       String(l.reminder1 || ""),
       String(l.reminder2 || ""),
@@ -1620,7 +1719,7 @@ export function LeadsView({
             </div>
           </div>
 
-          {/* LEADS */}
+                    {/* LEADS */}
           {viewMode === "sheet" ? (
             <LeadSheetTable
               leads={filteredLeads}
@@ -1642,6 +1741,7 @@ export function LeadsView({
                 const pStyle = priorityStyle(l.priority || "Warm");
                 const PIcon = pStyle.Icon;
                 const isToday = leadCreatedYmd(l) === today;
+                const texts = leadDisplayTexts(l);
 
                 return (
                   <div
@@ -1691,14 +1791,20 @@ export function LeadsView({
                             </>
                           )}
                         </p>
-                        {(l.clientRequirement || l.requirement) && (
+
+                        {texts.requirement && (
                           <p className="text-[11px] text-slate-500 mt-1">
-                            <strong>Req:</strong> {l.clientRequirement || l.requirement}
+                            <strong>Req:</strong> {texts.requirement}
                           </p>
                         )}
-                        {l.insafResponse && (
+                        {texts.insafResponse && (
                           <p className="text-[11px] text-slate-500 mt-1">
-                            <strong>Response:</strong> {l.insafResponse}
+                            <strong>Response:</strong> {texts.insafResponse}
+                          </p>
+                        )}
+                        {texts.remarks && (
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            <strong>Remarks:</strong> {texts.remarks}
                           </p>
                         )}
                       </div>
@@ -2348,6 +2454,38 @@ function LeadTimeline({ lead, fus }: { lead: any; fus: any[] }) {
   );
 }
 
+// ============================================================================
+// EXCEL-LIKE SHEET TABLE (Stable Version - No Layout Break)
+// ============================================================================
+
+type SheetCol = {
+  key: string;
+  label: string;
+  width: string;
+  frozen?: boolean;
+  align?: "left" | "center";
+  get: (l: any) => string;
+};
+
+const SHEET_COLUMNS: SheetCol[] = [
+  { key: "leadCode", label: "Lead ID", width: "140px", frozen: true, get: (l) => String(l.leadCode || l.id || "") },
+  { key: "date", label: "Date", width: "100px", frozen: true, get: (l) => fmtISO(l.leadDate || l.createdAt || l.date) },
+  { key: "name", label: "Client Name", width: "170px", frozen: true, get: (l) => String(l.name || "") },
+  { key: "phone", label: "Contact No", width: "130px", get: (l) => String(l.phone || "") },
+  { key: "location", label: "Location", width: "120px", get: (l) => String(l.location || l.preferredLocation || "") },
+  { key: "source", label: "Source", width: "110px", get: (l) => String(l.source || "") },
+  { key: "service", label: "Service Type", width: "170px", get: (l) => categoryOfLead(l) },
+  { key: "priority", label: "Priority", width: "100px", align: "center", get: (l) => String(l.priority || "Warm") },
+  { key: "status", label: "Status", width: "130px", align: "center", get: (l) => String(l.status || "") },
+  { key: "requirement", label: "Client Requirement", width: "220px", get: (l) => dash(leadDisplayTexts(l).requirement) },
+  { key: "insafResponse", label: "Insaf Response", width: "190px", get: (l) => dash(leadDisplayTexts(l).insafResponse) },
+{ key: "remarks", label: "Remarks", width: "190px", get: (l) => dash(leadDisplayTexts(l).remarks) },
+  { key: "nextFollowUpDate", label: "Next Follow-up", width: "120px", align: "center", get: (l) => String(l.nextFollowUpDate || "") },
+  { key: "reminder1", label: "Reminder 1", width: "160px", get: (l) => String(l.reminder1 || "") },
+  { key: "reminder2", label: "Reminder 2", width: "160px", get: (l) => String(l.reminder2 || "") },
+  { key: "reminder3", label: "Reminder 3", width: "160px", get: (l) => String(l.reminder3 || "") },
+];
+
 function LeadSheetTable({
   leads,
   fuByLead,
@@ -2369,108 +2507,244 @@ function LeadSheetTable({
   onDelete: (lead: any) => void;
   onMutate: (payload: Record<string, unknown>) => Promise<any>;
 }) {
+  const [colFilters, setColFilters] = useState<Record<string, string[]>>({});
+  const [openFilterKey, setOpenFilterKey] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [searchFilter, setSearchFilter] = useState("");
+
+  useEffect(() => {
+    if (!openFilterKey) return;
+    function onDocClick(e: MouseEvent) {
+      const el = e.target as HTMLElement;
+      if (el.closest("[data-filter-popover]") || el.closest("[data-filter-trigger]")) return;
+      setOpenFilterKey(null);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [openFilterKey]);
+
+  const filtered = useMemo(() => {
+    let rows = leads;
+
+    if (searchFilter.trim()) {
+      const q = searchFilter.toLowerCase();
+      rows = rows.filter((l) => {
+        const blob = [l.name, l.phone, l.leadCode, l.location, l.source, categoryOfLead(l)]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return blob.includes(q);
+      });
+    }
+
+    Object.entries(colFilters).forEach(([key, selected]) => {
+      if (!selected || selected.length === 0) return;
+      const col = SHEET_COLUMNS.find((c) => c.key === key);
+      if (!col) return;
+      const set = new Set(selected);
+      rows = rows.filter((l) => set.has(col.get(l) || "(ফাঁকা)"));
+    });
+    return rows;
+  }, [leads, colFilters, searchFilter]);
+
+  const sorted = useMemo(() => {
+    if (!sortKey) return filtered;
+    const col = SHEET_COLUMNS.find((c) => c.key === sortKey);
+    if (!col) return filtered;
+    return [...filtered].sort((a, b) => {
+      const av = col.get(a) || "";
+      const bv = col.get(b) || "";
+      const cmp = av.localeCompare(bv, "bn", { numeric: true });
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [filtered, sortKey, sortDir]);
+
+  function uniqueValues(key: string) {
+    const col = SHEET_COLUMNS.find((c) => c.key === key);
+    if (!col) return [];
+    const set = new Set<string>();
+    leads.forEach((l) => set.add(col.get(l) || "(ফাঁকা)"));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "bn", { numeric: true }));
+  }
+
+  function toggleSort(key: string) {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  function clearAllFilters() {
+    setColFilters({});
+    setSortKey(null);
+    setSortDir("asc");
+    setSearchFilter("");
+  }
+
+  const activeFilterCount = Object.values(colFilters).filter((v) => v && v.length > 0).length;
+
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-      <div className="overflow-x-auto w-full">
-        <table className="w-full text-[11px] border-collapse min-w-[2050px]">
-          <thead className="bg-slate-900 text-white">
-            <tr className="text-left whitespace-nowrap">
-              {[
-                "Lead ID",
-                "Date",
-                "Client Name",
-                "Contact No",
-                "Location",
-                "Source",
-                "Service Type",
-                "Priority",
-                "Status",
-                "Client Requirement",
-                "Insaf Response",
-                "Remarks",
-                "Next Follow-up",
-                "Reminder 1",
-                "Reminder 2",
-                "Reminder 3",
-                "Actions",
-              ].map((h) => (
-                <th key={h} className="px-3 py-2.5 border-r border-slate-700 font-semibold last:border-r-0">
-                  {h}
-                </th>
-              ))}
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 border-b border-slate-200">
+        <div className="flex items-center gap-2 text-[11px] text-slate-600 font-semibold">
+          <ListFilter className="w-3.5 h-3.5 text-emerald-600" />
+          দেখানো হচ্ছে <span className="text-slate-900 font-bold">{sorted.length}</span> / {leads.length}
+          {activeFilterCount > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+              {activeFilterCount} ফিল্টার
+            </span>
+          )}
+          {sortKey && (
+            <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+              সর্ট: {SHEET_COLUMNS.find((c) => c.key === sortKey)?.label}
+            </span>
+          )}
+        </div>
+
+        {(activeFilterCount > 0 || sortKey || searchFilter) && (
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold inline-flex items-center gap-1.5"
+          >
+            <Eraser className="w-3 h-3" /> রিসেট
+          </button>
+        )}
+      </div>
+
+      {/* Table Container with proper scrolling */}
+      <div className="overflow-auto" style={{ maxHeight: "65vh" }}>
+        <table className="w-full text-[11px] border-collapse" style={{ tableLayout: "fixed", minWidth: "2000px" }}>
+          <thead className="bg-slate-900 text-white sticky top-0 z-20">
+            <tr>
+              {SHEET_COLUMNS.map((col) => {
+                const selected = colFilters[col.key] || [];
+                const hasFilter = selected.length > 0;
+                const isSorted = sortKey === col.key;
+
+                return (
+                  <th
+                    key={col.key}
+                    className={`font-semibold text-left px-2 py-2.5 border-r border-slate-700 ${
+                      col.frozen ? "sticky left-0 z-30 bg-slate-900" : ""
+                    }`}
+                    style={{
+                      width: col.width,
+                      minWidth: col.width,
+                      textAlign: col.align || "left",
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(col.key)}
+                        className="flex items-center gap-1 hover:text-emerald-300 truncate font-semibold"
+                        title="সর্ট করুন"
+                      >
+                        <span className="truncate">{col.label}</span>
+                        {isSorted && (
+                          <span className="text-emerald-400 text-xs">
+                            {sortDir === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        data-filter-trigger
+                        onClick={() => setOpenFilterKey(openFilterKey === col.key ? null : col.key)}
+                        title="ফিল্টার"
+                        className={`shrink-0 w-5 h-5 rounded flex items-center justify-center transition ${
+                          hasFilter ? "bg-emerald-500 text-slate-950" : "bg-slate-700 hover:bg-slate-600 text-slate-300"
+                        }`}
+                      >
+                        <ListFilter className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    {openFilterKey === col.key && (
+                      <ColumnFilterPopover
+                        values={uniqueValues(col.key)}
+                        selected={selected}
+                        onApply={(vals) => {
+                          setColFilters((prev) => ({ ...prev, [col.key]: vals }));
+                          setOpenFilterKey(null);
+                        }}
+                        onClose={() => setOpenFilterKey(null)}
+                      />
+                    )}
+                  </th>
+                );
+              })}
+
+              <th className="font-semibold text-left px-2 py-2.5 border-l border-slate-700 sticky left-0 z-30 bg-slate-900" style={{ width: "280px", minWidth: "280px" }}>
+                Actions
+              </th>
             </tr>
           </thead>
+
           <tbody>
-            {leads.map((l) => {
+            {sorted.map((l, idx) => {
               const fus = fuByLead.get(l.id) || [];
               const pStyle = priorityStyle(l.priority || "Warm");
               const PIcon = pStyle.Icon;
               const isOpen = openLeadId === l.id;
               const isToday = leadCreatedYmd(l) === today;
+              const rowBg = isOpen ? "bg-emerald-50" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50";
 
               return (
-                <tr
-                  key={l.id}
-                  className={`border-b border-slate-200 hover:bg-emerald-50/40 ${isOpen ? "bg-emerald-50/30" : ""}`}
-                >
-                  <td className="px-3 py-2 border-r font-mono font-semibold bg-slate-50/70 whitespace-nowrap">
-                    {l.leadCode || l.id}
-                    {isToday && (
-                      <span className="ml-1 px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 text-[9px] font-bold">
-                        আজ
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 border-r whitespace-nowrap">
-                    {fmtISO(l.leadDate || l.createdAt || l.date)}
-                  </td>
-                  <td className="px-3 py-2 border-r font-medium text-slate-800 whitespace-nowrap">
-                    <button type="button" onClick={() => onOpenLead(l.id)} className="hover:text-emerald-700 hover:underline text-left">
-                      {l.name}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2 border-r whitespace-nowrap">{l.phone}</td>
-                  <td className="px-3 py-2 border-r">{l.location || l.preferredLocation || "—"}</td>
-                  <td className="px-3 py-2 border-r">{l.source || "—"}</td>
-                  <td className="px-3 py-2 border-r whitespace-nowrap">{categoryOfLead(l)}</td>
-                  <td className="px-3 py-2 border-r">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${pStyle.cls}`}>
-                      <PIcon className="w-3 h-3" /> {l.priority || "Warm"}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 border-r">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${statusStyle(l.status)}`}>
-                      {l.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 border-r max-w-[220px] truncate" title={l.clientRequirement || l.requirement || ""}>
-                    {l.clientRequirement || l.requirement || "—"}
-                  </td>
-                  <td className="px-3 py-2 border-r max-w-[220px] truncate" title={l.insafResponse || ""}>
-                    {l.insafResponse || "—"}
-                  </td>
-                  <td className="px-3 py-2 border-r max-w-[220px] truncate" title={l.remarks || ""}>
-                    {l.remarks || "—"}
-                  </td>
-                  <td className="px-3 py-2 border-r whitespace-nowrap text-center">
-                    {l.nextFollowUpDate || "—"}
-                  </td>
-                  <td className="px-3 py-2 border-r max-w-[220px] truncate" title={l.reminder1 || ""}>
-                    {l.reminder1 || "—"}
-                  </td>
-                  <td className="px-3 py-2 border-r max-w-[220px] truncate" title={l.reminder2 || ""}>
-                    {l.reminder2 || "—"}
-                  </td>
-                  <td className="px-3 py-2 border-r max-w-[220px] truncate" title={l.reminder3 || ""}>
-                    {l.reminder3 || "—"}
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    <div className="flex items-center gap-1">
+                <tr key={l.id} className={`${rowBg} border-b border-slate-200 hover:bg-emerald-50/60 transition-colors`}>
+                  {SHEET_COLUMNS.map((col, colIdx) => {
+                    const value = col.get(l);
+                    const isFrozen = col.frozen;
+                    const isPriority = col.key === "priority";
+                    const isStatus = col.key === "status";
+
+                    return (
+                      <td
+                        key={col.key}
+                        className={`px-2 py-2 border-r border-slate-200 truncate ${
+                          isFrozen ? "sticky bg-inherit z-10" : ""
+                        } ${colIdx === 2 ? "border-r-2 border-slate-300 font-semibold" : ""}`}
+                        style={{
+                          width: col.width,
+                          minWidth: col.width,
+                          textAlign: col.align || "left",
+                          left: isFrozen ? getFrozenLeft(col.key) : undefined,
+                        }}
+                        title={value.length > 50 ? value : undefined}
+                      >
+                        {colIdx === 0 && isToday && (
+                          <span className="inline-block mb-1 px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 text-[9px] font-bold">
+                            আজ
+                          </span>
+                        )}
+
+                        {isPriority ? (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${pStyle.cls}`}>
+                            <PIcon className="w-3 h-3" /> {value}
+                          </span>
+                        ) : isStatus ? (
+                          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${statusStyle(value)}`}>
+                            {value}
+                          </span>
+                        ) : (
+                          <span className="truncate block">{value || "—"}</span>
+                        )}
+                      </td>
+                    );
+                  })}
+
+                  <td className="px-2 py-2 border-l border-slate-200 sticky left-0 z-10 bg-inherit" style={{ width: "280px", minWidth: "280px" }}>
+                    <div className="flex items-center gap-1 flex-wrap">
                       {!["Won", "Lost", "On Hold"].includes(l.status) && l.priority !== "Lost" && (
                         <button
                           type="button"
                           onClick={() => onFollowUp(l.id)}
-                          className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold"
+                          className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold shrink-0"
                         >
                           FU
                         </button>
@@ -2478,14 +2752,14 @@ function LeadSheetTable({
                       <button
                         type="button"
                         onClick={() => onOpenLead(l.id)}
-                        className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-bold"
+                        className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-bold shrink-0"
                       >
-                        {isOpen ? "Hide" : `Timeline (${fus.length})`}
+                        {isOpen ? "Hide" : `TL(${fus.length})`}
                       </button>
                       <button
                         type="button"
                         onClick={() => onEdit(l)}
-                        className="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold"
+                        className="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold shrink-0"
                       >
                         Edit
                       </button>
@@ -2493,7 +2767,7 @@ function LeadSheetTable({
                         type="button"
                         onClick={() => onDelete(l)}
                         title="এক ক্লিকে ডিলিট — Ctrl+Z দিয়ে ফেরানো যাবে"
-                        className="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white"
+                        className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white shrink-0"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -2501,7 +2775,7 @@ function LeadSheetTable({
                         <button
                           type="button"
                           onClick={() => onMutate({ action: "convertLeadToClient", leadId: l.id })}
-                          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold"
+                          className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold shrink-0"
                         >
                           Convert
                         </button>
@@ -2511,10 +2785,11 @@ function LeadSheetTable({
                 </tr>
               );
             })}
-            {leads.length === 0 && (
+
+            {sorted.length === 0 && (
               <tr>
-                <td colSpan={17} className="px-4 py-10 text-center text-slate-400">
-                  কোনো লিড পাওয়া যায়নি।
+                <td colSpan={SHEET_COLUMNS.length + 1} className="px-4 py-10 text-center text-slate-400">
+                  কোনো লিড পাওয়া যায়নি। ফিল্টার পরিবর্তন করুন।
                 </td>
               </tr>
             )}
@@ -2525,6 +2800,133 @@ function LeadSheetTable({
   );
 }
 
+// Helper for frozen column positioning
+function getFrozenLeft(key: string): string {
+  const frozenCols = SHEET_COLUMNS.filter((c) => c.frozen);
+  const idx = frozenCols.findIndex((c) => c.key === key);
+  if (idx === -1) return "auto";
+
+  let left = 0;
+  for (let i = 0; i < idx; i++) {
+    left += parseInt(frozenCols[i].width) || 0;
+  }
+  return `${left}px`;
+}
+
+// ---- Simple Column Filter Popover ----
+function ColumnFilterPopover({
+  values,
+  selected,
+  onApply,
+  onClose,
+}: {
+  values: string[];
+  selected: string[];
+  onApply: (vals: string[]) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [draft, setDraft] = useState<string[]>(selected.length ? selected : values);
+
+  const shown = useMemo(
+    () => values.filter((v) => v.toLowerCase().includes(search.trim().toLowerCase())),
+    [values, search]
+  );
+
+  const allChecked = shown.length > 0 && shown.every((v) => draft.includes(v));
+
+  function toggle(v: string) {
+    setDraft((d) => (d.includes(v) ? d.filter((x) => x !== v) : [...d, v]));
+  }
+
+  function toggleAll() {
+    if (allChecked) setDraft((d) => d.filter((v) => !shown.includes(v)));
+    else setDraft((d) => Array.from(new Set([...d, ...shown])));
+  }
+
+  return (
+    <div
+      data-filter-popover
+      className="absolute top-full left-0 mt-1 w-56 bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-300 z-50 overflow-hidden"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="p-2 border-b border-slate-200 bg-slate-50">
+        <input
+          autoFocus
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="খুঁজুন…"
+          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-[11px] outline-none focus:ring-2 focus:ring-emerald-400"
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={toggleAll}
+        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold hover:bg-slate-50 border-b border-slate-200"
+      >
+        <span
+          className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${
+            allChecked ? "bg-emerald-500 border-emerald-600" : "bg-white border-slate-400"
+          }`}
+        >
+          {allChecked && <Check className="w-2.5 h-2.5 text-white" />}
+        </span>
+        সব নির্বাচন করুন
+      </button>
+
+      <div className="max-h-48 overflow-y-auto">
+        {shown.map((v) => {
+          const checked = draft.includes(v);
+          return (
+            <button
+              key={v}
+              type="button"
+              onClick={() => toggle(v)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-slate-50 text-left"
+            >
+              <span
+                className={`w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center ${
+                  checked ? "bg-emerald-500 border-emerald-600" : "bg-white border-slate-400"
+                }`}
+              >
+                {checked && <Check className="w-2.5 h-2.5 text-white" />}
+              </span>
+              <span className="truncate" title={v}>
+                {v}
+              </span>
+            </button>
+          );
+        })}
+        {shown.length === 0 && <p className="px-3 py-4 text-[11px] text-slate-400 text-center">কিছু পাওয়া যায়নি</p>}
+      </div>
+
+      <div className="flex gap-1.5 p-2 border-t border-slate-200 bg-slate-50">
+        <button
+          type="button"
+          onClick={() => onApply([])}
+          className="flex-1 px-2 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-bold"
+        >
+          মুছুন
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-600 text-[11px] font-bold"
+        >
+          বাতিল
+        </button>
+        <button
+          type="button"
+          onClick={() => onApply(draft.length === values.length ? [] : draft)}
+          className="flex-1 px-2 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold"
+        >
+          প্রয়োগ
+        </button>
+      </div>
+    </div>
+  );
+}
 function EditLeadModal({
   lead,
   form,
