@@ -270,7 +270,16 @@ export const leads = pgTable(
     purpose: text("purpose").notNull().default(""), // Own Use | Investment
     expectedPurchaseDate: text("expected_purchase_date").notNull().default(""),
     clientRequirement: text("client_requirement").notNull().default(""),
-    requirement: text("requirement").notNull().default(""),
+        requirement: text("requirement").notNull().default(""),
+
+    // ✅ নতুন কলাম (user-editable fields)
+    leadDate: text("lead_date"),
+    insafResponse: text("insaf_response").notNull().default(""),
+    remarks: text("remarks").notNull().default(""),
+    reminder1: text("reminder1").notNull().default(""),
+    reminder2: text("reminder2").notNull().default(""),
+    reminder3: text("reminder3").notNull().default(""),
+
     landSize: text("land_size").notNull().default(""),
     roadWidth: text("road_width").notNull().default(""),
     budget: numeric("budget", { precision: 14, scale: 2 }).notNull().default("0"),

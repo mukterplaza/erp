@@ -2624,7 +2624,6 @@ export async function POST(req: NextRequest) {
         .returning();
       return NextResponse.json({ success: true, comment: c });
     }
-
     // =========================================================================
     // 6. CRM: LEADS, FOLLOW-UPS, CLIENTS & QUOTATIONS
     // =========================================================================
@@ -2654,7 +2653,15 @@ export async function POST(req: NextRequest) {
         assignedStaffId,
         nextFollowUpDate,
         nextFollowUpTime,
+        // ✅ নতুন ফিল্ড
+        insafResponse,
+        remarks,
+        reminder1,
+        reminder2,
+        reminder3,
+        leadDate,
       } = body;
+
       // Accept the canonical UI payload and common legacy aliases without writing
       // unknown properties into the Drizzle insert object.
       const name = String(body.name ?? body.clientName ?? body.leadName ?? "").trim();
@@ -2787,15 +2794,28 @@ export async function POST(req: NextRequest) {
             landSize: resolvedCompany === "IBDC" ? landSize || "" : "",
             roadWidth: resolvedCompany === "IBDC" ? roadWidth || "" : "",
             budget: normalizedBudget.toFixed(2),
-            priority: ["Hot", "Warm", "Cold"].includes(priority) ? priority : "Warm",
-            status: ["New", "Contacted", "Follow-up", "Qualified", "Quotation", "Negotiating", "Won", "Lost", "On Hold"].includes(String(status))
+            priority: ["Hot", "Warm", "Cold", "Lost"].includes(String(priority)) ? String(priority) : "Warm",
+            status: [
+              "New", "Contacted", "Follow-up", "Qualified", "Quotation", "Negotiating",
+              "Won", "Lost", "On Hold",
+              "Conversation Started", "Mid Stage", "Proposal Sent", "No Response", "Converted",
+            ].includes(String(status))
               ? String(status)
               : "New",
-            assignedStaffId: assignedStaffId !== undefined && assignedStaffId !== null && assignedStaffId !== ""
-              ? Number(assignedStaffId)
-              : currentUser.employeeId,
+            assignedStaffId:
+              assignedStaffId !== undefined && assignedStaffId !== null && assignedStaffId !== ""
+                ? Number(assignedStaffId)
+                : currentUser.employeeId,
             nextFollowUpDate: normalizedNextDate,
             nextFollowUpTime: normalizedNextTime,
+
+            // ✅ নতুন কলামগুলো — insert
+            leadDate: leadDate ? String(leadDate).slice(0, 10) : null,
+            insafResponse: insafResponse ? String(insafResponse) : "",
+            remarks: remarks ? String(remarks) : "",
+            reminder1: reminder1 ? String(reminder1) : "",
+            reminder2: reminder2 ? String(reminder2) : "",
+            reminder3: reminder3 ? String(reminder3) : "",
           })
           .returning();
         return createdLead;
@@ -2965,8 +2985,11 @@ export async function POST(req: NextRequest) {
       if (!Number.isInteger(leadId) || leadId <= 0) {
         return NextResponse.json({ error: "A valid Lead ID is required." }, { status: 400 });
       }
+
       const [existingLead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
-      if (!existingLead) return NextResponse.json({ error: "Lead not found." }, { status: 404 });
+      if (!existingLead) {
+        return NextResponse.json({ error: "Lead not found." }, { status: 404 });
+      }
 
       const access = leadCompanyAccess(currentUser);
       const existingCompany = Number(existingLead.companyId) === 2 ? "IREL" : "IBDC";
@@ -2979,8 +3002,14 @@ export async function POST(req: NextRequest) {
       if (access !== "BOTH" && access !== nextCompany) {
         return NextResponse.json({ error: "অন্য কোম্পানিতে লিড স্থানান্তরের অনুমতি নেই।" }, { status: 403 });
       }
-      const validStatuses = ["New", "Contacted", "Follow-up", "Qualified", "Quotation", "Negotiating", "Won", "Lost", "On Hold"];
-      const validPriorities = ["Hot", "Warm", "Cold"];
+
+      const validStatuses = [
+        "New", "Contacted", "Follow-up", "Qualified", "Quotation", "Negotiating",
+        "Won", "Lost", "On Hold",
+        "Conversation Started", "Mid Stage", "Proposal Sent", "No Response", "Converted",
+      ];
+      const validPriorities = ["Hot", "Warm", "Cold", "Lost"];
+
       const nextName = String(body.name ?? existingLead.name).trim();
       const nextPhone = String(body.phone ?? existingLead.phone).trim();
       const nextBudget = Number(body.budget ?? existingLead.budget ?? 0);
@@ -2990,33 +3019,41 @@ export async function POST(req: NextRequest) {
       if (!Number.isFinite(nextBudget) || nextBudget < 0) {
         return NextResponse.json({ error: "Budget must be a valid non-negative number." }, { status: 400 });
       }
-      const nextDateRaw = body.nextFollowUpDate === undefined
-        ? existingLead.nextFollowUpDate
-        : body.nextFollowUpDate;
+
+      const nextDateRaw =
+        body.nextFollowUpDate === undefined ? existingLead.nextFollowUpDate : body.nextFollowUpDate;
       const nextDate = nextDateRaw ? String(nextDateRaw).slice(0, 10) : null;
       if (nextDate && !/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) {
         return NextResponse.json({ error: "Next Follow-up Date must use YYYY-MM-DD format." }, { status: 400 });
       }
-      const nextTime = body.nextFollowUpTime === undefined
-        ? existingLead.nextFollowUpTime
-        : String(body.nextFollowUpTime || "10:00");
-      if (nextTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(nextTime)) {
-        return NextResponse.json({ error: "Next Follow-up Time must use HH:mm format." }, { status: 400 });
-      }
-      const closed = ["Won", "Lost", "On Hold"].includes(String(body.status ?? existingLead.status));
-      const updateValues = {
+
+      const nextTime =
+        body.nextFollowUpTime === undefined
+          ? existingLead.nextFollowUpTime
+          : String(body.nextFollowUpTime || "10:00");
+
+      const nextStatus = validStatuses.includes(String(body.status))
+        ? String(body.status)
+        : existingLead.status;
+      const closed = ["Won", "Lost", "On Hold", "Converted"].includes(nextStatus);
+
+      const updateValues: any = {
         companyId: nextCompany === "IREL" ? 2 : 1,
         name: nextName,
         phone: nextPhone,
         whatsapp: String(body.whatsapp ?? existingLead.whatsapp ?? nextPhone).trim(),
         location: String(body.location ?? existingLead.location ?? "").trim(),
         source: String(body.source ?? existingLead.source ?? "Direct"),
-        service: nextCompany === "IBDC"
-          ? (typeof body.service === "string" && body.service.trim() ? body.service : existingLead.service)
-          : "Other",
-        propertyType: nextCompany === "IREL"
-          ? (typeof body.propertyType === "string" && body.propertyType.trim() ? body.propertyType : existingLead.propertyType)
-          : "Other",
+
+        service:
+          nextCompany === "IBDC"
+            ? (typeof body.service === "string" && body.service.trim() ? body.service : existingLead.service)
+            : "Other",
+        propertyType:
+          nextCompany === "IREL"
+            ? (typeof body.propertyType === "string" && body.propertyType.trim() ? body.propertyType : existingLead.propertyType)
+            : "Other",
+
         projectName: nextCompany === "IREL" ? String(body.projectName ?? existingLead.projectName ?? "") : "",
         unitFlatShop: nextCompany === "IREL" ? String(body.unitFlatShop ?? existingLead.unitFlatShop ?? "") : "",
         preferredLocation: nextCompany === "IREL" ? String(body.preferredLocation ?? existingLead.preferredLocation ?? "") : "",
@@ -3024,21 +3061,46 @@ export async function POST(req: NextRequest) {
         floor: nextCompany === "IREL" ? String(body.floor ?? existingLead.floor ?? "") : "",
         bedrooms: nextCompany === "IREL" ? String(body.bedrooms ?? existingLead.bedrooms ?? "") : "",
         purpose: nextCompany === "IREL" ? String(body.purpose ?? existingLead.purpose ?? "") : "",
-        expectedPurchaseDate: nextCompany === "IREL" ? String(body.expectedPurchaseDate ?? existingLead.expectedPurchaseDate ?? "") : "",
-        clientRequirement: nextCompany === "IREL" ? String(body.clientRequirement ?? existingLead.clientRequirement ?? "") : "",
+        expectedPurchaseDate:
+          nextCompany === "IREL" ? String(body.expectedPurchaseDate ?? existingLead.expectedPurchaseDate ?? "") : "",
+        clientRequirement:
+          nextCompany === "IREL" ? String(body.clientRequirement ?? existingLead.clientRequirement ?? "") : "",
+
         requirement: nextCompany === "IBDC" ? String(body.requirement ?? existingLead.requirement ?? "") : "",
         landSize: nextCompany === "IBDC" ? String(body.landSize ?? existingLead.landSize ?? "") : "",
         roadWidth: nextCompany === "IBDC" ? String(body.roadWidth ?? existingLead.roadWidth ?? "") : "",
+
         budget: nextBudget.toFixed(2),
-        priority: validPriorities.includes(String(body.priority)) ? String(body.priority) : existingLead.priority,
-        status: validStatuses.includes(String(body.status)) ? String(body.status) : existingLead.status,
-        assignedStaffId: body.assignedStaffId === undefined
-          ? existingLead.assignedStaffId
-          : (body.assignedStaffId === null || body.assignedStaffId === "" ? null : Number(body.assignedStaffId)),
+        priority: validPriorities.includes(String(body.priority))
+          ? String(body.priority)
+          : existingLead.priority,
+        status: nextStatus,
+        assignedStaffId:
+          body.assignedStaffId === undefined
+            ? existingLead.assignedStaffId
+            : body.assignedStaffId === null || body.assignedStaffId === ""
+            ? null
+            : Number(body.assignedStaffId),
         nextFollowUpDate: closed ? null : nextDate,
         nextFollowUpTime: nextTime || "10:00",
+
+        // ✅ নতুন কলামগুলো — update
+        insafResponse: String(body.insafResponse ?? existingLead.insafResponse ?? ""),
+        remarks: String(body.remarks ?? existingLead.remarks ?? ""),
+        reminder1: String(body.reminder1 ?? existingLead.reminder1 ?? ""),
+        reminder2: String(body.reminder2 ?? existingLead.reminder2 ?? ""),
+        reminder3: String(body.reminder3 ?? existingLead.reminder3 ?? ""),
+        leadDate: body.leadDate
+          ? String(body.leadDate).slice(0, 10)
+          : existingLead.leadDate ?? null,
       };
-      const [updatedLead] = await db.update(leads).set(updateValues).where(eq(leads.id, leadId)).returning();
+
+      const [updatedLead] = await db
+        .update(leads)
+        .set(updateValues)
+        .where(eq(leads.id, leadId))
+        .returning();
+
       await logAudit({
         userId: currentUser.id,
         userName: currentUser.name,
@@ -3049,41 +3111,43 @@ export async function POST(req: NextRequest) {
         beforeData: existingLead,
         afterData: updatedLead,
       });
+
       return NextResponse.json({ success: true, lead: updatedLead });
     }
-          if (action === "deleteLead") {
-        const { leadId } = body;
-        if (!leadId) {
-          return NextResponse.json({ error: "Lead ID প্রয়োজন" }, { status: 400 });
-        }
 
-        const [lead] = await db.select().from(leads).where(eq(leads.id, Number(leadId)));
-        if (!lead) {
-          return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-        }
-
-        const access = leadCompanyAccess(currentUser);
-        const leadCompany = Number(lead.companyId) === 2 ? "IREL" : "IBDC";
-        if (access !== "BOTH" && access !== leadCompany) {
-          return NextResponse.json({ error: "এই কোম্পানির লিড মোছার অনুমতি নেই।" }, { status: 403 });
-        }
-
-        await db.delete(leadFollowups).where(eq(leadFollowups.leadId, lead.id));
-        await db.delete(leads).where(eq(leads.id, lead.id));
-
-        await logAudit({
-          userId: currentUser.id,
-          userName: currentUser.name,
-          userRole: currentUser.role,
-          action: "DELETE",
-          entity: "Lead",
-          recordId: lead.leadCode,
-          beforeData: lead,
-          afterData: null,
-        });
-
-        return NextResponse.json({ success: true, deletedId: lead.id });
+    if (action === "deleteLead") {
+      const { leadId } = body;
+      if (!leadId) {
+        return NextResponse.json({ error: "Lead ID প্রয়োজন" }, { status: 400 });
       }
+
+      const [lead] = await db.select().from(leads).where(eq(leads.id, Number(leadId)));
+      if (!lead) {
+        return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+      }
+
+      const access = leadCompanyAccess(currentUser);
+      const leadCompany = Number(lead.companyId) === 2 ? "IREL" : "IBDC";
+      if (access !== "BOTH" && access !== leadCompany) {
+        return NextResponse.json({ error: "এই কোম্পানির লিড মোছার অনুমতি নেই।" }, { status: 403 });
+      }
+
+      await db.delete(leadFollowups).where(eq(leadFollowups.leadId, lead.id));
+      await db.delete(leads).where(eq(leads.id, lead.id));
+
+      await logAudit({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        action: "DELETE",
+        entity: "Lead",
+        recordId: lead.leadCode,
+        beforeData: lead,
+        afterData: null,
+      });
+
+      return NextResponse.json({ success: true, deletedId: lead.id });
+    }
 
     if (action === "updateLeadStatus") {
       const { leadId, status } = body;
@@ -3389,7 +3453,6 @@ export async function POST(req: NextRequest) {
         .returning();
       return NextResponse.json({ success: true, quotation: updated });
     }
-
     // =========================================================================
     // 7. PROJECTS & SITES
     // =========================================================================

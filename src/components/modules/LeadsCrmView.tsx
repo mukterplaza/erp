@@ -1148,24 +1148,32 @@ export function LeadsView({
     });
   }
 
-  async function saveEditedLead(e: React.FormEvent) {
+    async function saveEditedLead(e: React.FormEvent) {
     e.preventDefault();
     if (!editingLead || !editForm) return;
 
+    const companyId = editForm.companyId === "IREL" ? 2 : 1;
+
     const payload: Record<string, unknown> = {
       action: "updateLead",
-      leadId: editingLead.id,
-      companyId: editForm.companyId,
-      name: editForm.name,
-      phone: editForm.phone,
-      whatsapp: editForm.whatsapp || editForm.phone,
-      location: editForm.location,
-      source: editForm.source,
+      leadId: Number(editingLead.id),
+      companyId,
+      name: String(editForm.name || "").trim(),
+      phone: String(editForm.phone || "").trim(),
+      whatsapp: String(editForm.whatsapp || editForm.phone || "").trim(),
+      location: editForm.location || "",
+      source: editForm.source || "Facebook",
       budget: Number(editForm.budget || 0),
-      priority: editForm.priority,
-      status: editForm.status,
+      priority: editForm.priority || "Warm",
+      status: editForm.status || "New",
       assignedStaffId: editForm.assignedStaffId ? Number(editForm.assignedStaffId) : null,
       nextFollowUpDate: editForm.nextFollowUpDate || null,
+      insafResponse: editForm.insafResponse || "",
+      remarks: editForm.remarks || "",
+      reminder1: editForm.reminder1 || "",
+      reminder2: editForm.reminder2 || "",
+      reminder3: editForm.reminder3 || "",
+      leadDate: editForm.leadDate || null,
     };
 
     if (editForm.companyId === "IBDC") {
@@ -1173,35 +1181,22 @@ export function LeadsView({
       payload.requirement = editForm.requirement;
       payload.landSize = editForm.landSize;
       payload.roadWidth = editForm.roadWidth;
-      payload.propertyType = null;
-      payload.projectName = null;
-      payload.unitFlatShop = null;
-      payload.preferredLocation = null;
-      payload.size = null;
-      payload.floor = null;
-      payload.bedrooms = null;
-      payload.purpose = null;
-      payload.expectedPurchaseDate = null;
-      payload.clientRequirement = null;
     } else {
       payload.propertyType = editForm.propertyType;
       payload.projectName = editForm.projectName;
       payload.unitFlatShop = editForm.unitFlatShop;
-      payload.preferredLocation = editForm.preferredLocation;
+      payload.preferredLocation = editForm.preferredLocation || editForm.location;
       payload.size = editForm.size;
       payload.floor = editForm.floor;
       payload.bedrooms = editForm.bedrooms;
       payload.purpose = editForm.purpose;
       payload.expectedPurchaseDate = editForm.expectedPurchaseDate || null;
       payload.clientRequirement = editForm.clientRequirement;
-      payload.service = null;
-      payload.requirement = null;
-      payload.landSize = null;
-      payload.roadWidth = null;
     }
 
     const result = await onMutate(payload);
-    if (!result?.success) return;
+    if (result?.error) return;
+
     setEditingLead(null);
     setEditForm(null);
   }
@@ -2026,7 +2021,43 @@ leadDisplayTexts(l).remarks,
               </div>
             ))}
           </div>
-
+                      <textarea
+            value={insafResponse}
+            onChange={(e) => setInsafResponse(e.target.value)}
+            placeholder="Insaf Response (আমরা কী বলেছি)"
+            rows={2}
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs"
+          />
+          <textarea
+            value={leadRemarks}
+            onChange={(e) => setLeadRemarks(e.target.value)}
+            placeholder="Remarks"
+            rows={2}
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input
+              type="text"
+              value={reminder1Input}
+              onChange={(e) => setReminder1Input(e.target.value)}
+              placeholder="Reminder 1"
+              className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs"
+            />
+            <input
+              type="text"
+              value={reminder2Input}
+              onChange={(e) => setReminder2Input(e.target.value)}
+              placeholder="Reminder 2"
+              className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs"
+            />
+            <input
+              type="text"
+              value={reminder3Input}
+              onChange={(e) => setReminder3Input(e.target.value)}
+              placeholder="Reminder 3"
+              className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs"
+            />
+          </div>
           <label className="block space-y-1 text-xs text-slate-600"><span>পরবর্তী ফলো-আপ তারিখ</span><input type="date" value={nextFollowUpInput} onChange={(e) => setNextFollowUpInput(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs" /></label>
 
           <button type="submit" className={`w-full py-3 rounded-xl text-white font-bold text-sm transition ${formCompany === "IREL" ? "bg-indigo-600 hover:bg-indigo-500" : "bg-emerald-600 hover:bg-emerald-500"}`}>
