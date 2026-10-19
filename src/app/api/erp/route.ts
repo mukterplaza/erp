@@ -2628,6 +2628,7 @@ export async function POST(req: NextRequest) {
     // 6. CRM: LEADS, FOLLOW-UPS, CLIENTS & QUOTATIONS
     // =========================================================================
     if (action === "createLead") {
+       try {
       const {
         companyId,
         whatsapp,
@@ -2794,7 +2795,7 @@ export async function POST(req: NextRequest) {
             landSize: resolvedCompany === "IBDC" ? landSize || "" : "",
             roadWidth: resolvedCompany === "IBDC" ? roadWidth || "" : "",
             budget: normalizedBudget.toFixed(2),
-            priority: ["Hot", "Warm", "Cold", "Lost"].includes(String(priority)) ? String(priority) : "Warm",
+            priority: ["Hot", "Warm", "Cold"].includes(String(priority)) ? String(priority) : "Warm",
             status: [
               "New", "Contacted", "Follow-up", "Qualified", "Quotation", "Negotiating",
               "Won", "Lost", "On Hold",
@@ -2805,7 +2806,7 @@ export async function POST(req: NextRequest) {
             assignedStaffId:
               assignedStaffId !== undefined && assignedStaffId !== null && assignedStaffId !== ""
                 ? Number(assignedStaffId)
-                : currentUser.employeeId,
+                : currentUser.employeeId ?? null,
             nextFollowUpDate: normalizedNextDate,
             nextFollowUpTime: normalizedNextTime,
 
@@ -2822,6 +2823,13 @@ export async function POST(req: NextRequest) {
       });
 
       return NextResponse.json({ success: true, lead });
+     } catch (err: any) {                     // 👈 যোগ
+        console.error("createLead error:", err);
+        return NextResponse.json(
+          { error: err?.message || "লিড সেভ ব্যর্থ হয়েছে" },
+          { status: 500 }
+        );
+      }
     }
 
     if (action === "addLeadFollowup") {
