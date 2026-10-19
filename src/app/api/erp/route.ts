@@ -2897,7 +2897,7 @@ export async function POST(req: NextRequest) {
               nextFollowUpDate: isClosedStatus ? null : normalizedNextDate,
               nextFollowUpTime: normalizedNextTime,
 
-              leadDate: body.leadDate ? String(body.leadDate).slice(0, 10) : null,
+              leadDate: body.leadDate ? String(body.leadDate).slice(0, 10) : today,
               insafResponse: String(body.insafResponse ?? ""),
               remarks: String(body.remarks ?? ""),
               reminder1: String(body.reminder1 ?? ""),
