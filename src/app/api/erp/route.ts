@@ -2625,841 +2625,1033 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, comment: c });
     }
     // =========================================================================
+        // =========================================================================
     // 6. CRM: LEADS, FOLLOW-UPS, CLIENTS & QUOTATIONS
     // =========================================================================
+
+    // ---------- CRM shared constants (frontend-এর সাথে মিল রাখা) ----------
+    const CRM_IBDC_SERVICES: string[] = [
+      "Architectural Design",
+      "Structural Design",
+      "Electrical Design",
+      "Plumbing Design",
+      "Costing & Estimating",
+      "Costing & Estimation",
+      "RAJUK Approval",
+      "RAJUK Plan Approval",
+      "Plan Design + RAJUK Approval",
+      "Interior Design",
+      "3D Visualization & VR",
+      "3D View",
+      "Construction Management",
+      "Package Building Work",
+      "Documents",
+      "Other",
+    ];
+    const CRM_IREL_PROPERTY_TYPES: string[] = [
+      "Flat",
+      "Shop",
+      "Office Space",
+      "Commercial Space",
+      "Apartment",
+      "Land/Plot",
+      "Investment",
+      "Project",
+      "Other",
+    ];
+    const CRM_LEAD_STATUSES: string[] = [
+      "New",
+      "Contacted",
+      "Follow-up",
+      "Qualified",
+      "Quotation",
+      "Negotiating",
+      "Won",
+      "Lost",
+      "On Hold",
+      "Conversation Started",
+      "Mid Stage",
+      "Proposal Sent",
+      "No Response",
+      "Converted",
+    ];
+    const CRM_LEAD_PRIORITIES: string[] = ["Hot", "Warm", "Cold", "Lost"];
+    const CRM_FU_METHODS: string[] = [
+      "Phone Call",
+      "WhatsApp",
+      "Facebook",
+      "SMS",
+      "Email",
+      "Meeting",
+      "Office Visit",
+      "Site Visit",
+      "Other",
+    ];
+    const CRM_FU_OUTCOMES: string[] = [
+      "No Response",
+      "Contacted",
+      "Interested",
+      "Qualified",
+      "Need More Information",
+      "Quotation Sent",
+      "Negotiating",
+      "Call Back Later",
+      "Not Interested",
+      "Won",
+      "Lost",
+      "Other",
+    ];
+    const CRM_CLOSED_OUTCOMES: string[] = ["Won", "Lost", "Not Interested"];
+    const CRM_CLOSED_STATUSES: string[] = ["Won", "Lost", "On Hold", "Converted"];
+
+    // ---------- CRM helpers ----------
+    // কর্মী আছে কি না যাচাই করে; না থাকলে null (FK error এড়ায়)
+    const crmResolveEmployeeId = async (value: unknown): Promise<number | null> => {
+      const id = Number(value);
+      if (!Number.isInteger(id) || id <= 0) return null;
+      const [emp] = await db
+        .select({ id: employees.id })
+        .from(employees)
+        .where(eq(employees.id, id))
+        .limit(1);
+      return emp ? emp.id : null;
+    };
+
+    // DB error কে বাংলায় বোঝানো + আসল কারণ response-এ দেওয়া
+    const crmErrorResponse = (err: any, fallback: string) => {
+      const raw = String(err?.cause?.message || err?.message || "");
+      console.error(`[CRM] ${fallback}:`, raw || err);
+
+      let message = fallback;
+      if (/does not exist/i.test(raw)) {
+        message = `ডাটাবেসে কলাম নেই — production DB-তে migration চালান। (${raw})`;
+      } else if (/foreign key/i.test(raw)) {
+        message = "নির্বাচিত স্টাফ/তথ্য ডাটাবেসে পাওয়া যায়নি। অন্য স্টাফ নির্বাচন করুন।";
+      } else if (/duplicate key|unique/i.test(raw)) {
+        message = "এই কোড আগে থেকেই আছে। আবার চেষ্টা করুন।";
+      } else if (raw) {
+        message = `${fallback}: ${raw}`;
+      }
+      return NextResponse.json({ error: message }, { status: 500 });
+    };
+
+    // =========================================================================
+    // CREATE LEAD
+    // =========================================================================
     if (action === "createLead") {
-       try {
-      const {
-        companyId,
-        whatsapp,
-        location,
-        source,
-        service,
-        requirement,
-        landSize,
-        roadWidth,
-        budget,
-        propertyType,
-        projectName,
-        unitFlatShop,
-        preferredLocation,
-        size,
-        floor,
-        bedrooms,
-        purpose,
-        expectedPurchaseDate,
-        clientRequirement,
-        priority,
-        status,
-        assignedStaffId,
-        nextFollowUpDate,
-        nextFollowUpTime,
-        // ✅ নতুন ফিল্ড
-        insafResponse,
-        remarks,
-        reminder1,
-        reminder2,
-        reminder3,
-        leadDate,
-      } = body;
+      try {
+        const name = String(body.name ?? body.clientName ?? body.leadName ?? "").trim();
+        const phone = String(body.phone ?? body.mobile ?? body.contactNo ?? "").trim();
+        if (!name || !phone) {
+          return NextResponse.json({ error: "Lead Name and Phone are required" }, { status: 400 });
+        }
 
-      // Accept the canonical UI payload and common legacy aliases without writing
-      // unknown properties into the Drizzle insert object.
-      const name = String(body.name ?? body.clientName ?? body.leadName ?? "").trim();
-      const phone = String(body.phone ?? body.mobile ?? body.contactNo ?? "").trim();
+        const normalizedBudget = Number(body.budget ?? 0);
+        if (!Number.isFinite(normalizedBudget) || normalizedBudget < 0) {
+          return NextResponse.json(
+            { error: "Budget must be a valid non-negative number." },
+            { status: 400 }
+          );
+        }
 
-      if (!name || !phone) {
-        return NextResponse.json({ error: "Lead Name and Phone are required" }, { status: 400 });
-      }
-      const normalizedBudget = Number(budget ?? 0);
-      if (!Number.isFinite(normalizedBudget) || normalizedBudget < 0) {
-        return NextResponse.json({ error: "Budget must be a valid non-negative number." }, { status: 400 });
-      }
-      const requestedCompany = String(companyId ?? "IBDC").trim().toUpperCase();
-      const resolvedCompany = requestedCompany === "IREL" || requestedCompany === "2" ? "IREL" : "IBDC";
-      const normalizedNextDate = nextFollowUpDate ? String(nextFollowUpDate).slice(0, 10) : today;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedNextDate)) {
-        return NextResponse.json({ error: "Next Follow-up Date must use YYYY-MM-DD format." }, { status: 400 });
-      }
-      const normalizedNextTime = nextFollowUpTime ? String(nextFollowUpTime) : "10:00";
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(normalizedNextTime)) {
-        return NextResponse.json({ error: "Next Follow-up Time must use HH:mm format." }, { status: 400 });
-      }
-      const access = leadCompanyAccess(currentUser);
-      if (access !== "BOTH" && access !== resolvedCompany) {
-        return NextResponse.json(
-          { error: "এই কোম্পানির লিড তৈরি/দেখার অনুমতি নেই।" },
-          { status: 403 }
-        );
-      }
+        const requestedCompany = String(body.companyId ?? "IBDC").trim().toUpperCase();
+        const resolvedCompany: "IBDC" | "IREL" =
+          requestedCompany === "IREL" || requestedCompany === "2" ? "IREL" : "IBDC";
 
-      const IBDC_SERVICES = [
-        "Architectural Design",
-        "Structural Design",
-        "Electrical Design",
-        "Plumbing Design",
-        "Costing & Estimating",
-        "RAJUK Plan Approval",
-        "Plan Design + RAJUK Approval",
-        "Interior Design",
-        "3D Visualization & VR",
-        "3D View",
-        "Construction Management",
-        "Package Building Work",
-        "Documents",
-        "Other",
-      ];
-      const IREL_PROPERTY_TYPES = [
-        "Flat",
-        "Shop",
-        "Office Space",
-        "Commercial Space",
-        "Apartment",
-        "Land/Plot",
-        "Investment",
-        "Project",
-        "Other",
-      ];
+        const access = leadCompanyAccess(currentUser);
+        if (access !== "BOTH" && access !== resolvedCompany) {
+          return NextResponse.json(
+            { error: "এই কোম্পানির লিড তৈরি/দেখার অনুমতি নেই।" },
+            { status: 403 }
+          );
+        }
 
-      if (resolvedCompany === "IREL" && service && service !== "Other" && IBDC_SERVICES.includes(service)) {
-        return NextResponse.json(
-          {
-            error: `Data Separation Violation: "${service}" is a Building Design (IBDC) service and cannot be used for an Insaf Real Estate Ltd. lead. Please select a Property Interest such as Flat, Shop or Land/Plot.`,
-          },
-          { status: 400 }
-        );
-      }
+        const normalizedNextDate = body.nextFollowUpDate
+          ? String(body.nextFollowUpDate).slice(0, 10)
+          : today;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedNextDate)) {
+          return NextResponse.json(
+            { error: "Next Follow-up Date must use YYYY-MM-DD format." },
+            { status: 400 }
+          );
+        }
 
-      if (resolvedCompany === "IBDC" && propertyType && propertyType !== "Other" && IREL_PROPERTY_TYPES.includes(propertyType)) {
-        return NextResponse.json(
-          {
-            error: `Data Separation Violation: "${propertyType}" is a Real Estate (IREL) property type and cannot be used for an Insaf Building Design & Consultant Ltd. lead. Please select a Building Design Service.`,
-          },
-          { status: 400 }
-        );
-      }
+        const normalizedNextTime = body.nextFollowUpTime ? String(body.nextFollowUpTime) : "10:00";
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(normalizedNextTime)) {
+          return NextResponse.json(
+            { error: "Next Follow-up Time must use HH:mm format." },
+            { status: 400 }
+          );
+        }
 
-      // ⭐ race-condition-safe lead code
-      const lead = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended('lead-code-allocation', 0))`
-        );
-        const rows = await tx.select({ leadCode: leads.leadCode }).from(leads);
-        const usedCodes = new Set(rows.map((r) => r.leadCode));
-        const maxNum = rows.reduce((max, r) => {
-          const m = /^LEAD-(\d+)$/.exec(r.leadCode);
-          return m ? Math.max(max, Number(m[1])) : max;
-        }, 0);
-        let nextNum = maxNum + 1;
-        let leadCode = `LEAD-${String(nextNum).padStart(4, "0")}`;
-        while (usedCodes.has(leadCode)) {
-          nextNum++;
-          leadCode = `LEAD-${String(nextNum).padStart(4, "0")}`;
+        const requestedService = typeof body.service === "string" ? body.service.trim() : "";
+        const requestedPropertyType =
+          typeof body.propertyType === "string" ? body.propertyType.trim() : "";
+
+        if (
+          resolvedCompany === "IREL" &&
+          requestedService &&
+          requestedService !== "Other" &&
+          CRM_IBDC_SERVICES.includes(requestedService)
+        ) {
+          return NextResponse.json(
+            {
+              error: `Data Separation Violation: "${requestedService}" is a Building Design (IBDC) service and cannot be used for an Insaf Real Estate Ltd. lead.`,
+            },
+            { status: 400 }
+          );
+        }
+
+        if (
+          resolvedCompany === "IBDC" &&
+          requestedPropertyType &&
+          requestedPropertyType !== "Other" &&
+          CRM_IREL_PROPERTY_TYPES.includes(requestedPropertyType)
+        ) {
+          return NextResponse.json(
+            {
+              error: `Data Separation Violation: "${requestedPropertyType}" is a Real Estate (IREL) property type and cannot be used for an Insaf Building Design lead.`,
+            },
+            { status: 400 }
+          );
         }
 
         const finalService =
-          resolvedCompany === "IBDC"
-            ? IBDC_SERVICES.includes(service)
-              ? service
-              : "Other"
+          resolvedCompany === "IBDC" && CRM_IBDC_SERVICES.includes(requestedService)
+            ? requestedService
             : "Other";
         const finalPropertyType =
-          resolvedCompany === "IREL"
-            ? IREL_PROPERTY_TYPES.includes(propertyType)
-              ? propertyType
-              : "Other"
+          resolvedCompany === "IREL" && CRM_IREL_PROPERTY_TYPES.includes(requestedPropertyType)
+            ? requestedPropertyType
             : "Other";
 
-        const [createdLead] = await tx
-          .insert(leads)
-          .values({
-            leadCode,
-            companyId: resolvedCompany === "IREL" ? 2 : 1,
-            name,
-            phone,
-            whatsapp: String(whatsapp || phone).trim(),
-            location: location || "",
-            source: source || "Direct",
-            service: finalService,
-            propertyType: finalPropertyType,
-            projectName: resolvedCompany === "IREL" ? projectName || "" : "",
-            unitFlatShop: resolvedCompany === "IREL" ? unitFlatShop || "" : "",
-            preferredLocation: resolvedCompany === "IREL" ? preferredLocation || "" : "",
-            size: resolvedCompany === "IREL" ? size || "" : "",
-            floor: resolvedCompany === "IREL" ? floor || "" : "",
-            bedrooms: resolvedCompany === "IREL" ? bedrooms || "" : "",
-            purpose: resolvedCompany === "IREL" ? purpose || "" : "",
-            expectedPurchaseDate: resolvedCompany === "IREL" ? expectedPurchaseDate || "" : "",
-            clientRequirement: resolvedCompany === "IREL" ? clientRequirement || "" : "",
-            requirement: resolvedCompany === "IBDC" ? requirement || "" : "",
-            landSize: resolvedCompany === "IBDC" ? landSize || "" : "",
-            roadWidth: resolvedCompany === "IBDC" ? roadWidth || "" : "",
-            budget: normalizedBudget.toFixed(2),
-            priority: ["Hot", "Warm", "Cold"].includes(String(priority)) ? String(priority) : "Warm",
-            status: [
-              "New", "Contacted", "Follow-up", "Qualified", "Quotation", "Negotiating",
-              "Won", "Lost", "On Hold",
-              "Conversation Started", "Mid Stage", "Proposal Sent", "No Response", "Converted",
-            ].includes(String(status))
-              ? String(status)
-              : "New",
-            assignedStaffId:
-              assignedStaffId !== undefined && assignedStaffId !== null && assignedStaffId !== ""
-                ? Number(assignedStaffId)
-                : currentUser.employeeId ?? null,
-            nextFollowUpDate: normalizedNextDate,
-            nextFollowUpTime: normalizedNextTime,
-
-            // ✅ নতুন কলামগুলো — insert
-            leadDate: leadDate ? String(leadDate).slice(0, 10) : null,
-            insafResponse: insafResponse ? String(insafResponse) : "",
-            remarks: remarks ? String(remarks) : "",
-            reminder1: reminder1 ? String(reminder1) : "",
-            reminder2: reminder2 ? String(reminder2) : "",
-            reminder3: reminder3 ? String(reminder3) : "",
-          })
-          .returning();
-        return createdLead;
-      });
-
-      return NextResponse.json({ success: true, lead });
-     } catch (err: any) {                     // 👈 যোগ
-        console.error("createLead error:", err);
-        return NextResponse.json(
-          { error: err?.message || "লিড সেভ ব্যর্থ হয়েছে" },
-          { status: 500 }
-        );
-      }
-    }
-
-    if (action === "addLeadFollowup") {
-      const {
-        leadId,
-        contactMethod,
-        outcome,
-        clientResponse,
-        note,
-        nextAction,
-        nextFollowUpDate,
-        nextFollowUpTime,
-        attachment,
-        newStatus,
-      } = body;
-
-      if (!leadId || !note || !outcome || !contactMethod) {
-        return NextResponse.json(
-          { error: "Contact Method, Outcome and Staff Note are required" },
-          { status: 400 }
-        );
-      }
-
-      const [lead] = await db.select().from(leads).where(eq(leads.id, Number(leadId)));
-      if (!lead) {
-        return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-      }
-
-      const VALID_METHODS = [
-        "Phone Call", "WhatsApp", "Facebook", "SMS", "Email",
-        "Meeting", "Office Visit", "Site Visit", "Other",
-      ];
-      const VALID_OUTCOMES = [
-        "No Response", "Contacted", "Interested", "Qualified", "Need More Information",
-        "Quotation Sent", "Negotiating", "Call Back Later", "Not Interested",
-        "Won", "Lost", "Other",
-      ];
-      const CLOSED = ["Won", "Lost", "Not Interested"];
-
-      const method = VALID_METHODS.includes(contactMethod) ? contactMethod : "Phone Call";
-      const resolvedOutcome = VALID_OUTCOMES.includes(outcome) ? outcome : "Contacted";
-      const isClosed = CLOSED.includes(resolvedOutcome);
-      const leadOnHold = lead.status === "On Hold";
-
-      if (!isClosed && !leadOnHold && !nextFollowUpDate) {
-        return NextResponse.json(
-          {
-            error:
-              "Next Follow-up Date is required. Active leads must always have a next follow-up scheduled so they are never forgotten.",
-          },
-          { status: 400 }
-        );
-      }
-
-      // ⭐ followUpNumber race-safe
-      const { followUpNumber, createdFollowup } = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended(${`followup:${leadId}`}, 0))`
-        );
-        const existingFollowUps = await tx
-          .select({ id: leadFollowups.id, followUpNumber: leadFollowups.followUpNumber })
-          .from(leadFollowups)
-          .where(eq(leadFollowups.leadId, Number(leadId)));
-        const maxFU = existingFollowUps.reduce((m, r) => Math.max(m, r.followUpNumber || 0), 0);
-        const fuNum = maxFU + 1;
-        const nowTime = new Date().toTimeString().slice(0, 5);
-
-        const [f] = await tx
-          .insert(leadFollowups)
-          .values({
-            leadId: Number(leadId),
-            followUpNumber: fuNum,
-            staffId: currentUser.employeeId,
-            staffName: currentUser.name,
-            date: today,
-            time: nowTime,
-            contactMethod: method,
-            outcome: resolvedOutcome,
-            clientResponse: clientResponse || "",
-            discussion: note,
-            nextAction: nextAction || (isClosed ? "No further follow-up" : "Follow up as scheduled"),
-            nextFollowUpDate: isClosed ? null : nextFollowUpDate,
-            nextFollowUpTime: nextFollowUpTime || "10:00",
-            attachmentName: attachment?.name || null,
-            attachmentType: attachment?.type || null,
-            attachmentSize: attachment?.size || null,
-            attachmentUrl: attachment?.url || null,
-            reminderKey: isClosed ? null : `FU-${leadId}-${fuNum}`,
-            reminderNotified: false,
-            result: resolvedOutcome,
-          })
-          .returning();
-        return { followUpNumber: fuNum, createdFollowup: f };
-      });
-
-      let nextStatus = newStatus;
-      if (!nextStatus) {
-        if (isClosed) nextStatus = resolvedOutcome === "Won" ? "Won" : "Lost";
-        else if (resolvedOutcome === "Qualified") nextStatus = "Qualified";
-        else if (resolvedOutcome === "Quotation Sent") nextStatus = "Quotation";
-        else if (resolvedOutcome === "Negotiating") nextStatus = "Negotiating";
-        else if (resolvedOutcome === "Contacted") nextStatus = "Contacted";
-        else nextStatus = "Follow-up";
-      }
-
-      await db
-        .update(leads)
-        .set({
-          status: nextStatus,
-          lastContactDate: today,
-          nextFollowUpDate: isClosed ? null : nextFollowUpDate,
-          nextFollowUpTime: nextFollowUpTime || "10:00",
-        })
-        .where(eq(leads.id, lead.id));
-
-      await createNotification({
-        targetRole: "All",
-        type: resolvedOutcome === "Won" ? "Project Update" : "Follow-up Due",
-        title: isClosed
-          ? `Lead ${resolvedOutcome}: ${lead.name} (${lead.leadCode})`
-          : `Follow-up #${followUpNumber} logged for ${lead.name}`,
-        message: isClosed
-          ? `${lead.name} (${lead.leadCode}) marked ${resolvedOutcome} by ${currentUser.name} after ${followUpNumber} follow-up(s).`
-          : `${lead.name} (${lead.leadCode}) — ${method} • ${resolvedOutcome}. Next follow-up: ${nextFollowUpDate} ${nextFollowUpTime || "10:00"}. ${clientResponse || note}`,
-        createdBy: currentUser.name,
-        priority: lead.priority,
-        assignedPersonOrTeam: lead.name,
-        dueDate: isClosed ? null : nextFollowUpDate,
-        relatedUrl: "/leads",
-        relatedEntityCode: lead.leadCode,
-      });
-
-      await logAudit({
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userRole: currentUser.role,
-        action: "FOLLOW_UP_CREATE",
-        entity: "LeadFollowup",
-        recordId: `${lead.leadCode}-FU-${followUpNumber}`,
-        beforeData: {
-          status: lead.status,
-          nextFollowUpDate: lead.nextFollowUpDate,
-        },
-        afterData: {
-          followUpNumber,
-          contactMethod: method,
-          outcome: resolvedOutcome,
-          clientResponse: clientResponse || "",
-          note,
-          nextFollowUpDate: isClosed ? null : nextFollowUpDate,
-          nextFollowUpTime: nextFollowUpTime || "10:00",
-          newStatus: nextStatus,
-        },
-      });
-
-      return NextResponse.json({ success: true, followup: createdFollowup });
-    }
-
-    if (action === "updateLead") {
-      const leadId = Number(body.leadId ?? body.id);
-      if (!Number.isInteger(leadId) || leadId <= 0) {
-        return NextResponse.json({ error: "A valid Lead ID is required." }, { status: 400 });
-      }
-
-      const [existingLead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
-      if (!existingLead) {
-        return NextResponse.json({ error: "Lead not found." }, { status: 404 });
-      }
-
-      const access = leadCompanyAccess(currentUser);
-      const existingCompany = Number(existingLead.companyId) === 2 ? "IREL" : "IBDC";
-      if (access !== "BOTH" && access !== existingCompany) {
-        return NextResponse.json({ error: "এই কোম্পানির লিড সম্পাদনার অনুমতি নেই।" }, { status: 403 });
-      }
-
-      const requestedCompany = String(body.companyId ?? existingCompany).trim().toUpperCase();
-      const nextCompany = requestedCompany === "IREL" || requestedCompany === "2" ? "IREL" : "IBDC";
-      if (access !== "BOTH" && access !== nextCompany) {
-        return NextResponse.json({ error: "অন্য কোম্পানিতে লিড স্থানান্তরের অনুমতি নেই।" }, { status: 403 });
-      }
-
-      const validStatuses = [
-        "New", "Contacted", "Follow-up", "Qualified", "Quotation", "Negotiating",
-        "Won", "Lost", "On Hold",
-        "Conversation Started", "Mid Stage", "Proposal Sent", "No Response", "Converted",
-      ];
-      const validPriorities = ["Hot", "Warm", "Cold", "Lost"];
-
-      const nextName = String(body.name ?? existingLead.name).trim();
-      const nextPhone = String(body.phone ?? existingLead.phone).trim();
-      const nextBudget = Number(body.budget ?? existingLead.budget ?? 0);
-      if (!nextName || !nextPhone) {
-        return NextResponse.json({ error: "Lead Name and Phone are required." }, { status: 400 });
-      }
-      if (!Number.isFinite(nextBudget) || nextBudget < 0) {
-        return NextResponse.json({ error: "Budget must be a valid non-negative number." }, { status: 400 });
-      }
-
-      const nextDateRaw =
-        body.nextFollowUpDate === undefined ? existingLead.nextFollowUpDate : body.nextFollowUpDate;
-      const nextDate = nextDateRaw ? String(nextDateRaw).slice(0, 10) : null;
-      if (nextDate && !/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) {
-        return NextResponse.json({ error: "Next Follow-up Date must use YYYY-MM-DD format." }, { status: 400 });
-      }
-
-      const nextTime =
-        body.nextFollowUpTime === undefined
-          ? existingLead.nextFollowUpTime
-          : String(body.nextFollowUpTime || "10:00");
-
-      const nextStatus = validStatuses.includes(String(body.status))
-        ? String(body.status)
-        : existingLead.status;
-      const closed = ["Won", "Lost", "On Hold", "Converted"].includes(nextStatus);
-
-      const updateValues: any = {
-        companyId: nextCompany === "IREL" ? 2 : 1,
-        name: nextName,
-        phone: nextPhone,
-        whatsapp: String(body.whatsapp ?? existingLead.whatsapp ?? nextPhone).trim(),
-        location: String(body.location ?? existingLead.location ?? "").trim(),
-        source: String(body.source ?? existingLead.source ?? "Direct"),
-
-        service:
-          nextCompany === "IBDC"
-            ? (typeof body.service === "string" && body.service.trim() ? body.service : existingLead.service)
-            : "Other",
-        propertyType:
-          nextCompany === "IREL"
-            ? (typeof body.propertyType === "string" && body.propertyType.trim() ? body.propertyType : existingLead.propertyType)
-            : "Other",
-
-        projectName: nextCompany === "IREL" ? String(body.projectName ?? existingLead.projectName ?? "") : "",
-        unitFlatShop: nextCompany === "IREL" ? String(body.unitFlatShop ?? existingLead.unitFlatShop ?? "") : "",
-        preferredLocation: nextCompany === "IREL" ? String(body.preferredLocation ?? existingLead.preferredLocation ?? "") : "",
-        size: nextCompany === "IREL" ? String(body.size ?? existingLead.size ?? "") : "",
-        floor: nextCompany === "IREL" ? String(body.floor ?? existingLead.floor ?? "") : "",
-        bedrooms: nextCompany === "IREL" ? String(body.bedrooms ?? existingLead.bedrooms ?? "") : "",
-        purpose: nextCompany === "IREL" ? String(body.purpose ?? existingLead.purpose ?? "") : "",
-        expectedPurchaseDate:
-          nextCompany === "IREL" ? String(body.expectedPurchaseDate ?? existingLead.expectedPurchaseDate ?? "") : "",
-        clientRequirement:
-          nextCompany === "IREL" ? String(body.clientRequirement ?? existingLead.clientRequirement ?? "") : "",
-
-        requirement: nextCompany === "IBDC" ? String(body.requirement ?? existingLead.requirement ?? "") : "",
-        landSize: nextCompany === "IBDC" ? String(body.landSize ?? existingLead.landSize ?? "") : "",
-        roadWidth: nextCompany === "IBDC" ? String(body.roadWidth ?? existingLead.roadWidth ?? "") : "",
-
-        budget: nextBudget.toFixed(2),
-        priority: validPriorities.includes(String(body.priority))
+        const finalStatus = CRM_LEAD_STATUSES.includes(String(body.status))
+          ? String(body.status)
+          : "New";
+        const finalPriority = CRM_LEAD_PRIORITIES.includes(String(body.priority))
           ? String(body.priority)
-          : existingLead.priority,
-        status: nextStatus,
-        assignedStaffId:
-          body.assignedStaffId === undefined
-            ? existingLead.assignedStaffId
-            : body.assignedStaffId === null || body.assignedStaffId === ""
-            ? null
-            : Number(body.assignedStaffId),
-        nextFollowUpDate: closed ? null : nextDate,
-        nextFollowUpTime: nextTime || "10:00",
+          : "Warm";
 
-        // ✅ নতুন কলামগুলো — update
-        insafResponse: String(body.insafResponse ?? existingLead.insafResponse ?? ""),
-        remarks: String(body.remarks ?? existingLead.remarks ?? ""),
-        reminder1: String(body.reminder1 ?? existingLead.reminder1 ?? ""),
-        reminder2: String(body.reminder2 ?? existingLead.reminder2 ?? ""),
-        reminder3: String(body.reminder3 ?? existingLead.reminder3 ?? ""),
-        leadDate: body.leadDate
-          ? String(body.leadDate).slice(0, 10)
-          : existingLead.leadDate ?? null,
-      };
+        // কর্মী production DB-তে না থাকলে null
+        const requestedStaffRaw =
+          body.assignedStaffId !== undefined && body.assignedStaffId !== null && body.assignedStaffId !== ""
+            ? body.assignedStaffId
+            : currentUser.employeeId;
+        const finalAssignedStaffId = await crmResolveEmployeeId(requestedStaffRaw);
 
-      const [updatedLead] = await db
-        .update(leads)
-        .set(updateValues)
-        .where(eq(leads.id, leadId))
-        .returning();
+        const isClosedStatus = CRM_CLOSED_STATUSES.includes(finalStatus);
 
-      await logAudit({
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userRole: currentUser.role,
-        action: "UPDATE",
-        entity: "Lead",
-        recordId: updatedLead.leadCode,
-        beforeData: existingLead,
-        afterData: updatedLead,
-      });
+        const lead = await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended('lead-code-allocation', 0))`
+          );
 
-      return NextResponse.json({ success: true, lead: updatedLead });
+          const rows = await tx.select({ leadCode: leads.leadCode }).from(leads);
+          const usedCodes = new Set(rows.map((r) => r.leadCode));
+          const maxNum = rows.reduce((max, r) => {
+            const m = /^LEAD-(\d+)$/.exec(r.leadCode);
+            return m ? Math.max(max, Number(m[1])) : max;
+          }, 0);
+          let nextNum = maxNum + 1;
+          let leadCode = `LEAD-${String(nextNum).padStart(4, "0")}`;
+          while (usedCodes.has(leadCode)) {
+            nextNum++;
+            leadCode = `LEAD-${String(nextNum).padStart(4, "0")}`;
+          }
+
+          const [createdLead] = await tx
+            .insert(leads)
+            .values({
+              leadCode,
+              companyId: resolvedCompany === "IREL" ? 2 : 1,
+              name,
+              phone,
+              whatsapp: String(body.whatsapp || phone).trim(),
+              location: String(body.location ?? "").trim(),
+              source: String(body.source || "Direct"),
+
+              service: finalService,
+              propertyType: finalPropertyType,
+
+              projectName: resolvedCompany === "IREL" ? String(body.projectName ?? "") : "",
+              unitFlatShop: resolvedCompany === "IREL" ? String(body.unitFlatShop ?? "") : "",
+              preferredLocation: resolvedCompany === "IREL" ? String(body.preferredLocation ?? "") : "",
+              size: resolvedCompany === "IREL" ? String(body.size ?? "") : "",
+              floor: resolvedCompany === "IREL" ? String(body.floor ?? "") : "",
+              bedrooms: resolvedCompany === "IREL" ? String(body.bedrooms ?? "") : "",
+              purpose: resolvedCompany === "IREL" ? String(body.purpose ?? "") : "",
+              expectedPurchaseDate:
+                resolvedCompany === "IREL" ? String(body.expectedPurchaseDate ?? "") : "",
+              clientRequirement:
+                resolvedCompany === "IREL" ? String(body.clientRequirement ?? "") : "",
+
+              requirement: resolvedCompany === "IBDC" ? String(body.requirement ?? "") : "",
+              landSize: resolvedCompany === "IBDC" ? String(body.landSize ?? "") : "",
+              roadWidth: resolvedCompany === "IBDC" ? String(body.roadWidth ?? "") : "",
+
+              budget: normalizedBudget.toFixed(2),
+              priority: finalPriority,
+              status: finalStatus,
+              lastContactDate: null,
+              assignedStaffId: finalAssignedStaffId,
+              nextFollowUpDate: isClosedStatus ? null : normalizedNextDate,
+              nextFollowUpTime: normalizedNextTime,
+
+              leadDate: body.leadDate ? String(body.leadDate).slice(0, 10) : null,
+              insafResponse: String(body.insafResponse ?? ""),
+              remarks: String(body.remarks ?? ""),
+              reminder1: String(body.reminder1 ?? ""),
+              reminder2: String(body.reminder2 ?? ""),
+              reminder3: String(body.reminder3 ?? ""),
+            })
+            .returning();
+
+          return createdLead;
+        });
+
+        return NextResponse.json({ success: true, lead });
+      } catch (err: any) {
+        return crmErrorResponse(err, "লিড সেভ ব্যর্থ হয়েছে");
+      }
     }
 
-    if (action === "deleteLead") {
-      const { leadId } = body;
-      if (!leadId) {
-        return NextResponse.json({ error: "Lead ID প্রয়োজন" }, { status: 400 });
-      }
+    // =========================================================================
+    // ADD FOLLOW-UP
+    // =========================================================================
+    if (action === "addLeadFollowup") {
+      try {
+        const leadId = Number(body.leadId);
+        const note = String(body.note ?? "").trim();
+        const outcomeRaw = String(body.outcome ?? "");
+        const methodRaw = String(body.contactMethod ?? "");
 
-      const [lead] = await db.select().from(leads).where(eq(leads.id, Number(leadId)));
-      if (!lead) {
-        return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-      }
-
-      const access = leadCompanyAccess(currentUser);
-      const leadCompany = Number(lead.companyId) === 2 ? "IREL" : "IBDC";
-      if (access !== "BOTH" && access !== leadCompany) {
-        return NextResponse.json({ error: "এই কোম্পানির লিড মোছার অনুমতি নেই।" }, { status: 403 });
-      }
-
-      await db.delete(leadFollowups).where(eq(leadFollowups.leadId, lead.id));
-      await db.delete(leads).where(eq(leads.id, lead.id));
-
-      await logAudit({
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userRole: currentUser.role,
-        action: "DELETE",
-        entity: "Lead",
-        recordId: lead.leadCode,
-        beforeData: lead,
-        afterData: null,
-      });
-
-      return NextResponse.json({ success: true, deletedId: lead.id });
-    }
-
-    if (action === "updateLeadStatus") {
-      const { leadId, status } = body;
-      if (!leadId || !status) {
-        return NextResponse.json({ error: "Lead ID and Status are required" }, { status: 400 });
-      }
-      const [lead] = await db.select().from(leads).where(eq(leads.id, Number(leadId)));
-      if (!lead) {
-        return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-      }
-
-      await db
-        .update(leads)
-        .set({
-          status,
-          nextFollowUpDate:
-            status === "Won" || status === "Lost" || status === "On Hold"
-              ? null
-              : lead.nextFollowUpDate,
-        })
-        .where(eq(leads.id, lead.id));
-
-      await logAudit({
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userRole: currentUser.role,
-        action: "LEAD_STATUS_UPDATE",
-        entity: "Lead",
-        recordId: lead.leadCode,
-        beforeData: { status: lead.status },
-        afterData: { status },
-      });
-
-      return NextResponse.json({ success: true });
-    }
-
-    if (action === "sendFollowUpReminders") {
-      // Idempotent follow-up reminders (never duplicated for the same follow-up)
-      const access = leadCompanyAccess(currentUser);
-      const rawLeadRows = await db.select().from(leads);
-      const allLeadRows = access === "BOTH"
-        ? rawLeadRows
-        : rawLeadRows.filter((lead) => (Number(lead.companyId) === 2 ? "IREL" : "IBDC") === access);
-      const allFollowUps = await db.select().from(leadFollowups);
-      const allEmpRows = await db.select().from(employees);
-      const empNameMap = new Map(allEmpRows.map((e) => [e.id, e.name]));
-      const empById = new Map(allEmpRows.map((e) => [e.id, e]));
-
-      let dueToday = 0;
-      let overdueSent = 0;
-      let alreadyNotified = 0;
-
-      for (const lead of allLeadRows) {
-        if (!lead.nextFollowUpDate) continue;
-        if (["Won", "Lost", "On Hold"].includes(lead.status)) continue;
-
-        const isToday = lead.nextFollowUpDate === today;
-        const isOverdue = lead.nextFollowUpDate < today;
-        if (!isToday && !isOverdue) continue;
-
-        const leadFUs = allFollowUps
-          .filter((f) => f.leadId === lead.id)
-          .sort((a, b) => b.followUpNumber - a.followUpNumber);
-        const latest = leadFUs[0];
-        const reminderType = isOverdue ? "Approval Required" : "Follow-up Due";
-        // Deduplicate by lead + scheduled date + reminder category. This also
-        // works for newly collected leads that do not have a follow-up row yet.
-        const [alreadySent] = await db
-          .select({ id: notifications.id })
-          .from(notifications)
-          .where(and(
-            eq(notifications.relatedEntityCode, lead.leadCode),
-            eq(notifications.dueDate, lead.nextFollowUpDate),
-            eq(notifications.type, reminderType),
-            eq(notifications.createdBy, "Follow-up Automation"),
-          ))
-          .limit(1);
-        if (alreadySent) {
-          alreadyNotified++;
-          continue;
+        if (!leadId || !note || !outcomeRaw || !methodRaw) {
+          return NextResponse.json(
+            { error: "Contact Method, Outcome and Staff Note are required" },
+            { status: 400 }
+          );
         }
 
-        const daysOverdue = isOverdue
-          ? Math.round(
-              (new Date(today).getTime() - new Date(lead.nextFollowUpDate).getTime()) / 86400000
-            )
-          : 0;
+        const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+        if (!lead) {
+          return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+        }
 
-        const assignedEmployee = lead.assignedStaffId ? empById.get(lead.assignedStaffId) : undefined;
+        const access = leadCompanyAccess(currentUser);
+        const leadCompany = Number(lead.companyId) === 2 ? "IREL" : "IBDC";
+        if (access !== "BOTH" && access !== leadCompany) {
+          return NextResponse.json({ error: "এই কোম্পানির লিডে ফলো-আপ দেওয়ার অনুমতি নেই।" }, { status: 403 });
+        }
+
+        const method = CRM_FU_METHODS.includes(methodRaw) ? methodRaw : "Phone Call";
+        const resolvedOutcome = CRM_FU_OUTCOMES.includes(outcomeRaw) ? outcomeRaw : "Contacted";
+        const isClosed = CRM_CLOSED_OUTCOMES.includes(resolvedOutcome);
+        const leadOnHold = lead.status === "On Hold";
+
+        const nextDateInput = body.nextFollowUpDate ? String(body.nextFollowUpDate).slice(0, 10) : "";
+        const nextTimeInput = body.nextFollowUpTime ? String(body.nextFollowUpTime) : "10:00";
+
+        if (!isClosed && !leadOnHold && !nextDateInput) {
+          return NextResponse.json(
+            {
+              error:
+                "Next Follow-up Date is required. Active leads must always have a next follow-up scheduled so they are never forgotten.",
+            },
+            { status: 400 }
+          );
+        }
+        if (nextDateInput && !/^\d{4}-\d{2}-\d{2}$/.test(nextDateInput)) {
+          return NextResponse.json(
+            { error: "Next Follow-up Date must use YYYY-MM-DD format." },
+            { status: 400 }
+          );
+        }
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(nextTimeInput)) {
+          return NextResponse.json(
+            { error: "Next Follow-up Time must use HH:mm format." },
+            { status: 400 }
+          );
+        }
+
+        const staffId = await crmResolveEmployeeId(currentUser.employeeId);
+        const attachment = body.attachment ?? null;
+
+        // followUpNumber race-safe
+        const { followUpNumber, createdFollowup } = await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended(${`followup:${leadId}`}, 0))`
+          );
+          const existing = await tx
+            .select({ followUpNumber: leadFollowups.followUpNumber })
+            .from(leadFollowups)
+            .where(eq(leadFollowups.leadId, leadId));
+
+          const maxFU = existing.reduce((m, r) => Math.max(m, r.followUpNumber || 0), 0);
+          const fuNum = maxFU + 1;
+          const nowTime = new Date().toTimeString().slice(0, 5);
+
+          const [f] = await tx
+            .insert(leadFollowups)
+            .values({
+              leadId,
+              followUpNumber: fuNum,
+              staffId,
+              staffName: currentUser.name,
+              date: today,
+              time: nowTime,
+              contactMethod: method,
+              outcome: resolvedOutcome,
+              clientResponse: String(body.clientResponse ?? ""),
+              discussion: note,
+              nextAction:
+                String(body.nextAction ?? "") ||
+                (isClosed ? "No further follow-up" : "Follow up as scheduled"),
+              nextFollowUpDate: isClosed ? null : nextDateInput || null,
+              nextFollowUpTime: nextTimeInput,
+              attachmentName: attachment?.name || null,
+              attachmentType: attachment?.type || null,
+              attachmentSize: attachment?.size || null,
+              attachmentUrl: attachment?.url || null,
+              reminderKey: isClosed ? null : `FU-${leadId}-${fuNum}`,
+              reminderNotified: false,
+              result: resolvedOutcome,
+            })
+            .returning();
+
+          return { followUpNumber: fuNum, createdFollowup: f };
+        });
+
+        let nextStatus = body.newStatus ? String(body.newStatus) : "";
+        if (!nextStatus) {
+          if (isClosed) nextStatus = resolvedOutcome === "Won" ? "Won" : "Lost";
+          else if (resolvedOutcome === "Qualified") nextStatus = "Qualified";
+          else if (resolvedOutcome === "Quotation Sent") nextStatus = "Quotation";
+          else if (resolvedOutcome === "Negotiating") nextStatus = "Negotiating";
+          else if (resolvedOutcome === "Contacted") nextStatus = "Contacted";
+          else nextStatus = "Follow-up";
+        }
+        if (!CRM_LEAD_STATUSES.includes(nextStatus)) nextStatus = lead.status;
+
+        await db
+          .update(leads)
+          .set({
+            status: nextStatus,
+            lastContactDate: today,
+            nextFollowUpDate: isClosed ? null : nextDateInput || lead.nextFollowUpDate,
+            nextFollowUpTime: nextTimeInput,
+          })
+          .where(eq(leads.id, lead.id));
+
         await createNotification({
-          userId: assignedEmployee?.userId ?? null,
-          targetRole: assignedEmployee?.userId ? "All" : "Owner",
-          type: reminderType,
-          title: isOverdue
-            ? `Follow-up overdue: ${lead.name} — ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue`
-            : `Follow-up due today: ${lead.name}`,
-          message: isOverdue
-            ? `${lead.name} (${lead.leadCode}) was scheduled for follow-up on ${lead.nextFollowUpDate} and is now ${daysOverdue} day(s) overdue. Assigned to ${empNameMap.get(lead.assignedStaffId || 0) || "Unassigned"}.`
-            : `${lead.name} (${lead.leadCode}) is due for follow-up today (${lead.nextFollowUpDate} ${lead.nextFollowUpTime}). Priority: ${lead.priority}.`,
-          createdBy: "Follow-up Automation",
+          targetRole: "All",
+          type: resolvedOutcome === "Won" ? "Project Update" : "Follow-up Due",
+          title: isClosed
+            ? `Lead ${resolvedOutcome}: ${lead.name} (${lead.leadCode})`
+            : `Follow-up #${followUpNumber} logged for ${lead.name}`,
+          message: isClosed
+            ? `${lead.name} (${lead.leadCode}) marked ${resolvedOutcome} by ${currentUser.name} after ${followUpNumber} follow-up(s).`
+            : `${lead.name} (${lead.leadCode}) — ${method} • ${resolvedOutcome}. Next follow-up: ${nextDateInput} ${nextTimeInput}. ${body.clientResponse || note}`,
+          createdBy: currentUser.name,
           priority: lead.priority,
           assignedPersonOrTeam: lead.name,
-          dueDate: lead.nextFollowUpDate,
+          dueDate: isClosed ? null : nextDateInput || null,
           relatedUrl: "/leads",
           relatedEntityCode: lead.leadCode,
         });
 
-        if (latest) {
-          await db
-            .update(leadFollowups)
-            .set({ reminderNotified: true })
-            .where(eq(leadFollowups.id, latest.id));
-        }
+        await logAudit({
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          action: "FOLLOW_UP_CREATE",
+          entity: "LeadFollowup",
+          recordId: `${lead.leadCode}-FU-${followUpNumber}`,
+          beforeData: {
+            status: lead.status,
+            nextFollowUpDate: lead.nextFollowUpDate,
+          },
+          afterData: {
+            followUpNumber,
+            contactMethod: method,
+            outcome: resolvedOutcome,
+            clientResponse: String(body.clientResponse ?? ""),
+            note,
+            nextFollowUpDate: isClosed ? null : nextDateInput || null,
+            nextFollowUpTime: nextTimeInput,
+            newStatus: nextStatus,
+          },
+        });
 
-        if (isToday) dueToday++;
-        else overdueSent++;
+        return NextResponse.json({ success: true, followup: createdFollowup });
+      } catch (err: any) {
+        return crmErrorResponse(err, "ফলো-আপ সেভ ব্যর্থ হয়েছে");
       }
-
-      return NextResponse.json({
-        success: true,
-        dispatched: { dueToday, overdue: overdueSent, alreadyNotified },
-      });
     }
 
-    if (action === "convertLeadToClient") {
-      const { leadId, email, companyName } = body;
-      const [lead] = await db.select().from(leads).where(eq(leads.id, Number(leadId)));
-      if (!lead) {
-        return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-      }
-
-      const client = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended('client-code-allocation', 0))`
-        );
-        const rows = await tx.select({ clientCode: clients.clientCode }).from(clients);
-        const usedCodes = new Set(rows.map((r) => r.clientCode));
-        const maxNum = rows.reduce((max, r) => {
-          const m = /^CLI-(\d+)$/.exec(r.clientCode);
-          return m ? Math.max(max, Number(m[1])) : max;
-        }, 0);
-        let nextNum = maxNum + 1;
-        let clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
-        while (usedCodes.has(clientCode)) {
-          nextNum++;
-          clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
+    // =========================================================================
+    // UPDATE LEAD (Edit modal + inline sheet edit)
+    // =========================================================================
+    if (action === "updateLead") {
+      try {
+        const leadId = Number(body.leadId ?? body.id);
+        if (!Number.isInteger(leadId) || leadId <= 0) {
+          return NextResponse.json({ error: "A valid Lead ID is required." }, { status: 400 });
         }
 
-        const [createdClient] = await tx
-          .insert(clients)
-          .values({
-            clientCode,
-            leadId: lead.id,
-            name: lead.name,
-            companyName: companyName || `${lead.name} Holdings`,
-            phone: lead.phone,
-            whatsapp: lead.whatsapp,
-            email: email || "",
-            address: lead.location,
-            assignedStaffId: lead.assignedStaffId,
-            totalInvoiced: "0.00",
-            totalPaid: "0.00",
-            outstandingBalance: "0.00",
-          })
+        const [existingLead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+        if (!existingLead) {
+          return NextResponse.json({ error: "Lead not found." }, { status: 404 });
+        }
+
+        const access = leadCompanyAccess(currentUser);
+        const existingCompany = Number(existingLead.companyId) === 2 ? "IREL" : "IBDC";
+        if (access !== "BOTH" && access !== existingCompany) {
+          return NextResponse.json({ error: "এই কোম্পানির লিড সম্পাদনার অনুমতি নেই।" }, { status: 403 });
+        }
+
+        const requestedCompany = String(body.companyId ?? existingCompany).trim().toUpperCase();
+        const nextCompany: "IBDC" | "IREL" =
+          requestedCompany === "IREL" || requestedCompany === "2" ? "IREL" : "IBDC";
+        if (access !== "BOTH" && access !== nextCompany) {
+          return NextResponse.json({ error: "অন্য কোম্পানিতে লিড স্থানান্তরের অনুমতি নেই।" }, { status: 403 });
+        }
+
+        const nextName = String(body.name ?? existingLead.name).trim();
+        const nextPhone = String(body.phone ?? existingLead.phone).trim();
+        const nextBudget = Number(body.budget ?? existingLead.budget ?? 0);
+        if (!nextName || !nextPhone) {
+          return NextResponse.json({ error: "Lead Name and Phone are required." }, { status: 400 });
+        }
+        if (!Number.isFinite(nextBudget) || nextBudget < 0) {
+          return NextResponse.json(
+            { error: "Budget must be a valid non-negative number." },
+            { status: 400 }
+          );
+        }
+
+        const nextDateRaw =
+          body.nextFollowUpDate === undefined ? existingLead.nextFollowUpDate : body.nextFollowUpDate;
+        const nextDate = nextDateRaw ? String(nextDateRaw).slice(0, 10) : null;
+        if (nextDate && !/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) {
+          return NextResponse.json(
+            { error: "Next Follow-up Date must use YYYY-MM-DD format." },
+            { status: 400 }
+          );
+        }
+
+        const nextTime =
+          body.nextFollowUpTime === undefined
+            ? existingLead.nextFollowUpTime
+            : String(body.nextFollowUpTime || "10:00");
+        if (nextTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(nextTime)) {
+          return NextResponse.json(
+            { error: "Next Follow-up Time must use HH:mm format." },
+            { status: 400 }
+          );
+        }
+
+        const nextStatus = CRM_LEAD_STATUSES.includes(String(body.status))
+          ? String(body.status)
+          : existingLead.status;
+        const closed = CRM_CLOSED_STATUSES.includes(nextStatus);
+
+        const nextPriority = CRM_LEAD_PRIORITIES.includes(String(body.priority))
+          ? String(body.priority)
+          : existingLead.priority;
+
+        const assignedStaffId =
+          body.assignedStaffId === undefined
+            ? existingLead.assignedStaffId
+            : await crmResolveEmployeeId(body.assignedStaffId);
+
+        const updateValues: Record<string, unknown> = {
+          companyId: nextCompany === "IREL" ? 2 : 1,
+          name: nextName,
+          phone: nextPhone,
+          whatsapp: String(body.whatsapp ?? existingLead.whatsapp ?? nextPhone).trim(),
+          location: String(body.location ?? existingLead.location ?? "").trim(),
+          source: String(body.source ?? existingLead.source ?? "Direct"),
+
+          service:
+            nextCompany === "IBDC"
+              ? typeof body.service === "string" && body.service.trim()
+                ? body.service.trim()
+                : existingLead.service
+              : "Other",
+          propertyType:
+            nextCompany === "IREL"
+              ? typeof body.propertyType === "string" && body.propertyType.trim()
+                ? body.propertyType.trim()
+                : existingLead.propertyType
+              : "Other",
+
+          projectName: nextCompany === "IREL" ? String(body.projectName ?? existingLead.projectName ?? "") : "",
+          unitFlatShop: nextCompany === "IREL" ? String(body.unitFlatShop ?? existingLead.unitFlatShop ?? "") : "",
+          preferredLocation:
+            nextCompany === "IREL" ? String(body.preferredLocation ?? existingLead.preferredLocation ?? "") : "",
+          size: nextCompany === "IREL" ? String(body.size ?? existingLead.size ?? "") : "",
+          floor: nextCompany === "IREL" ? String(body.floor ?? existingLead.floor ?? "") : "",
+          bedrooms: nextCompany === "IREL" ? String(body.bedrooms ?? existingLead.bedrooms ?? "") : "",
+          purpose: nextCompany === "IREL" ? String(body.purpose ?? existingLead.purpose ?? "") : "",
+          expectedPurchaseDate:
+            nextCompany === "IREL"
+              ? String(body.expectedPurchaseDate ?? existingLead.expectedPurchaseDate ?? "")
+              : "",
+          clientRequirement:
+            nextCompany === "IREL"
+              ? String(body.clientRequirement ?? existingLead.clientRequirement ?? "")
+              : "",
+
+          requirement: nextCompany === "IBDC" ? String(body.requirement ?? existingLead.requirement ?? "") : "",
+          landSize: nextCompany === "IBDC" ? String(body.landSize ?? existingLead.landSize ?? "") : "",
+          roadWidth: nextCompany === "IBDC" ? String(body.roadWidth ?? existingLead.roadWidth ?? "") : "",
+
+          budget: nextBudget.toFixed(2),
+          priority: nextPriority,
+          status: nextStatus,
+          assignedStaffId,
+          nextFollowUpDate: closed ? null : nextDate,
+          nextFollowUpTime: nextTime || "10:00",
+
+          insafResponse: String(body.insafResponse ?? existingLead.insafResponse ?? ""),
+          remarks: String(body.remarks ?? existingLead.remarks ?? ""),
+          reminder1: String(body.reminder1 ?? existingLead.reminder1 ?? ""),
+          reminder2: String(body.reminder2 ?? existingLead.reminder2 ?? ""),
+          reminder3: String(body.reminder3 ?? existingLead.reminder3 ?? ""),
+          leadDate: body.leadDate ? String(body.leadDate).slice(0, 10) : existingLead.leadDate ?? null,
+        };
+
+        const [updatedLead] = await db
+          .update(leads)
+          .set(updateValues as any)
+          .where(eq(leads.id, leadId))
           .returning();
 
-        await tx
+        await logAudit({
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          action: "UPDATE",
+          entity: "Lead",
+          recordId: updatedLead.leadCode,
+          beforeData: existingLead,
+          afterData: updatedLead,
+        });
+
+        return NextResponse.json({ success: true, lead: updatedLead });
+      } catch (err: any) {
+        return crmErrorResponse(err, "লিড আপডেট ব্যর্থ হয়েছে");
+      }
+    }
+
+    // =========================================================================
+    // DELETE LEAD
+    // =========================================================================
+    if (action === "deleteLead") {
+      try {
+        const leadId = Number(body.leadId);
+        if (!leadId) {
+          return NextResponse.json({ error: "Lead ID প্রয়োজন" }, { status: 400 });
+        }
+
+        const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+        if (!lead) {
+          return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+        }
+
+        const access = leadCompanyAccess(currentUser);
+        const leadCompany = Number(lead.companyId) === 2 ? "IREL" : "IBDC";
+        if (access !== "BOTH" && access !== leadCompany) {
+          return NextResponse.json({ error: "এই কোম্পানির লিড মোছার অনুমতি নেই।" }, { status: 403 });
+        }
+
+        await db.delete(leadFollowups).where(eq(leadFollowups.leadId, lead.id));
+        await db.delete(leads).where(eq(leads.id, lead.id));
+
+        await logAudit({
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          action: "DELETE",
+          entity: "Lead",
+          recordId: lead.leadCode,
+          beforeData: lead,
+          afterData: null,
+        });
+
+        return NextResponse.json({ success: true, deletedId: lead.id });
+      } catch (err: any) {
+        return crmErrorResponse(err, "লিড মোছা ব্যর্থ হয়েছে");
+      }
+    }
+
+    // =========================================================================
+    // UPDATE LEAD STATUS (On Hold / Resume)
+    // =========================================================================
+    if (action === "updateLeadStatus") {
+      try {
+        const leadId = Number(body.leadId);
+        const status = String(body.status ?? "");
+        if (!leadId || !status) {
+          return NextResponse.json({ error: "Lead ID and Status are required" }, { status: 400 });
+        }
+        if (!CRM_LEAD_STATUSES.includes(status)) {
+          return NextResponse.json({ error: "Invalid lead status" }, { status: 400 });
+        }
+
+        const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+        if (!lead) {
+          return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+        }
+
+        const access = leadCompanyAccess(currentUser);
+        const leadCompany = Number(lead.companyId) === 2 ? "IREL" : "IBDC";
+        if (access !== "BOTH" && access !== leadCompany) {
+          return NextResponse.json({ error: "এই কোম্পানির লিড পরিবর্তনের অনুমতি নেই।" }, { status: 403 });
+        }
+
+        await db
           .update(leads)
-          .set({ status: "Won", convertedClientId: createdClient.id })
+          .set({
+            status,
+            nextFollowUpDate: CRM_CLOSED_STATUSES.includes(status) ? null : lead.nextFollowUpDate,
+          })
           .where(eq(leads.id, lead.id));
 
-        return createdClient;
-      });
+        await logAudit({
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          action: "LEAD_STATUS_UPDATE",
+          entity: "Lead",
+          recordId: lead.leadCode,
+          beforeData: { status: lead.status },
+          afterData: { status },
+        });
 
-      await logAudit({
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userRole: currentUser.role,
-        action: "CREATE",
-        entity: "Client",
-        recordId: client.clientCode,
-        afterData: { fromLead: lead.leadCode, clientCode: client.clientCode },
-      });
-
-      return NextResponse.json({ success: true, client });
+        return NextResponse.json({ success: true });
+      } catch (err: any) {
+        return crmErrorResponse(err, "স্ট্যাটাস আপডেট ব্যর্থ হয়েছে");
+      }
     }
 
+    // =========================================================================
+    // FOLLOW-UP REMINDERS (idempotent)
+    // =========================================================================
+    if (action === "sendFollowUpReminders") {
+      try {
+        const access = leadCompanyAccess(currentUser);
+        const rawLeadRows = await db.select().from(leads);
+        const allLeadRows =
+          access === "BOTH"
+            ? rawLeadRows
+            : rawLeadRows.filter((lead) => (Number(lead.companyId) === 2 ? "IREL" : "IBDC") === access);
+
+        const allFollowUps = await db.select().from(leadFollowups);
+        const allEmpRows = await db.select().from(employees);
+        const empNameMap = new Map(allEmpRows.map((e) => [e.id, e.name]));
+        const empById = new Map(allEmpRows.map((e) => [e.id, e]));
+
+        let dueToday = 0;
+        let overdueSent = 0;
+        let alreadyNotified = 0;
+
+        for (const lead of allLeadRows) {
+          if (!lead.nextFollowUpDate) continue;
+          if (["Won", "Lost", "On Hold", "Converted"].includes(lead.status)) continue;
+
+          const isToday = lead.nextFollowUpDate === today;
+          const isOverdue = lead.nextFollowUpDate < today;
+          if (!isToday && !isOverdue) continue;
+
+          const leadFUs = allFollowUps
+            .filter((f) => f.leadId === lead.id)
+            .sort((a, b) => b.followUpNumber - a.followUpNumber);
+          const latest = leadFUs[0];
+
+          const reminderType = isOverdue ? "Approval Required" : "Follow-up Due";
+
+          const [alreadySent] = await db
+            .select({ id: notifications.id })
+            .from(notifications)
+            .where(
+              and(
+                eq(notifications.relatedEntityCode, lead.leadCode),
+                eq(notifications.dueDate, lead.nextFollowUpDate),
+                eq(notifications.type, reminderType),
+                eq(notifications.createdBy, "Follow-up Automation")
+              )
+            )
+            .limit(1);
+
+          if (alreadySent) {
+            alreadyNotified++;
+            continue;
+          }
+
+          const daysOverdue = isOverdue
+            ? Math.round(
+                (new Date(today).getTime() - new Date(lead.nextFollowUpDate).getTime()) / 86400000
+              )
+            : 0;
+
+          const assignedEmployee = lead.assignedStaffId ? empById.get(lead.assignedStaffId) : undefined;
+
+          await createNotification({
+            userId: assignedEmployee?.userId ?? null,
+            targetRole: assignedEmployee?.userId ? "All" : "Owner",
+            type: reminderType,
+            title: isOverdue
+              ? `Follow-up overdue: ${lead.name} — ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue`
+              : `Follow-up due today: ${lead.name}`,
+            message: isOverdue
+              ? `${lead.name} (${lead.leadCode}) was scheduled for follow-up on ${lead.nextFollowUpDate} and is now ${daysOverdue} day(s) overdue. Assigned to ${empNameMap.get(lead.assignedStaffId || 0) || "Unassigned"}.`
+              : `${lead.name} (${lead.leadCode}) is due for follow-up today (${lead.nextFollowUpDate} ${lead.nextFollowUpTime}). Priority: ${lead.priority}.`,
+            createdBy: "Follow-up Automation",
+            priority: lead.priority,
+            assignedPersonOrTeam: lead.name,
+            dueDate: lead.nextFollowUpDate,
+            relatedUrl: "/leads",
+            relatedEntityCode: lead.leadCode,
+          });
+
+          if (latest) {
+            await db
+              .update(leadFollowups)
+              .set({ reminderNotified: true })
+              .where(eq(leadFollowups.id, latest.id));
+          }
+
+          if (isToday) dueToday++;
+          else overdueSent++;
+        }
+
+        return NextResponse.json({
+          success: true,
+          dispatched: { dueToday, overdue: overdueSent, alreadyNotified },
+        });
+      } catch (err: any) {
+        return crmErrorResponse(err, "রিমাইন্ডার পাঠানো ব্যর্থ হয়েছে");
+      }
+    }
+
+    // =========================================================================
+    // CONVERT LEAD → CLIENT
+    // =========================================================================
+    if (action === "convertLeadToClient") {
+      try {
+        const { email, companyName } = body;
+        const leadId = Number(body.leadId);
+        const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+        if (!lead) {
+          return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+        }
+
+        const access = leadCompanyAccess(currentUser);
+        const leadCompany = Number(lead.companyId) === 2 ? "IREL" : "IBDC";
+        if (access !== "BOTH" && access !== leadCompany) {
+          return NextResponse.json({ error: "এই কোম্পানির লিড রূপান্তরের অনুমতি নেই।" }, { status: 403 });
+        }
+
+        const client = await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended('client-code-allocation', 0))`
+          );
+          const rows = await tx.select({ clientCode: clients.clientCode }).from(clients);
+          const usedCodes = new Set(rows.map((r) => r.clientCode));
+          const maxNum = rows.reduce((max, r) => {
+            const m = /^CLI-(\d+)$/.exec(r.clientCode);
+            return m ? Math.max(max, Number(m[1])) : max;
+          }, 0);
+          let nextNum = maxNum + 1;
+          let clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
+          while (usedCodes.has(clientCode)) {
+            nextNum++;
+            clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
+          }
+
+          const [createdClient] = await tx
+            .insert(clients)
+            .values({
+              clientCode,
+              leadId: lead.id,
+              name: lead.name,
+              companyName: companyName || `${lead.name} Holdings`,
+              phone: lead.phone,
+              whatsapp: lead.whatsapp,
+              email: email || "",
+              address: lead.location,
+              assignedStaffId: lead.assignedStaffId,
+              totalInvoiced: "0.00",
+              totalPaid: "0.00",
+              outstandingBalance: "0.00",
+            })
+            .returning();
+
+          await tx
+            .update(leads)
+            .set({ status: "Won", convertedClientId: createdClient.id, nextFollowUpDate: null })
+            .where(eq(leads.id, lead.id));
+
+          return createdClient;
+        });
+
+        await logAudit({
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          action: "CREATE",
+          entity: "Client",
+          recordId: client.clientCode,
+          afterData: { fromLead: lead.leadCode, clientCode: client.clientCode },
+        });
+
+        return NextResponse.json({ success: true, client });
+      } catch (err: any) {
+        return crmErrorResponse(err, "ক্লায়েন্টে রূপান্তর ব্যর্থ হয়েছে");
+      }
+    }
+
+    // =========================================================================
+    // CREATE CLIENT
+    // =========================================================================
     if (action === "createClient") {
-      const { name, companyName, phone, whatsapp, email, address } = body;
-      if (!name || !phone) {
-        return NextResponse.json({ error: "Client Name and Phone are required" }, { status: 400 });
-      }
-
-      const client = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended('client-code-allocation', 0))`
-        );
-        const rows = await tx.select({ clientCode: clients.clientCode }).from(clients);
-        const usedCodes = new Set(rows.map((r) => r.clientCode));
-        const maxNum = rows.reduce((max, r) => {
-          const m = /^CLI-(\d+)$/.exec(r.clientCode);
-          return m ? Math.max(max, Number(m[1])) : max;
-        }, 0);
-        let nextNum = maxNum + 1;
-        let clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
-        while (usedCodes.has(clientCode)) {
-          nextNum++;
-          clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
+      try {
+        const { name, companyName, phone, whatsapp, email, address } = body;
+        if (!name || !phone) {
+          return NextResponse.json({ error: "Client Name and Phone are required" }, { status: 400 });
         }
 
-        const [createdClient] = await tx
-          .insert(clients)
-          .values({
-            clientCode,
-            name,
-            companyName: companyName || "",
-            phone,
-            whatsapp: whatsapp || phone,
-            email: email || "",
-            address: address || "",
-            assignedStaffId: currentUser.employeeId,
-          })
-          .returning();
-        return createdClient;
-      });
+        const staffId = await crmResolveEmployeeId(currentUser.employeeId);
 
-      return NextResponse.json({ success: true, client });
+        const client = await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended('client-code-allocation', 0))`
+          );
+          const rows = await tx.select({ clientCode: clients.clientCode }).from(clients);
+          const usedCodes = new Set(rows.map((r) => r.clientCode));
+          const maxNum = rows.reduce((max, r) => {
+            const m = /^CLI-(\d+)$/.exec(r.clientCode);
+            return m ? Math.max(max, Number(m[1])) : max;
+          }, 0);
+          let nextNum = maxNum + 1;
+          let clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
+          while (usedCodes.has(clientCode)) {
+            nextNum++;
+            clientCode = `CLI-${String(nextNum).padStart(4, "0")}`;
+          }
+
+          const [createdClient] = await tx
+            .insert(clients)
+            .values({
+              clientCode,
+              name: String(name).trim(),
+              companyName: companyName || "",
+              phone: String(phone).trim(),
+              whatsapp: whatsapp || phone,
+              email: email || "",
+              address: address || "",
+              assignedStaffId: staffId,
+            })
+            .returning();
+          return createdClient;
+        });
+
+        return NextResponse.json({ success: true, client });
+      } catch (err: any) {
+        return crmErrorResponse(err, "ক্লায়েন্ট সেভ ব্যর্থ হয়েছে");
+      }
     }
 
+    // =========================================================================
+    // CREATE QUOTATION
+    // =========================================================================
     if (action === "createQuotation") {
-      const { leadId, clientId, projectId, service, items, discount, tax, terms, validUntil } = body;
-      if (!service || !Array.isArray(items) || items.length === 0) {
-        return NextResponse.json({ error: "Service and at least 1 item required" }, { status: 400 });
-      }
+      try {
+        const { leadId, clientId, projectId, service, items, discount, tax, terms, validUntil } = body;
+        if (!service || !Array.isArray(items) || items.length === 0) {
+          return NextResponse.json({ error: "Service and at least 1 item required" }, { status: 400 });
+        }
 
-      const subtotal = items.reduce(
-        (s: number, it: { quantity: number; rate: number }) =>
-          s + Number(it.quantity) * Number(it.rate),
-        0
-      );
-      const disc = Number(discount || 0);
-      const tx2 = Number(tax || 0);
-      const totalAmount = Math.max(0, subtotal - disc + tx2);
-
-      const quotation = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended('quotation-code-allocation', 0))`
+        const subtotal = items.reduce(
+          (s: number, it: { quantity: number; rate: number }) =>
+            s + Number(it.quantity) * Number(it.rate),
+          0
         );
-        const rows = await tx.select({ quotationNumber: quotations.quotationNumber }).from(quotations);
-        const usedCodes = new Set(rows.map((r) => r.quotationNumber));
-        const maxNum = rows.reduce((max, r) => {
-          const m = /^QUO-(\d+)$/.exec(r.quotationNumber);
-          return m ? Math.max(max, Number(m[1])) : max;
-        }, 0);
-        let nextNum = maxNum + 1;
-        let quotationNumber = `QUO-${String(nextNum).padStart(4, "0")}`;
-        while (usedCodes.has(quotationNumber)) {
-          nextNum++;
-          quotationNumber = `QUO-${String(nextNum).padStart(4, "0")}`;
-        }
+        const discountAmt = Number(discount || 0);
+        const taxAmt = Number(tax || 0);
+        const totalAmount = Math.max(0, subtotal - discountAmt + taxAmt);
 
-        const [q] = await tx
-          .insert(quotations)
-          .values({
-            quotationNumber,
-            leadId: leadId ? Number(leadId) : null,
-            clientId: clientId ? Number(clientId) : null,
-            projectId: projectId ? Number(projectId) : null,
-            service,
-            items: items.map((it: { description: string; unit: string; quantity: number; rate: number }) => ({
-              description: it.description,
-              unit: it.unit || "LS",
-              quantity: Number(it.quantity),
-              rate: Number(it.rate),
-              amount: Number(it.quantity) * Number(it.rate),
-            })),
-            subtotal: subtotal.toFixed(2),
-            discount: disc.toFixed(2),
-            tax: tx2.toFixed(2),
-            totalAmount: totalAmount.toFixed(2),
-            terms: terms || "50% advance, 50% on completion.",
-            validUntil: validUntil || "2026-12-31",
-            status: "Sent",
-            createdBy: currentUser.name,
-          })
-          .returning();
+        const quotation = await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended('quotation-code-allocation', 0))`
+          );
+          const rows = await tx.select({ quotationNumber: quotations.quotationNumber }).from(quotations);
+          const usedCodes = new Set(rows.map((r) => r.quotationNumber));
+          const maxNum = rows.reduce((max, r) => {
+            const m = /^QUO-(\d+)$/.exec(r.quotationNumber);
+            return m ? Math.max(max, Number(m[1])) : max;
+          }, 0);
+          let nextNum = maxNum + 1;
+          let quotationNumber = `QUO-${String(nextNum).padStart(4, "0")}`;
+          while (usedCodes.has(quotationNumber)) {
+            nextNum++;
+            quotationNumber = `QUO-${String(nextNum).padStart(4, "0")}`;
+          }
 
-        if (leadId) {
-          await tx.update(leads).set({ status: "Quotation" }).where(eq(leads.id, Number(leadId)));
-        }
-        return q;
-      });
+          const [q] = await tx
+            .insert(quotations)
+            .values({
+              quotationNumber,
+              leadId: leadId ? Number(leadId) : null,
+              clientId: clientId ? Number(clientId) : null,
+              projectId: projectId ? Number(projectId) : null,
+              service,
+              items: items.map((it: { description: string; unit: string; quantity: number; rate: number }) => ({
+                description: it.description,
+                unit: it.unit || "LS",
+                quantity: Number(it.quantity),
+                rate: Number(it.rate),
+                amount: Number(it.quantity) * Number(it.rate),
+              })),
+              subtotal: subtotal.toFixed(2),
+              discount: discountAmt.toFixed(2),
+              tax: taxAmt.toFixed(2),
+              totalAmount: totalAmount.toFixed(2),
+              terms: terms || "50% advance, 50% on completion.",
+              validUntil: validUntil || "2026-12-31",
+              status: "Sent",
+              createdBy: currentUser.name,
+            })
+            .returning();
 
-      return NextResponse.json({ success: true, quotation });
+          if (leadId) {
+            await tx.update(leads).set({ status: "Quotation" }).where(eq(leads.id, Number(leadId)));
+          }
+          return q;
+        });
+
+        return NextResponse.json({ success: true, quotation });
+      } catch (err: any) {
+        return crmErrorResponse(err, "কোটেশন সেভ ব্যর্থ হয়েছে");
+      }
     }
 
+    // =========================================================================
+    // UPDATE QUOTATION STATUS
+    // =========================================================================
     if (action === "updateQuotationStatus") {
-      const { quotationId, status } = body;
-      const [updated] = await db
-        .update(quotations)
-        .set({ status })
-        .where(eq(quotations.id, Number(quotationId)))
-        .returning();
-      return NextResponse.json({ success: true, quotation: updated });
+      try {
+        const { quotationId, status } = body;
+        const [updated] = await db
+          .update(quotations)
+          .set({ status })
+          .where(eq(quotations.id, Number(quotationId)))
+          .returning();
+        return NextResponse.json({ success: true, quotation: updated });
+      } catch (err: any) {
+        return crmErrorResponse(err, "কোটেশন স্ট্যাটাস আপডেট ব্যর্থ হয়েছে");
+      }
     }
     // =========================================================================
     // 7. PROJECTS & SITES
