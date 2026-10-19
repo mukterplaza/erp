@@ -1006,7 +1006,7 @@ export function LeadsView({
     setFuLeadId(null);
   }
 
-  async function handleCreateLead(e: React.FormEvent) {
+    async function handleCreateLead(e: React.FormEvent) {
     e.preventDefault();
 
     const payload: Record<string, unknown> = {
@@ -1021,9 +1021,18 @@ export function LeadsView({
       priority,
       status: leadStatus,
       assignedStaffId: assignedStaffId ? Number(assignedStaffId) : null,
-      nextFollowUpDate: nextFollowUpInput || null,
+      nextFollowUpDate: nextFollowUpInput || today,
+
+      // ✅ নতুন ফিল্ড — এগুলো থাকা জরুরি
+      insafResponse: String(insafResponse || ""),
+      remarks: String(leadRemarks || ""),
+      reminder1: String(reminder1Input || ""),
+      reminder2: String(reminder2Input || ""),
+      reminder3: String(reminder3Input || ""),
+      leadDate: leadDate || today,
     };
 
+    // অতিরিক্ত ফিল্ড — requirement-এ যোগ
     const customFieldLines = customLeadFields
       .map((field) => ({ label: field.label.trim(), value: field.value.trim() }))
       .filter((field) => field.label && field.value)
@@ -1051,10 +1060,12 @@ export function LeadsView({
     }
 
     const result = await onMutate(payload);
-    if (!result?.success) return;
+    if (result?.error) return;
+
     setActiveTab(formCompany);
     setViewMode("cards");
 
+    // ফর্ম রিসেট
     setLeadDate(today);
     setName("");
     setPhone("");
@@ -1148,7 +1159,7 @@ export function LeadsView({
     });
   }
 
-    async function saveEditedLead(e: React.FormEvent) {
+      async function saveEditedLead(e: React.FormEvent) {
     e.preventDefault();
     if (!editingLead || !editForm) return;
 
@@ -1168,12 +1179,14 @@ export function LeadsView({
       status: editForm.status || "New",
       assignedStaffId: editForm.assignedStaffId ? Number(editForm.assignedStaffId) : null,
       nextFollowUpDate: editForm.nextFollowUpDate || null,
-      insafResponse: editForm.insafResponse || "",
-      remarks: editForm.remarks || "",
-      reminder1: editForm.reminder1 || "",
-      reminder2: editForm.reminder2 || "",
-      reminder3: editForm.reminder3 || "",
-      leadDate: editForm.leadDate || null,
+
+      // ✅ নতুন ফিল্ড — এগুলো থাকা জরুরি
+      insafResponse: String(editForm.insafResponse || ""),
+      remarks: String(editForm.remarks || ""),
+      reminder1: String(editForm.reminder1 || ""),
+      reminder2: String(editForm.reminder2 || ""),
+      reminder3: String(editForm.reminder3 || ""),
+      leadDate: editForm.leadDate || today,
     };
 
     if (editForm.companyId === "IBDC") {
