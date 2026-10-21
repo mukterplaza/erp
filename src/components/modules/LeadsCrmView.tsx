@@ -23,10 +23,10 @@ import {
   Clock,
   CalendarDays,
   ListFilter,
-  ArrowUpAZ,
-  ArrowDownAZ,
   Check,
   Eraser,
+  Send,
+  SkipForward,
 } from "lucide-react";
 import { exportToCSV as exportRecordsToCSV, exportToExcel, exportToPDFPrint as exportRecordsToPDFPrint } from "@/lib/export-utils";
 
@@ -116,11 +116,11 @@ const COMPANIES = {
 
 type CompanyTab = "IBDC" | "IREL" | "ALL";
 
-// Undo করার সময় (১০ সেকেন্ড)
 const UNDO_WINDOW_MS = 10000;
+const BULK_WA_LIMIT = 50;
 
 // ============================================================================
-// PROVIDED LEADS (YOUR SHARED LEADS)
+// PROVIDED LEADS (SAMPLE)
 // ============================================================================
 const PROVIDED_SAMPLE_LEADS = [
   {
@@ -141,7 +141,7 @@ const PROVIDED_SAMPLE_LEADS = [
     nextFollowUpDate: "2026-08-27",
     reminder1: "ফোনে কথা হয়েছে কোটেশন দেখে জানাবে",
     reminder2: "আপডেট জানার জন্য ম্যাসেজ করা হয়েছে",
-    reminder3: "Extra date noted: 2026-09-07",
+    reminder3: "",
     budget: 0,
   },
   {
@@ -158,54 +158,11 @@ const PROVIDED_SAMPLE_LEADS = [
     status: "Conversation Started",
     requirement: "কত তলা পাবে জানতে চাইছে",
     insafResponse: "৪/৫ তলা",
-    remarks:
-      "তাদের জায়গা সরকারি গণপূর্ত মধ্যে পড়ছে, এখন তারা চাচ্ছে গণপূর্ত থেকে কিছু জায়গা পাবে সেটি নিয়ে দেওয়ার জন্য। আমরা বলেছি জমি উনি নিয়ে দিলে আমরা রাজউকের প্ল্যান করে দিতে পারবো। কেমন ইউনিট পাবে এই সব বিষয়ে কথা হয়েছে।",
+    remarks: "গণপূর্ত সংক্রান্ত আলোচনা হয়েছে",
     nextFollowUpDate: "",
     reminder1: "",
     reminder2: "",
     reminder3: "",
-    budget: 0,
-  },
-  {
-    leadCode: "L-0003",
-    leadDate: "2026-08-19",
-    companyId: "IBDC",
-    name: "Nexora Structure Limited",
-    phone: "01766913185",
-    whatsapp: "01766913185",
-    location: "",
-    source: "Facebook",
-    service: "RAJUK Plan Approval",
-    priority: "Lost",
-    status: "No Response",
-    requirement: "12.80 শতাংশে ১০ তলা চায়",
-    insafResponse: "পাবে না বলে দিয়েছি",
-    remarks: "কত তলা জানানো হয়েছে",
-    nextFollowUpDate: "",
-    reminder1: "",
-    reminder2: "",
-    reminder3: "",
-    budget: 0,
-  },
-  {
-    leadCode: "L-0004",
-    leadDate: "2026-08-19",
-    companyId: "IBDC",
-    name: "Sajib",
-    phone: "01681392440",
-    whatsapp: "01681392440",
-    location: "Konapara",
-    source: "Facebook",
-    service: "RAJUK Plan Approval",
-    priority: "Warm",
-    status: "Proposal Sent",
-    requirement: "Rajuk plan Design",
-    insafResponse: "",
-    remarks: "অফিসে এসে কোটেশন নিয়ে গিয়েছে",
-    nextFollowUpDate: "2026-08-29",
-    reminder1: "কল দিয়েছি পাইনি ভয়েস দিয়ে রাখছি",
-    reminder2: "পরে কল দিবে",
-    reminder3: "Extra date noted: 2026-09-07",
     budget: 0,
   },
 ];
@@ -247,31 +204,15 @@ const CLOSED_FU = ["Won", "Lost", "Not Interested"];
 // ============================================================================
 function priorityStyle(p: string) {
   if (p === "Hot") {
-    return {
-      cls: "bg-rose-50 text-rose-700 border-rose-200",
-      dot: "bg-rose-500",
-      Icon: Flame,
-    };
+    return { cls: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-500", Icon: Flame };
   }
   if (p === "Cold") {
-    return {
-      cls: "bg-sky-50 text-sky-700 border-sky-200",
-      dot: "bg-sky-500",
-      Icon: Snowflake,
-    };
+    return { cls: "bg-sky-50 text-sky-700 border-sky-200", dot: "bg-sky-500", Icon: Snowflake };
   }
   if (p === "Lost") {
-    return {
-      cls: "bg-slate-200 text-slate-800 border-slate-300",
-      dot: "bg-rose-600",
-      Icon: XCircle,
-    };
+    return { cls: "bg-slate-200 text-slate-800 border-slate-300", dot: "bg-rose-600", Icon: XCircle };
   }
-  return {
-    cls: "bg-amber-50 text-amber-800 border-amber-200",
-    dot: "bg-amber-500",
-    Icon: Sun,
-  };
+  return { cls: "bg-amber-50 text-amber-800 border-amber-200", dot: "bg-amber-500", Icon: Sun };
 }
 
 function statusStyle(s: string) {
@@ -306,9 +247,122 @@ function tally(items: string[]): Array<{ label: string; count: number }> {
 }
 
 function categoryOfLead(l: any): string {
-  const isIREL = (l.companyId || "IBDC") === "IREL";
-  return (isIREL ? l.propertyType : l.service) || "Other";
+  const isIREL = (l?.companyId || "IBDC") === "IREL";
+  return (isIREL ? l?.propertyType : l?.service) || "Other";
 }
+
+// ============================================================================
+// GLOBAL WHATSAPP HELPERS
+// ============================================================================
+function normalizePhoneForWa(phone?: string | null): string {
+  if (!phone) return "";
+  let raw = String(phone).split(",")[0].split("/")[0].trim();
+  raw = raw.replace(/[^\d+]/g, "");
+  if (raw.startsWith("+")) raw = raw.slice(1);
+  if (!raw) return "";
+  if (raw.startsWith("880")) return raw;
+  if (raw.startsWith("0") && raw.length >= 11) return "880" + raw.slice(1);
+  if (raw.length >= 10 && raw.length <= 12 && raw.startsWith("1")) return "880" + raw;
+  return raw;
+}
+
+function waLink(phone?: string | null, name?: string, customText?: string): string {
+  const n = normalizePhoneForWa(phone);
+  if (!n) return "#";
+  const text =
+    customText && customText.trim() ? customText.trim() : name ? `Hi ${name}, ` : "";
+  return `https://wa.me/${n}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
+}
+
+function defaultFollowUpMessage(lead: any) {
+  const name = String(lead?.name || lead?.clientName || "স্যার/ম্যাডাম").trim();
+  const service = categoryOfLead(lead);
+  const next = lead?.nextFollowUpDate || "";
+  return `আসসালামু আলাইকুম ${name},
+
+INSAF থেকে কথা বলছি। আপনার ${service || "কাজের"} বিষয়ে ফলো-আপ করছি।${next ? `\nনির্ধারিত ফলো-আপ: ${next}` : ""}
+
+আপনার সুবিধামতো একটু আপডেট দিলে উপকৃত হবো।
+
+ধন্যবাদ।`;
+}
+
+function defaultReminderMessage(lead: any) {
+  const name = String(lead?.name || lead?.clientName || "স্যার/ম্যাডাম").trim();
+  const service = categoryOfLead(lead);
+  return `আসসালামু আলাইকুম ${name},
+
+INSAF থেকে রিমাইন্ডার। আপনার ${service || "কাজের"} বিষয়ে আগে কথা হয়েছিল।
+একটু আপডেট পেলে ভালো হতো।
+
+ধন্যবাদ।`;
+}
+
+function defaultQuotationMessage(lead: any) {
+  const name = String(lead?.name || lead?.clientName || "স্যার/ম্যাডাম").trim();
+  return `আসসালামু আলাইকুম ${name},
+
+INSAF থেকে আপনার কোটেশন প্রস্তুত করা হয়েছে।
+বিস্তারিত জানতে বা অফিসে আসতে চাইলে জানাবেন।
+
+ধন্যবাদ।`;
+}
+
+function personalizeMessage(template: string, lead: any) {
+  return String(template || "")
+    .replace(/\{name\}/gi, lead?.name || lead?.clientName || "")
+    .replace(/\{service\}/gi, categoryOfLead(lead) || "")
+    .replace(/\{code\}/gi, lead?.leadCode || "")
+    .replace(/\{location\}/gi, lead?.location || lead?.preferredLocation || "")
+    .replace(/\{nextdate\}/gi, lead?.nextFollowUpDate || "");
+}
+
+function WhatsAppIcon({ className = "w-3 h-3 shrink-0" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M19.05 4.91A9.82 9.82 0 0 0 12.03 2C6.55 2 2.09 6.45 2.09 12c0 1.76.46 3.48 1.33 4.99L2 22l5.15-1.35A9.82 9.82 0 0 0 12.03 22c5.48 0 9.94-4.45 9.94-9.94 0-2.65-1.03-5.15-2.92-7.15Zm-7.02 15.2c-1.5 0-2.96-.4-4.23-1.16l-.3-.18-3.06.8.82-2.98-.2-.3a8.2 8.2 0 0 1-1.27-4.39c0-4.54 3.7-8.23 8.24-8.23 2.2 0 4.27.86 5.83 2.41a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.7 8.21-8.24 8.21Zm4.52-6.16c-.25-.12-1.47-.73-1.7-.81-.23-.09-.39-.12-.56.12-.17.25-.65.81-.8.97-.15.17-.3.19-.54.06-.25-.12-1.04-.38-1.98-1.22-.73-.65-1.22-1.45-1.36-1.7-.14-.25-.02-.38.1-.51.11-.11.25-.3.37-.45.12-.15.16-.25.25-.42.08-.17.04-.32-.02-.44-.06-.12-.56-1.35-.77-1.85-.2-.48-.4-.42-.56-.43h-.48c-.17 0-.44.06-.67.32-.23.25-.88.86-.88 2.1s.9 2.44 1.03 2.61c.12.17 1.77 2.71 4.29 3.8.6.26 1.07.41 1.43.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.2-.58.2-1.08.14-1.18-.06-.11-.23-.17-.48-.29Z" />
+    </svg>
+  );
+}
+
+function PhoneWhatsApp({
+  phone,
+  name,
+  message,
+  size = "sm",
+}: {
+  phone?: string | null;
+  name?: string;
+  message?: string;
+  size?: "xs" | "sm" | "md";
+}) {
+  const displayPhone = String(phone || "").split(",")[0].trim();
+  if (!displayPhone) return <span className="text-slate-400">—</span>;
+
+  const cls =
+    size === "md"
+      ? "px-3 py-1.5 rounded-xl text-xs font-bold gap-2"
+      : size === "sm"
+      ? "px-2 py-0.5 rounded-full text-[11px] font-bold gap-1.5"
+      : "px-1.5 py-0.5 rounded-full text-[10px] font-bold gap-1";
+
+  return (
+    <a
+      href={waLink(phone, name, message)}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`${displayPhone} — WhatsApp খুলুন (মেসেজ এডিট করা যাবে)`}
+      className={`inline-flex items-center bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition font-mono ${cls}`}
+    >
+      <WhatsAppIcon className={size === "md" ? "w-4 h-4 shrink-0" : "w-3 h-3 shrink-0"} />
+      {displayPhone}
+    </a>
+  );
+}
+
+// ============================================================================
+// DUMP PARSING HELPERS
+// ============================================================================
 function isImportDump(text?: string | null) {
   const t = String(text || "");
   return (
@@ -341,19 +395,14 @@ function extractSection(text: string, labels: string[], stopLabels: string[]) {
     if (i >= 0 && i < end) end = i;
   }
 
-  return src
-    .slice(from, end)
-    .replace(/^[\s:–—-]+/, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return src.slice(from, end).replace(/^[\s:–—-]+/, "").replace(/\s+/g, " ").trim();
 }
 
-/** Excel-এর মতো পরিষ্কার Requirement / Response / Remarks */
 function leadDisplayTexts(l: any) {
-  const storedClientReq = String(l.clientRequirement || "").trim();
-  const storedReq = String(l.requirement || "").trim();
-  const storedInsaf = String(l.insafResponse || "").trim();
-  const storedRemarks = String(l.remarks || "").trim();
+  const storedClientReq = String(l?.clientRequirement || "").trim();
+  const storedReq = String(l?.requirement || "").trim();
+  const storedInsaf = String(l?.insafResponse || "").trim();
+  const storedRemarks = String(l?.remarks || "").trim();
 
   const dump = isImportDump(storedClientReq)
     ? storedClientReq
@@ -361,7 +410,6 @@ function leadDisplayTexts(l: any) {
     ? storedReq
     : "";
 
-  // নতুন লিড — বক্সে যা লেখা, হুবহু সেটাই
   if (!dump) {
     return {
       requirement: storedClientReq || storedReq,
@@ -384,7 +432,6 @@ function leadDisplayTexts(l: any) {
     storedRemarks ||
     extractSection(dump, ["Remarks:"], ["Source notes:", "Review required:", "[অতিরিক্ত তথ্য]"]);
 
-  // dump-এর আবর্জনা বাদ
   if (
     !requirement ||
     isImportDump(requirement) ||
@@ -502,21 +549,25 @@ export function LeadsView({
   const [importingProvided, setImportingProvided] = useState(false);
   const [onlyToday, setOnlyToday] = useState(false);
 
-  // ---- Undo Delete System ----
-  const [pendingDeletes, setPendingDeletes] = useState<
-    Record<number, { lead: any; expiresAt: number }>
-  >({});
+  // ---- Undo Delete ----
+  const [pendingDeletes, setPendingDeletes] = useState<Record<number, { lead: any; expiresAt: number }>>({});
   const deleteTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const [, forceTick] = useState(0);
 
-  // কাউন্টডাউন রিফ্রেশ
+  // ---- Bulk WhatsApp ----
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [showBulkWa, setShowBulkWa] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState("");
+  const [bulkIndex, setBulkIndex] = useState(0);
+  const [bulkQueue, setBulkQueue] = useState<any[]>([]);
+  const [bulkSentIds, setBulkSentIds] = useState<number[]>([]);
+
   useEffect(() => {
     if (Object.keys(pendingDeletes).length === 0) return;
     const timer = setInterval(() => forceTick((t) => t + 1), 300);
     return () => clearInterval(timer);
   }, [pendingDeletes]);
 
-  // সব টাইমার পরিষ্কার
   useEffect(() => {
     const timers = deleteTimers.current;
     return () => {
@@ -524,7 +575,6 @@ export function LeadsView({
     };
   }, []);
 
-  // এক ক্লিকে ডিলিট — আসল ডিলিট ১০ সেকেন্ড পরে
   function softDeleteLead(lead: any) {
     const id = Number(lead.id);
     if (deleteTimers.current[id]) return;
@@ -544,7 +594,7 @@ export function LeadsView({
       try {
         await onMutate({ action: "deleteLead", leadId: id });
       } catch {
-        /* AppShell টোস্ট দেখাবে */
+        /* AppShell shows toast */
       }
     }, UNDO_WINDOW_MS);
   }
@@ -575,21 +625,17 @@ export function LeadsView({
     setPendingDeletes({});
   }
 
-  // ⌨️ Ctrl+Z / Cmd+Z
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const isUndo = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z";
       if (!isUndo) return;
-
       const el = e.target as HTMLElement | null;
       const tag = el?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || el?.isContentEditable) return;
-
       if (Object.keys(pendingDeletes).length === 0) return;
       e.preventDefault();
       undoDelete();
     }
-
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [pendingDeletes]);
@@ -634,10 +680,7 @@ export function LeadsView({
   const [filterPriority, setFilterPriority] = useState("All");
   const [filterCategory, setFilterCategory] = useState("All");
 
-  // ---- Timeline ----
   const [openLeadId, setOpenLeadId] = useState<number | null>(null);
-
-  // ---- Edit Lead Modal ----
   const [editingLead, setEditingLead] = useState<any | null>(null);
   const [editForm, setEditForm] = useState<any>(null);
 
@@ -656,9 +699,7 @@ export function LeadsView({
   // DERIVED
   // ============================================================================
   const scopedLeads = useMemo(() => {
-    // Undo-এর অপেক্ষায় থাকা লিড বাদ
     const live = allLeads.filter((l) => !pendingDeletes[Number(l.id)]);
-
     if (activeTab === "IBDC") return live.filter((l) => activeLeadCompany(l) === "IBDC");
     if (activeTab === "IREL") return live.filter((l) => activeLeadCompany(l) === "IREL");
     return live;
@@ -688,39 +729,20 @@ export function LeadsView({
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         const blob = [
-          l.name,
-          l.phone,
-          l.whatsapp,
-          l.leadCode,
-          l.location,
-          l.preferredLocation,
-          l.source,
-          l.service,
-          l.propertyType,
-          l.status,
-          l.requirement,
-          l.clientRequirement,
-          l.insafResponse,
-          l.remarks,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
+          l.name, l.phone, l.whatsapp, l.leadCode, l.location, l.preferredLocation,
+          l.source, l.service, l.propertyType, l.status, l.requirement,
+          l.clientRequirement, l.insafResponse, l.remarks,
+        ].filter(Boolean).join(" ").toLowerCase();
         if (!blob.includes(q)) return false;
       }
       return true;
     });
-  }, [
-    scopedLeads,
-    filterSource,
-    filterStatus,
-    filterPriority,
-    filterCategory,
-    searchTerm,
-    activeTab,
-    onlyToday,
-    today,
-  ]);
+  }, [scopedLeads, filterSource, filterStatus, filterPriority, filterCategory, searchTerm, activeTab, onlyToday, today]);
+
+  const selectedLeads = useMemo(
+    () => filteredLeads.filter((l) => selectedIds.includes(Number(l.id))),
+    [filteredLeads, selectedIds]
+  );
 
   const todayLeadCount = useMemo(
     () => scopedLeads.filter((l) => leadCreatedYmd(l) === today).length,
@@ -733,10 +755,7 @@ export function LeadsView({
     const lost = scopedLeads.filter((l) => l.status === "Lost" || l.priority === "Lost").length;
     const hot = scopedLeads.filter((l) => l.priority === "Hot").length;
     const active = scopedLeads.filter(
-      (l) =>
-        !["Won", "Converted", "On Hold"].includes(l.status) &&
-        l.status !== "Lost" &&
-        l.priority !== "Lost"
+      (l) => !["Won", "Converted", "On Hold"].includes(l.status) && l.status !== "Lost" && l.priority !== "Lost"
     ).length;
     const rate = total > 0 ? ((converted / total) * 100).toFixed(1) : "0.0";
 
@@ -749,11 +768,7 @@ export function LeadsView({
 
     const serviceTallied = tally(scopedLeads.map(categoryOfLead));
     const cats =
-      activeTab === "IREL"
-        ? [...IREL_PROPERTY_TYPES]
-        : activeTab === "IBDC"
-        ? [...IBDC_SERVICES]
-        : null;
+      activeTab === "IREL" ? [...IREL_PROPERTY_TYPES] : activeTab === "IBDC" ? [...IBDC_SERVICES] : null;
     const serviceItems = cats
       ? cats.map((c) => serviceTallied.find((x) => x.label === c) || { label: c, count: 0 })
       : serviceTallied;
@@ -789,8 +804,7 @@ export function LeadsView({
         const lastContactDate = normalizeYmd(l.lastContactDate || last?.date || l.updatedAt || l.createdAt || l.leadDate);
         const assignedName =
           (l.assignedStaffId ? employeeNameById.get(Number(l.assignedStaffId)) : "") ||
-          l.assignedStaffName ||
-          "অনির্ধারিত";
+          l.assignedStaffName || "অনির্ধারিত";
 
         return {
           leadId: l.id,
@@ -813,20 +827,13 @@ export function LeadsView({
           lastOutcome: last?.outcome || "",
         };
       })
-      .sort((a, b) => {
-        const aa = a.nextFollowUpDate || "9999-12-31";
-        const bb = b.nextFollowUpDate || "9999-12-31";
-        return aa.localeCompare(bb);
-      });
+      .sort((a, b) => (a.nextFollowUpDate || "9999-12-31").localeCompare(b.nextFollowUpDate || "9999-12-31"));
   }, [scopedLeads, fuByLead, today, employeeNameById]);
 
   const boardToday = useMemo(() => derivedBoardRows.filter((r) => r.bucket === "Today"), [derivedBoardRows]);
   const boardOverdue = useMemo(() => derivedBoardRows.filter((r) => r.bucket === "Overdue"), [derivedBoardRows]);
   const boardUpcoming = useMemo(
-    () =>
-      derivedBoardRows.filter((r) =>
-        ["Tomorrow", "Next 3 Days", "Next 7 Days", "Later"].includes(r.bucket)
-      ),
+    () => derivedBoardRows.filter((r) => ["Tomorrow", "Next 3 Days", "Next 7 Days", "Later"].includes(r.bucket)),
     [derivedBoardRows]
   );
 
@@ -834,48 +841,35 @@ export function LeadsView({
     () => scopedLeads.filter((l) => (fuByLead.get(l.id) || []).length === 0),
     [scopedLeads, fuByLead]
   );
-
   const managementMultipleFU = useMemo(
     () => scopedLeads.filter((l) => (fuByLead.get(l.id) || []).length > 1),
     [scopedLeads, fuByLead]
   );
-
   const managementNoResponse = useMemo(
-    () =>
-      scopedLeads.filter((l) => {
-        const fus = fuByLead.get(l.id) || [];
-        const last = fus[fus.length - 1];
-        return l.status === "No Response" || last?.outcome === "No Response";
-      }),
+    () => scopedLeads.filter((l) => {
+      const fus = fuByLead.get(l.id) || [];
+      const last = fus[fus.length - 1];
+      return l.status === "No Response" || last?.outcome === "No Response";
+    }),
     [scopedLeads, fuByLead]
   );
-
   const managementAwaitingClient = useMemo(
-    () =>
-      scopedLeads.filter((l) => {
-        const fus = fuByLead.get(l.id) || [];
-        const last = fus[fus.length - 1];
-        if (!last) return false;
-        return ["Contacted", "Interested", "Need More Information", "Quotation Sent", "Negotiating", "Call Back Later"].includes(last.outcome);
-      }),
+    () => scopedLeads.filter((l) => {
+      const fus = fuByLead.get(l.id) || [];
+      const last = fus[fus.length - 1];
+      if (!last) return false;
+      return ["Contacted", "Interested", "Need More Information", "Quotation Sent", "Negotiating", "Call Back Later"].includes(last.outcome);
+    }),
     [scopedLeads, fuByLead]
   );
-
   const managementNoNextFU = useMemo(
-    () =>
-      scopedLeads.filter(
-        (l) =>
-          !normalizeYmd(l.nextFollowUpDate) &&
-          !["Won", "Converted", "Lost", "On Hold"].includes(l.status) &&
-          l.priority !== "Lost"
-      ),
+    () => scopedLeads.filter(
+      (l) => !normalizeYmd(l.nextFollowUpDate) &&
+        !["Won", "Converted", "Lost", "On Hold"].includes(l.status) && l.priority !== "Lost"
+    ),
     [scopedLeads]
   );
-
-  const managementOnHold = useMemo(
-    () => scopedLeads.filter((l) => l.status === "On Hold"),
-    [scopedLeads]
-  );
+  const managementOnHold = useMemo(() => scopedLeads.filter((l) => l.status === "On Hold"), [scopedLeads]);
 
   const boardSummary = useMemo(() => {
     const completedToday = followUps.filter((f) => {
@@ -894,32 +888,13 @@ export function LeadsView({
       leadsWithNoResponse: managementNoResponse.length,
       activeLeads: dashStats.active,
     };
-  }, [
-    boardToday.length,
-    boardOverdue.length,
-    boardUpcoming.length,
-    followUps,
-    allLeads,
-    activeTab,
-    today,
-    managementNoNextFU.length,
-    managementNoResponse.length,
-    dashStats.active,
-  ]);
+  }, [boardToday.length, boardOverdue.length, boardUpcoming.length, followUps, allLeads, activeTab, today, managementNoNextFU.length, managementNoResponse.length, dashStats.active]);
 
   const staffPerformanceScoped = useMemo(() => {
     const map = new Map<string, any>();
-
     const ensure = (staffId: string, staffName: string) => {
       if (!map.has(staffId)) {
-        map.set(staffId, {
-          staffId,
-          staffName,
-          activeLeads: 0,
-          todaysFollowUps: 0,
-          totalFollowUps: 0,
-          overdueFollowUps: 0,
-        });
+        map.set(staffId, { staffId, staffName, activeLeads: 0, todaysFollowUps: 0, totalFollowUps: 0, overdueFollowUps: 0 });
       }
       return map.get(staffId);
     };
@@ -928,12 +903,9 @@ export function LeadsView({
       const sid = String(l.assignedStaffId || "unassigned");
       const sname =
         (l.assignedStaffId ? employeeNameById.get(Number(l.assignedStaffId)) : "") ||
-        l.assignedStaffName ||
-        "অনির্ধারিত";
+        l.assignedStaffName || "অনির্ধারিত";
       const row = ensure(sid, sname);
-      if (!["Won", "Converted", "Lost", "On Hold"].includes(l.status) && l.priority !== "Lost") {
-        row.activeLeads += 1;
-      }
+      if (!["Won", "Converted", "Lost", "On Hold"].includes(l.status) && l.priority !== "Lost") row.activeLeads += 1;
       row.totalFollowUps += (fuByLead.get(l.id) || []).length;
     });
 
@@ -941,7 +913,6 @@ export function LeadsView({
       const row = ensure(String(r.assignedStaffName || "unassigned"), r.assignedStaffName || "অনির্ধারিত");
       row.todaysFollowUps += 1;
     });
-
     boardOverdue.forEach((r) => {
       const row = ensure(String(r.assignedStaffName || "unassigned"), r.assignedStaffName || "অনির্ধারিত");
       row.overdueFollowUps += 1;
@@ -955,6 +926,64 @@ export function LeadsView({
   const closedOutcome = CLOSED_FU.includes(fuOutcome);
 
   // ============================================================================
+  // BULK WHATSAPP ACTIONS
+  // ============================================================================
+  function toggleSelect(id: number) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function toggleSelectAllVisible() {
+    const ids = filteredLeads.map((l) => Number(l.id));
+    const allOn = ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+    setSelectedIds(allOn ? [] : ids.slice(0, BULK_WA_LIMIT));
+  }
+
+  function openBulkWa(leadsToSend: any[], template: "followup" | "reminder" | "quotation" | "custom") {
+    const withPhone = (leadsToSend || []).filter((l) => l && normalizePhoneForWa(l.phone));
+    if (withPhone.length === 0) {
+      alert("সিলেক্ট করা লিডে কোনো বৈধ ফোন নম্বর নেই।");
+      return;
+    }
+    const capped = withPhone.slice(0, BULK_WA_LIMIT);
+
+    let msg = bulkMessage;
+    if (template === "followup") msg = defaultFollowUpMessage(capped[0]).replace(capped[0]?.name || "", "{name}");
+    if (template === "reminder") msg = defaultReminderMessage(capped[0]).replace(capped[0]?.name || "", "{name}");
+    if (template === "quotation") msg = defaultQuotationMessage(capped[0]).replace(capped[0]?.name || "", "{name}");
+    if (template === "custom" && !msg.trim()) {
+      msg = `আসসালামু আলাইকুম {name},\n\nINSAF থেকে কথা বলছি। আপনার {service} বিষয়ে একটু আপডেট দিলে ভালো হতো।\n\nধন্যবাদ।`;
+    }
+
+    setBulkQueue(capped);
+    setBulkIndex(0);
+    setBulkSentIds([]);
+    setBulkMessage(msg);
+    setShowBulkWa(true);
+  }
+
+  function openCurrentBulkChat() {
+    const lead = bulkQueue[bulkIndex];
+    if (!lead) return;
+    const personalized = personalizeMessage(bulkMessage, lead);
+    window.open(waLink(lead.phone, lead.name, personalized), "_blank", "noopener,noreferrer");
+    setBulkSentIds((prev) => (prev.includes(Number(lead.id)) ? prev : [...prev, Number(lead.id)]));
+  }
+
+  function bulkNext() {
+    if (bulkIndex + 1 >= bulkQueue.length) {
+      setShowBulkWa(false);
+      setBulkQueue([]);
+      setBulkIndex(0);
+      return;
+    }
+    setBulkIndex((i) => i + 1);
+  }
+
+  function bulkPrev() {
+    setBulkIndex((i) => Math.max(0, i - 1));
+  }
+
+  // ============================================================================
   // ACTIONS
   // ============================================================================
   function switchTab(tab: CompanyTab) {
@@ -965,6 +994,8 @@ export function LeadsView({
     setFilterCategory("All");
     setSearchTerm("");
     setOnlyToday(false);
+    setSelectedIds([]);
+    setShowBulkWa(false);
     if (tab === "IREL") setFormCompany("IREL");
     else if (tab === "IBDC") setFormCompany("IBDC");
   }
@@ -1002,11 +1033,11 @@ export function LeadsView({
       attachment: fuAttachment,
       newStatus: fuNewStatus || undefined,
     });
-    if (!result?.success) return;
+    if (result?.error) return;
     setFuLeadId(null);
   }
 
-    async function handleCreateLead(e: React.FormEvent) {
+  async function handleCreateLead(e: React.FormEvent) {
     e.preventDefault();
 
     const payload: Record<string, unknown> = {
@@ -1022,8 +1053,6 @@ export function LeadsView({
       status: leadStatus,
       assignedStaffId: assignedStaffId ? Number(assignedStaffId) : null,
       nextFollowUpDate: nextFollowUpInput || today,
-
-      // ✅ নতুন ফিল্ড — এগুলো থাকা জরুরি
       insafResponse: String(insafResponse || ""),
       remarks: String(leadRemarks || ""),
       reminder1: String(reminder1Input || ""),
@@ -1032,14 +1061,11 @@ export function LeadsView({
       leadDate: leadDate || today,
     };
 
-    // অতিরিক্ত ফিল্ড — requirement-এ যোগ
     const customFieldLines = customLeadFields
-      .map((field) => ({ label: field.label.trim(), value: field.value.trim() }))
-      .filter((field) => field.label && field.value)
-      .map((field) => `${field.label}: ${field.value}`);
-    const customFieldBlock = customFieldLines.length
-      ? `\n\n[অতিরিক্ত তথ্য]\n${customFieldLines.join("\n")}`
-      : "";
+      .map((f) => ({ label: f.label.trim(), value: f.value.trim() }))
+      .filter((f) => f.label && f.value)
+      .map((f) => `${f.label}: ${f.value}`);
+    const customFieldBlock = customFieldLines.length ? `\n\n[অতিরিক্ত তথ্য]\n${customFieldLines.join("\n")}` : "";
 
     if (formCompany === "IBDC") {
       payload.service = service;
@@ -1065,7 +1091,6 @@ export function LeadsView({
     setActiveTab(formCompany);
     setViewMode("cards");
 
-    // ফর্ম রিসেট
     setLeadDate(today);
     setName("");
     setPhone("");
@@ -1098,7 +1123,6 @@ export function LeadsView({
             activeLeadCompany(l) === seed.companyId
         );
         if (exists) continue;
-
         await onMutate({
           action: "createLead",
           companyId: seed.companyId,
@@ -1159,7 +1183,7 @@ export function LeadsView({
     });
   }
 
-      async function saveEditedLead(e: React.FormEvent) {
+  async function saveEditedLead(e: React.FormEvent) {
     e.preventDefault();
     if (!editingLead || !editForm) return;
 
@@ -1179,8 +1203,6 @@ export function LeadsView({
       status: editForm.status || "New",
       assignedStaffId: editForm.assignedStaffId ? Number(editForm.assignedStaffId) : null,
       nextFollowUpDate: editForm.nextFollowUpDate || null,
-
-      // ✅ নতুন ফিল্ড — এগুলো থাকা জরুরি
       insafResponse: String(editForm.insafResponse || ""),
       remarks: String(editForm.remarks || ""),
       reminder1: String(editForm.reminder1 || ""),
@@ -1216,42 +1238,32 @@ export function LeadsView({
 
   async function handleExport(kind: "csv" | "xlsx" | "pdf") {
     const headers = [
-      "Lead ID",
-      "Date",
-      "Client Name",
-      "Contact No",
-      "Location",
-      "Source",
-      "Service Type",
-      "Priority",
-      "Status",
-      "Client Requirement",
-      "Insaf Response",
-      "Remarks",
-      "Next Follow-up",
-      "Reminder 1",
-      "Reminder 2",
-      "Reminder 3",
+      "Lead ID", "Date", "Client Name", "Contact No", "Location", "Source",
+      "Service Type", "Priority", "Status", "Client Requirement", "Insaf Response",
+      "Remarks", "Next Follow-up", "Reminder 1", "Reminder 2", "Reminder 3",
     ];
 
-    const rows: string[][] = filteredLeads.map((l) => [
-      String(l.leadCode || l.id || ""),
-      fmtISO(l.leadDate || l.createdAt || l.date),
-      String(l.name || ""),
-      String(l.phone || ""),
-      String(l.location || l.preferredLocation || ""),
-      String(l.source || ""),
-      String(categoryOfLead(l)),
-      String(l.priority || ""),
-      String(l.status || ""),
-      leadDisplayTexts(l).requirement,
-leadDisplayTexts(l).insafResponse,
-leadDisplayTexts(l).remarks,
-      String(l.nextFollowUpDate || ""),
-      String(l.reminder1 || ""),
-      String(l.reminder2 || ""),
-      String(l.reminder3 || ""),
-    ]);
+    const rows: string[][] = filteredLeads.map((l) => {
+      const texts = leadDisplayTexts(l);
+      return [
+        String(l.leadCode || l.id || ""),
+        fmtISO(l.leadDate || l.createdAt || l.date),
+        String(l.name || ""),
+        String(l.phone || ""),
+        String(l.location || l.preferredLocation || ""),
+        String(l.source || ""),
+        String(categoryOfLead(l)),
+        String(l.priority || ""),
+        String(l.status || ""),
+        String(texts.requirement || ""),
+        String(texts.insafResponse || ""),
+        String(texts.remarks || ""),
+        String(l.nextFollowUpDate || ""),
+        String(l.reminder1 || ""),
+        String(l.reminder2 || ""),
+        String(l.reminder3 || ""),
+      ];
+    });
 
     const exportRows = rows.map((row) =>
       Object.fromEntries(headers.map((heading, index) => [heading, row[index] ?? ""]))
@@ -1262,6 +1274,8 @@ leadDisplayTexts(l).remarks,
   }
 
   const pendingCount = Object.keys(pendingDeletes).length;
+  const allVisibleSelected =
+    filteredLeads.length > 0 && filteredLeads.every((l) => selectedIds.includes(Number(l.id)));
 
   // ============================================================================
   // RENDER
@@ -1278,47 +1292,30 @@ leadDisplayTexts(l).remarks,
             <div>
               <h1 className="text-lg font-bold text-white">Leads & CRM Management</h1>
               <p className="text-xs text-slate-400">
-                Dual Business Unit • One-Click Delete • Ctrl+Z Undo • Dashboard Auto Update
+                Dual Business Unit • Bulk WhatsApp • One-Click Delete • Ctrl+Z Undo
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={importProvidedLeads}
-              disabled={true}
-              className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-xs font-bold inline-flex items-center gap-1.5"
-            >
-              <Download className="w-3.5 h-3.5" />
-              {"Sample Import Disabled (Production Safety)"}
+            <button type="button" onClick={importProvidedLeads} disabled={true}
+              className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-xs font-bold inline-flex items-center gap-1.5">
+              <Download className="w-3.5 h-3.5" /> Sample Import Disabled
             </button>
-            <button
-              type="button"
-              onClick={() => handleExport("xlsx")}
-              className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold inline-flex items-center gap-1.5"
-            >
+            <button type="button" onClick={() => handleExport("xlsx")}
+              className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold inline-flex items-center gap-1.5">
               <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
             </button>
-            <button
-              type="button"
-              onClick={() => handleExport("csv")}
-              className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold inline-flex items-center gap-1.5"
-            >
+            <button type="button" onClick={() => handleExport("csv")}
+              className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold inline-flex items-center gap-1.5">
               <Download className="w-3.5 h-3.5" /> CSV
             </button>
-            <button
-              type="button"
-              onClick={() => handleExport("pdf")}
-              className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold inline-flex items-center gap-1.5"
-            >
+            <button type="button" onClick={() => handleExport("pdf")}
+              className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold inline-flex items-center gap-1.5">
               <Printer className="w-3.5 h-3.5" /> Print
             </button>
-            <button
-              type="button"
-              onClick={() => onMutate({ action: "sendFollowUpReminders" })}
-              className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold inline-flex items-center gap-1.5"
-            >
+            <button type="button" onClick={() => onMutate({ action: "sendFollowUpReminders" })}
+              className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold inline-flex items-center gap-1.5">
               <RefreshCw className="w-3.5 h-3.5" /> Reminders
             </button>
           </div>
@@ -1328,50 +1325,22 @@ leadDisplayTexts(l).remarks,
       {/* COMPANY TABS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {([
-          {
-            id: "IBDC" as CompanyTab,
-            label: "IBDC",
-            sub: "Building Design • RAJUK • Engineering",
-            activeCls: "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-100",
-            badgeCls: "bg-emerald-600",
-          },
-          {
-            id: "IREL" as CompanyTab,
-            label: "IREL",
-            sub: "Flat • Shop • Land • Investment",
-            activeCls: "border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100",
-            badgeCls: "bg-indigo-600",
-          },
-          {
-            id: "ALL" as CompanyTab,
-            label: "ALL",
-            sub: "Combined View",
-            activeCls: "border-slate-800 bg-slate-50 ring-2 ring-slate-200",
-            badgeCls: "bg-slate-900",
-          },
+          { id: "IBDC" as CompanyTab, label: "IBDC", sub: "Building Design • RAJUK • Engineering", activeCls: "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-100", badgeCls: "bg-emerald-600" },
+          { id: "IREL" as CompanyTab, label: "IREL", sub: "Flat • Shop • Land • Investment", activeCls: "border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100", badgeCls: "bg-indigo-600" },
+          { id: "ALL" as CompanyTab, label: "ALL", sub: "Combined View", activeCls: "border-slate-800 bg-slate-50 ring-2 ring-slate-200", badgeCls: "bg-slate-900" },
         ]).map((tab) => {
           const live = allLeads.filter((l) => !pendingDeletes[Number(l.id)]);
           const count =
-            tab.id === "IBDC"
-              ? live.filter((l) => activeLeadCompany(l) === "IBDC").length
-              : tab.id === "IREL"
-              ? live.filter((l) => activeLeadCompany(l) === "IREL").length
-              : live.length;
+            tab.id === "IBDC" ? live.filter((l) => activeLeadCompany(l) === "IBDC").length
+            : tab.id === "IREL" ? live.filter((l) => activeLeadCompany(l) === "IREL").length
+            : live.length;
           const isActive = activeTab === tab.id;
           return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => switchTab(tab.id)}
-              className={`text-left p-4 rounded-2xl border-2 transition ${
-                isActive ? tab.activeCls : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
-              }`}
-            >
+            <button key={tab.id} type="button" onClick={() => switchTab(tab.id)}
+              className={`text-left p-4 rounded-2xl border-2 transition ${isActive ? tab.activeCls : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"}`}>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-bold text-slate-900">{tab.label}</span>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold text-white ${tab.badgeCls}`}>
-                  {count}
-                </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold text-white ${tab.badgeCls}`}>{count}</span>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">{tab.sub}</p>
             </button>
@@ -1384,10 +1353,8 @@ leadDisplayTexts(l).remarks,
         <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-600 text-white py-3 px-5 flex items-center gap-2">
           <BarChart3 className="w-4 h-4" />
           <h2 className="text-sm font-bold tracking-wide">
-            {activeTab === "IBDC"
-              ? "INSAF BUILDING DESIGN — LEAD DASHBOARD"
-              : activeTab === "IREL"
-              ? "INSAF REAL ESTATE — LEAD DASHBOARD"
+            {activeTab === "IBDC" ? "INSAF BUILDING DESIGN — LEAD DASHBOARD"
+              : activeTab === "IREL" ? "INSAF REAL ESTATE — LEAD DASHBOARD"
               : "ALL COMPANIES — LEAD DASHBOARD"}
           </h2>
         </div>
@@ -1404,39 +1371,28 @@ leadDisplayTexts(l).remarks,
         <div className="grid grid-cols-1 lg:grid-cols-2 border-t border-slate-100">
           <div className="p-5 border-b lg:border-b-0 lg:border-r border-slate-100">
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-1.5">
-              <PieChart className="w-3.5 h-3.5" />
-              Leads by Source
+              <PieChart className="w-3.5 h-3.5" /> Leads by Source
             </h3>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6 min-h-[220px]">
-              <PieChartSVG
-                items={dashStats.sourceItems
-                  .filter((s) => s.count > 0)
-                  .map((s, i) => ({ ...s, color: colorForLabel(s.label, i) }))}
-              />
+              <PieChartSVG items={dashStats.sourceItems.filter((s) => s.count > 0).map((s, i) => ({ ...s, color: colorForLabel(s.label, i) }))} />
               <div className="flex flex-col gap-1.5 text-[11px] w-full max-w-[180px]">
                 {dashStats.sourceItems.filter((s) => s.count > 0).map((s, i) => (
                   <div key={s.label} className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-2 min-w-0">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: colorForLabel(s.label, i) }}
-                      />
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorForLabel(s.label, i) }} />
                       <span className="truncate text-slate-700">{s.label}</span>
                     </span>
                     <span className="font-bold text-slate-900 tabular-nums">{s.count}</span>
                   </div>
                 ))}
-                {dashStats.sourceItems.every((s) => s.count === 0) && (
-                  <p className="text-slate-400 text-center">No data yet</p>
-                )}
+                {dashStats.sourceItems.every((s) => s.count === 0) && <p className="text-slate-400 text-center">No data yet</p>}
               </div>
             </div>
           </div>
 
           <div className="p-5">
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-1.5">
-              <BarChart3 className="w-3.5 h-3.5" />
-              Leads by {activeTab === "IREL" ? "Property Type" : "Service"}
+              <BarChart3 className="w-3.5 h-3.5" /> Leads by {activeTab === "IREL" ? "Property Type" : "Service"}
             </h3>
             <ServiceBarChart items={dashStats.serviceItems} />
           </div>
@@ -1447,26 +1403,34 @@ leadDisplayTexts(l).remarks,
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <Repeat className="w-4 h-4 text-emerald-600" />
-            ফলো-আপ কমান্ড বোর্ড
+            <Repeat className="w-4 h-4 text-emerald-600" /> ফলো-আপ কমান্ড বোর্ড
           </h2>
 
           <div className="flex flex-wrap gap-1">
             {(["Today", "Overdue", "Upcoming", "Management"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setBoardTab(t)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  boardTab === t ? "bg-slate-900 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
+              <button key={t} type="button" onClick={() => setBoardTab(t)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${boardTab === t ? "bg-slate-900 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
                 {t}
                 {t === "Today" && ` (${boardSummary.todaysFollowUps})`}
                 {t === "Overdue" && ` (${boardSummary.overdueFollowUps})`}
                 {t === "Upcoming" && ` (${boardSummary.upcomingFollowUps})`}
               </button>
             ))}
+
+            {boardTab === "Today" && boardToday.length > 0 && (
+              <button type="button"
+                onClick={() => openBulkWa(boardToday.map((r) => allLeads.find((l) => l.id === r.leadId)).filter(Boolean) as any[], "followup")}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold inline-flex items-center gap-1">
+                <WhatsAppIcon /> আজকের FU WhatsApp ({boardToday.length})
+              </button>
+            )}
+            {boardTab === "Overdue" && boardOverdue.length > 0 && (
+              <button type="button"
+                onClick={() => openBulkWa(boardOverdue.map((r) => allLeads.find((l) => l.id === r.leadId)).filter(Boolean) as any[], "reminder")}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold inline-flex items-center gap-1">
+                <WhatsAppIcon /> Overdue রিমাইন্ডার ({boardOverdue.length})
+              </button>
+            )}
           </div>
         </div>
 
@@ -1511,11 +1475,7 @@ leadDisplayTexts(l).remarks,
                     </tr>
                   ))}
                   {staffPerformanceScoped.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="p-4 text-center text-slate-400">
-                        ডাটা নেই
-                      </td>
-                    </tr>
+                    <tr><td colSpan={5} className="p-4 text-center text-slate-400">ডাটা নেই</td></tr>
                   )}
                 </tbody>
               </table>
@@ -1547,76 +1507,44 @@ leadDisplayTexts(l).remarks,
                 </tr>
               </thead>
               <tbody>
-                {(boardTab === "Today"
-                  ? boardToday
-                  : boardTab === "Overdue"
-                  ? boardOverdue
-                  : boardUpcoming
-                ).map((r: any) => (
-                  <tr key={r.leadId} className="border-b border-slate-100 hover:bg-emerald-50/30">
-                    <td className="p-2.5">
-                      <button
-                        type="button"
-                        onClick={() => setOpenLeadId(r.leadId)}
-                        className="text-left"
-                      >
-                        <span className="font-bold text-slate-900 hover:text-emerald-700">
-                          {r.clientName}
-                        </span>
-                        <span className="block text-[10px] text-slate-400 font-mono">
-                          {r.leadCode}
-                        </span>
-                      </button>
-                    </td>
-                    <td className="p-2.5 font-mono text-[11px]">{r.phone}</td>
-                    <td className="p-2.5 text-[11px]">
-                      {r.category}
-                      {r.projectName ? ` • ${r.projectName}` : ""}
-                    </td>
-                    <td className="p-2.5 text-[11px]">{r.assignedStaffName || "—"}</td>
-                    <td className="p-2.5 text-[11px]">
-                      {fmtDate(r.lastContactDate)}
-                      <span className="block text-slate-400">
-                        {r.daysSinceLastContact != null ? `${r.daysSinceLastContact}d ago` : "never"}
-                      </span>
-                    </td>
-                    <td className="p-2.5 text-[11px]">
-                      {fmtDate(r.nextFollowUpDate)} {r.nextFollowUpTime}
-                      {r.bucket === "Overdue" && (
-                        <span className="block text-rose-600 font-bold">
-                          🔴 {r.daysOverdue}d late
-                        </span>
-                      )}
-                      {r.bucket === "Today" && (
-                        <span className="block text-amber-600 font-bold">TODAY</span>
-                      )}
-                    </td>
-                    <td className="p-2.5 text-center">
-                      <span className={`inline-block w-2 h-2 rounded-full ${priorityStyle(r.priority).dot}`} />
-                    </td>
-                    <td className="p-2.5 text-center font-semibold">{r.totalFollowUps}</td>
-                    <td className="p-2.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => openFollowUpModal(r.leadId)}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold"
-                      >
-                        + FU
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {(boardTab === "Today"
-                  ? boardToday
-                  : boardTab === "Overdue"
-                  ? boardOverdue
-                  : boardUpcoming
-                ).length === 0 && (
-                  <tr>
-                    <td colSpan={9} className="p-6 text-center text-slate-400">
-                      এই তালিকায় লিড নেই ✓
-                    </td>
-                  </tr>
+                {(boardTab === "Today" ? boardToday : boardTab === "Overdue" ? boardOverdue : boardUpcoming).map((r: any) => {
+                  const leadObj = allLeads.find((l) => l.id === r.leadId);
+                  return (
+                    <tr key={r.leadId} className="border-b border-slate-100 hover:bg-emerald-50/30">
+                      <td className="p-2.5">
+                        <button type="button" onClick={() => setOpenLeadId(r.leadId)} className="text-left">
+                          <span className="font-bold text-slate-900 hover:text-emerald-700">{r.clientName}</span>
+                          <span className="block text-[10px] text-slate-400 font-mono">{r.leadCode}</span>
+                        </button>
+                      </td>
+                      <td className="p-2.5 whitespace-nowrap">
+                        <PhoneWhatsApp phone={r.phone} name={r.clientName} size="xs"
+                          message={leadObj ? (r.bucket === "Overdue" ? defaultReminderMessage(leadObj) : defaultFollowUpMessage(leadObj)) : undefined} />
+                      </td>
+                      <td className="p-2.5 text-[11px]">{r.category}{r.projectName ? ` • ${r.projectName}` : ""}</td>
+                      <td className="p-2.5 text-[11px]">{r.assignedStaffName || "—"}</td>
+                      <td className="p-2.5 text-[11px]">
+                        {fmtDate(r.lastContactDate)}
+                        <span className="block text-slate-400">{r.daysSinceLastContact != null ? `${r.daysSinceLastContact}d ago` : "never"}</span>
+                      </td>
+                      <td className="p-2.5 text-[11px]">
+                        {fmtDate(r.nextFollowUpDate)} {r.nextFollowUpTime}
+                        {r.bucket === "Overdue" && <span className="block text-rose-600 font-bold">🔴 {r.daysOverdue}d late</span>}
+                        {r.bucket === "Today" && <span className="block text-amber-600 font-bold">TODAY</span>}
+                      </td>
+                      <td className="p-2.5 text-center">
+                        <span className={`inline-block w-2 h-2 rounded-full ${priorityStyle(r.priority).dot}`} />
+                      </td>
+                      <td className="p-2.5 text-center font-semibold">{r.totalFollowUps}</td>
+                      <td className="p-2.5 text-center">
+                        <button type="button" onClick={() => openFollowUpModal(r.leadId)}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold">+ FU</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {(boardTab === "Today" ? boardToday : boardTab === "Overdue" ? boardOverdue : boardUpcoming).length === 0 && (
+                  <tr><td colSpan={9} className="p-6 text-center text-slate-400">এই তালিকায় লিড নেই ✓</td></tr>
                 )}
               </tbody>
             </table>
@@ -1626,114 +1554,92 @@ leadDisplayTexts(l).remarks,
 
       {/* LEAD LIST + NEW LEAD FORM */}
       <div className={`grid grid-cols-1 gap-5 ${viewMode === "sheet" ? "" : "lg:grid-cols-12"}`}>
-        {/* LEFT */}
         <div className={`${viewMode === "sheet" ? "" : "lg:col-span-8"} space-y-3`}>
           {/* FILTER BAR */}
           <div className="bg-white p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center gap-2 shadow-sm">
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search…"
-                className="pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs w-40 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-              />
+              <input type="search" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search…"
+                className="pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs w-40 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500" />
             </div>
 
-            <button
-              type="button"
-              onClick={() => setOnlyToday((v) => !v)}
-              className={`px-2.5 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border-2 transition ${
-                onlyToday
-                  ? "bg-emerald-500 border-emerald-600 text-slate-950"
-                  : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-              }`}
-            >
-              <CalendarDays className="w-3.5 h-3.5" />
-              আজকের লিড ({todayLeadCount})
+            <button type="button" onClick={() => setOnlyToday((v) => !v)}
+              className={`px-2.5 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border-2 transition ${onlyToday ? "bg-emerald-500 border-emerald-600 text-slate-950" : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"}`}>
+              <CalendarDays className="w-3.5 h-3.5" /> আজকের লিড ({todayLeadCount})
             </button>
 
             <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="px-2.5 py-2 rounded-xl border border-slate-200 text-xs bg-white">
               <option value="All">সকল Source</option>
-              {LEAD_SOURCES.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
+              {LEAD_SOURCES.map((s) => <option key={s}>{s}</option>)}
             </select>
 
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-2.5 py-2 rounded-xl border border-slate-200 text-xs bg-white">
               <option value="All">সকল Status</option>
-              {LEAD_STATUSES_FULL.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
+              {LEAD_STATUSES_FULL.map((s) => <option key={s}>{s}</option>)}
             </select>
 
             <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="px-2.5 py-2 rounded-xl border border-slate-200 text-xs bg-white">
               <option value="All">সকল Priority</option>
-              {LEAD_PRIORITY_OPTIONS.map((p) => (
-                <option key={p}>{p}</option>
-              ))}
+              {LEAD_PRIORITY_OPTIONS.map((p) => <option key={p}>{p}</option>)}
             </select>
 
             {activeTab !== "ALL" && (
               <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="px-2.5 py-2 rounded-xl border border-slate-200 text-xs bg-white">
                 <option value="All">All {activeTab === "IREL" ? "Property" : "Service"}</option>
-                {(activeTab === "IREL" ? IREL_PROPERTY_TYPES : IBDC_SERVICES).map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
+                {(activeTab === "IREL" ? IREL_PROPERTY_TYPES : IBDC_SERVICES).map((c) => <option key={c}>{c}</option>)}
               </select>
             )}
 
-            <button
-              type="button"
+            <button type="button"
               onClick={() => {
-                setFilterSource("All");
-                setFilterStatus("All");
-                setFilterPriority("All");
-                setFilterCategory("All");
-                setSearchTerm("");
-                setOnlyToday(false);
+                setFilterSource("All"); setFilterStatus("All"); setFilterPriority("All");
+                setFilterCategory("All"); setSearchTerm(""); setOnlyToday(false); setSelectedIds([]);
               }}
-              className="px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold"
-            >
+              className="px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold">
               Reset
             </button>
 
+            <button type="button" onClick={toggleSelectAllVisible}
+              className="px-2.5 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-bold">
+              {allVisibleSelected ? "✓ সব আনসিলেক্ট" : `সব সিলেক্ট (ম্যাক্স ${BULK_WA_LIMIT})`}
+            </button>
+
+            {selectedIds.length > 0 && (
+              <>
+                <button type="button" onClick={() => openBulkWa(selectedLeads, "custom")}
+                  className="px-2.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold inline-flex items-center gap-1.5">
+                  <WhatsAppIcon className="w-3.5 h-3.5" /> WhatsApp পাঠান ({Math.min(selectedIds.length, BULK_WA_LIMIT)})
+                </button>
+                <span className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
+                  {selectedIds.length} সিলেক্টেড
+                </span>
+              </>
+            )}
+
             {pendingCount > 0 && (
-              <button
-                type="button"
-                onClick={undoAllDeletes}
-                className="px-2.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold inline-flex items-center gap-1.5"
-              >
+              <button type="button" onClick={undoAllDeletes}
+                className="px-2.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold inline-flex items-center gap-1.5">
                 <Undo2 className="w-3.5 h-3.5" /> সব ফেরান ({pendingCount})
               </button>
             )}
 
             <div className="ml-auto flex items-center gap-0.5 bg-slate-100 rounded-xl p-0.5">
-              <button
-                type="button"
-                onClick={() => setViewMode("cards")}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold ${viewMode === "cards" ? "bg-white shadow-sm text-slate-900" : "text-slate-500"}`}
-              >
-                Cards
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("sheet")}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold ${viewMode === "sheet" ? "bg-white shadow-sm text-slate-900" : "text-slate-500"}`}
-              >
-                Sheet
-              </button>
+              <button type="button" onClick={() => setViewMode("cards")}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold ${viewMode === "cards" ? "bg-white shadow-sm text-slate-900" : "text-slate-500"}`}>Cards</button>
+              <button type="button" onClick={() => setViewMode("sheet")}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold ${viewMode === "sheet" ? "bg-white shadow-sm text-slate-900" : "text-slate-500"}`}>Sheet</button>
             </div>
           </div>
 
-                    {/* LEADS */}
+          {/* LEADS */}
           {viewMode === "sheet" ? (
             <LeadSheetTable
               leads={filteredLeads}
               fuByLead={fuByLead}
               openLeadId={openLeadId}
               today={today}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
               onOpenLead={(id) => setOpenLeadId(id === openLeadId ? null : id)}
               onFollowUp={openFollowUpModal}
               onEdit={openEditModal}
@@ -1750,150 +1656,93 @@ leadDisplayTexts(l).remarks,
                 const PIcon = pStyle.Icon;
                 const isToday = leadCreatedYmd(l) === today;
                 const texts = leadDisplayTexts(l);
+                const isSelected = selectedIds.includes(Number(l.id));
 
                 return (
-                  <div
-                    key={l.id}
-                    className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-emerald-200 hover:shadow-sm transition-all space-y-2"
-                  >
+                  <div key={l.id}
+                    className={`bg-white p-4 rounded-2xl border-2 transition-all space-y-2 ${isSelected ? "border-emerald-400 bg-emerald-50/30" : "border-slate-200 hover:border-emerald-200 hover:shadow-sm"}`}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-mono text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                            {l.leadCode || l.id}
-                          </span>
-                          {isToday && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500 text-slate-950">
-                              আজ
+                      <div className="min-w-0 flex gap-2">
+                        <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(Number(l.id))}
+                          className="w-4 h-4 accent-emerald-600 mt-1 shrink-0" title="WhatsApp পাঠানোর জন্য সিলেক্ট" />
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-mono text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">{l.leadCode || l.id}</span>
+                            {isToday && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500 text-slate-950">আজ</span>}
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${isIREL ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
+                              {isIREL ? "IREL" : "IBDC"}
                             </span>
-                          )}
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
-                              isIREL
-                                ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            }`}
-                          >
-                            {isIREL ? "IREL" : "IBDC"}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusStyle(l.status)}`}>
-                            {l.status}
-                          </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusStyle(l.status)}`}>{l.status}</span>
+                          </div>
+
+                          <h3 className="text-sm font-bold text-slate-900 mt-1.5 truncate">{l.name}</h3>
+                          <p className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap mt-1">
+                            <PhoneWhatsApp phone={l.phone} name={l.name} message={defaultFollowUpMessage(l)} />
+                            <span>• {l.location || l.preferredLocation || "—"}</span>
+                          </p>
+                          <p className="text-[11px] text-slate-600 mt-0.5">
+                            {isIREL ? (
+                              <>🏠 <strong>{l.propertyType}</strong>{l.projectName ? ` • ${l.projectName}` : ""}{l.size ? ` • ${l.size}` : ""}</>
+                            ) : (
+                              <>📐 <strong>{l.service}</strong>{l.landSize ? ` • ${l.landSize}` : ""}</>
+                            )}
+                          </p>
+
+                          {texts.requirement && <p className="text-[11px] text-slate-500 mt-1"><strong>Req:</strong> {texts.requirement}</p>}
+                          {texts.insafResponse && <p className="text-[11px] text-slate-500 mt-1"><strong>Response:</strong> {texts.insafResponse}</p>}
+                          {texts.remarks && <p className="text-[11px] text-slate-500 mt-1"><strong>Remarks:</strong> {texts.remarks}</p>}
                         </div>
-
-                        <h3 className="text-sm font-bold text-slate-900 mt-1.5 truncate">{l.name}</h3>
-                        <p className="text-[11px] text-slate-500">
-                          {l.phone} • {l.location || l.preferredLocation || "—"}
-                        </p>
-                        <p className="text-[11px] text-slate-600 mt-0.5">
-                          {isIREL ? (
-                            <>
-                              🏠 <strong>{l.propertyType}</strong>
-                              {l.projectName ? ` • ${l.projectName}` : ""}
-                              {l.size ? ` • ${l.size}` : ""}
-                            </>
-                          ) : (
-                            <>
-                              📐 <strong>{l.service}</strong>
-                              {l.landSize ? ` • ${l.landSize}` : ""}
-                            </>
-                          )}
-                        </p>
-
-                        {texts.requirement && (
-                          <p className="text-[11px] text-slate-500 mt-1">
-                            <strong>Req:</strong> {texts.requirement}
-                          </p>
-                        )}
-                        {texts.insafResponse && (
-                          <p className="text-[11px] text-slate-500 mt-1">
-                            <strong>Response:</strong> {texts.insafResponse}
-                          </p>
-                        )}
-                        {texts.remarks && (
-                          <p className="text-[11px] text-slate-500 mt-1">
-                            <strong>Remarks:</strong> {texts.remarks}
-                          </p>
-                        )}
                       </div>
 
                       <div className="text-right space-y-1 shrink-0">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border ${pStyle.cls}`}>
                           <PIcon className="w-3 h-3" /> {l.priority || "Warm"}
                         </span>
-                        <p className="text-[10px] text-slate-500">
-                          Next: <strong>{fmtDate(l.nextFollowUpDate)}</strong>
-                        </p>
-                        <p className="text-[10px] text-slate-500">
-                          FU: <strong>{fus.length}</strong> • {formatBudget(Number(l.budget || 0))}
-                        </p>
+                        <p className="text-[10px] text-slate-500">Next: <strong>{fmtDate(l.nextFollowUpDate)}</strong></p>
+                        <p className="text-[10px] text-slate-500">FU: <strong>{fus.length}</strong> • {formatBudget(Number(l.budget || 0))}</p>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
                       {!["Won", "Lost", "On Hold"].includes(l.status) && l.priority !== "Lost" && (
-                        <button
-                          type="button"
-                          onClick={() => openFollowUpModal(l.id)}
-                          className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold"
-                        >
-                          + Follow-up
-                        </button>
+                        <button type="button" onClick={() => openFollowUpModal(l.id)}
+                          className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold">+ Follow-up</button>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() => setOpenLeadId(l.id === openLeadId ? null : l.id)}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold"
-                      >
+                      <a href={waLink(l.phone, l.name, defaultFollowUpMessage(l))} target="_blank" rel="noopener noreferrer"
+                        title="WhatsApp — মেসেজ এডিট করে পাঠাতে পারবেন"
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-600 hover:text-white text-[11px] font-bold inline-flex items-center gap-1">
+                        <WhatsAppIcon /> FU WhatsApp
+                      </a>
+
+                      <button type="button" onClick={() => setOpenLeadId(l.id === openLeadId ? null : l.id)}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold">
                         {l.id === openLeadId ? "Hide" : `Timeline (${fus.length})`}
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(l)}
-                        className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold inline-flex items-center gap-1"
-                      >
+                      <button type="button" onClick={() => openEditModal(l)}
+                        className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold inline-flex items-center gap-1">
                         <Pencil className="w-3 h-3" /> Edit
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => softDeleteLead(l)}
-                        title="এক ক্লিকে ডিলিট — Ctrl+Z দিয়ে ফেরানো যাবে"
-                        className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold inline-flex items-center gap-1"
-                      >
+                      <button type="button" onClick={() => softDeleteLead(l)} title="এক ক্লিকে ডিলিট — Ctrl+Z দিয়ে ফেরানো যাবে"
+                        className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold inline-flex items-center gap-1">
                         <Trash2 className="w-3 h-3" /> Delete
                       </button>
 
                       {l.status !== "On Hold" && !["Won", "Lost"].includes(l.status) && l.priority !== "Lost" && (
-                        <button
-                          type="button"
-                          onClick={() => onMutate({ action: "updateLeadStatus", leadId: l.id, status: "On Hold" })}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-semibold"
-                        >
-                          Hold
-                        </button>
+                        <button type="button" onClick={() => onMutate({ action: "updateLeadStatus", leadId: l.id, status: "On Hold" })}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-semibold">Hold</button>
                       )}
 
                       {l.status === "On Hold" && (
-                        <button
-                          type="button"
-                          onClick={() => onMutate({ action: "updateLeadStatus", leadId: l.id, status: "Follow-up" })}
-                          className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold"
-                        >
-                          Resume
-                        </button>
+                        <button type="button" onClick={() => onMutate({ action: "updateLeadStatus", leadId: l.id, status: "Follow-up" })}
+                          className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold">Resume</button>
                       )}
 
                       {l.status !== "Won" && (
-                        <button
-                          type="button"
-                          onClick={() => onMutate({ action: "convertLeadToClient", leadId: l.id })}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-semibold"
-                        >
-                          Convert →
-                        </button>
+                        <button type="button" onClick={() => onMutate({ action: "convertLeadToClient", leadId: l.id })}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-semibold">Convert →</button>
                       )}
 
                       {last && <span className="text-[10px] text-slate-400 ml-auto truncate">Last: {last.outcome}</span>}
@@ -1916,10 +1765,8 @@ leadDisplayTexts(l).remarks,
         </div>
 
         {/* RIGHT FORM */}
-        <form
-          onSubmit={handleCreateLead}
-          className={`${viewMode === "sheet" ? "max-w-lg" : "lg:col-span-4"} bg-white p-5 rounded-2xl border border-slate-200 space-y-3 h-fit shadow-sm`}
-        >
+        <form onSubmit={handleCreateLead}
+          className={`${viewMode === "sheet" ? "max-w-lg" : "lg:col-span-4"} bg-white p-5 rounded-2xl border border-slate-200 space-y-3 h-fit shadow-sm`}>
           <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 pb-2 border-b border-slate-100">
             <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center">
               <Plus className="w-3.5 h-3.5 text-emerald-700" />
@@ -1941,21 +1788,26 @@ leadDisplayTexts(l).remarks,
           <div className="grid grid-cols-2 gap-2">
             <input type="date" value={leadDate} onChange={(e) => setLeadDate(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
             <select value={leadStatus} onChange={(e) => setLeadStatus(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-              {LEAD_STATUSES_FULL.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
+              {LEAD_STATUSES_FULL.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
 
           <input type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="ক্লায়েন্টের নাম *" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
-          <input type="text" required value={phone} onChange={(e) => { setPhone(e.target.value); setWhatsapp(e.target.value); }} placeholder="ফোন / WhatsApp *" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
+
+          <div className="space-y-1">
+            <input type="text" required value={phone} onChange={(e) => { setPhone(e.target.value); setWhatsapp(e.target.value); }} placeholder="ফোন / WhatsApp *" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
+            {phone.trim() && normalizePhoneForWa(phone) && (
+              <a href={waLink(phone, name)} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-600 hover:text-white text-xs font-bold transition">
+                <WhatsAppIcon className="w-4 h-4" /> WhatsApp ({normalizePhoneForWa(phone)})
+              </a>
+            )}
+          </div>
 
           {formCompany === "IBDC" ? (
             <>
               <select value={service} onChange={(e) => setService(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50/30 text-xs font-medium">
-                {IBDC_SERVICES.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
+                {IBDC_SERVICES.map((s) => <option key={s}>{s}</option>)}
               </select>
               <div className="grid grid-cols-2 gap-2">
                 <input type="text" value={landSize} onChange={(e) => setLandSize(e.target.value)} placeholder="জমির পরিমাণ" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
@@ -1966,9 +1818,7 @@ leadDisplayTexts(l).remarks,
           ) : (
             <>
               <select value={propertyType} onChange={(e) => setPropertyType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50/30 text-xs font-medium">
-                {IREL_PROPERTY_TYPES.map((p) => (
-                  <option key={p}>{p}</option>
-                ))}
+                {IREL_PROPERTY_TYPES.map((p) => <option key={p}>{p}</option>)}
               </select>
               <div className="grid grid-cols-2 gap-2">
                 <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Project" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
@@ -1982,8 +1832,7 @@ leadDisplayTexts(l).remarks,
                 <input type="text" value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="Floor" className="px-2.5 py-2.5 rounded-xl border border-slate-200 text-xs" />
                 <input type="text" value={bedrooms} onChange={(e) => setBedrooms(e.target.value)} placeholder="Bed" className="px-2.5 py-2.5 rounded-xl border border-slate-200 text-xs" />
                 <select value={purpose} onChange={(e) => setPurpose(e.target.value)} className="px-2.5 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-                  <option>Own Use</option>
-                  <option>Investment</option>
+                  <option>Own Use</option><option>Investment</option>
                 </select>
               </div>
               <input type="date" value={expectedPurchaseDate} onChange={(e) => setExpectedPurchaseDate(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
@@ -1998,80 +1847,49 @@ leadDisplayTexts(l).remarks,
 
           <div className="grid grid-cols-2 gap-2">
             <select value={source} onChange={(e) => setSource(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-              {LEAD_SOURCES.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
+              {LEAD_SOURCES.map((s) => <option key={s}>{s}</option>)}
             </select>
             <select value={priority} onChange={(e) => setPriority(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-              {LEAD_PRIORITIES.map((p) => (
-                <option key={p}>{p}</option>
-              ))}
+              {LEAD_PRIORITIES.map((p) => <option key={p}>{p}</option>)}
             </select>
           </div>
 
           <select value={assignedStaffId} onChange={(e) => setAssignedStaffId(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
             <option value="">অনির্ধারিত স্টাফ</option>
-            {employees.map((e: any) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
+            {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
 
           <div className="space-y-2 rounded-xl border border-slate-200 p-3">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-bold text-slate-800">অতিরিক্ত ফিল্ড</p>
-                <p className="text-[10px] text-slate-500">দুই কোম্পানির জন্যই প্রয়োজনমতো যোগ বা বাদ দিন; পূরণ করা তথ্য লিডের Requirement-এ সংরক্ষিত হবে।</p>
+                <p className="text-[10px] text-slate-500">প্রয়োজনমতো যোগ বা বাদ দিন; তথ্য Requirement-এ সংরক্ষিত হবে।</p>
               </div>
-              <button type="button" onClick={() => setCustomLeadFields((fields) => [...fields, { id: `${Date.now()}-${fields.length}`, label: "", value: "" }])} className="shrink-0 rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-semibold text-white">+ ফিল্ড যোগ</button>
+              <button type="button" onClick={() => setCustomLeadFields((f) => [...f, { id: `${Date.now()}-${f.length}`, label: "", value: "" }])}
+                className="shrink-0 rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-semibold text-white">+ ফিল্ড যোগ</button>
             </div>
             {customLeadFields.map((field) => (
               <div key={field.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-start">
-                <input value={field.label} onChange={(e) => setCustomLeadFields((fields) => fields.map((item) => item.id === field.id ? { ...item, label: e.target.value } : item))} placeholder="ফিল্ডের নাম" aria-label="অতিরিক্ত ফিল্ডের নাম" className="min-w-0 px-2.5 py-2.5 rounded-lg border border-slate-200 text-xs" />
-                <input value={field.value} onChange={(e) => setCustomLeadFields((fields) => fields.map((item) => item.id === field.id ? { ...item, value: e.target.value } : item))} placeholder="তথ্য" aria-label="অতিরিক্ত ফিল্ডের তথ্য" className="min-w-0 px-2.5 py-2.5 rounded-lg border border-slate-200 text-xs" />
-                <button type="button" onClick={() => setCustomLeadFields((fields) => fields.filter((item) => item.id !== field.id))} aria-label="ফিল্ড বাদ দিন" title="ফিল্ড বাদ দিন" className="rounded-lg border border-red-200 p-2 text-red-600"><XCircle className="h-4 w-4" /></button>
+                <input value={field.label} onChange={(e) => setCustomLeadFields((fs) => fs.map((it) => it.id === field.id ? { ...it, label: e.target.value } : it))} placeholder="ফিল্ডের নাম" className="min-w-0 px-2.5 py-2.5 rounded-lg border border-slate-200 text-xs" />
+                <input value={field.value} onChange={(e) => setCustomLeadFields((fs) => fs.map((it) => it.id === field.id ? { ...it, value: e.target.value } : it))} placeholder="তথ্য" className="min-w-0 px-2.5 py-2.5 rounded-lg border border-slate-200 text-xs" />
+                <button type="button" onClick={() => setCustomLeadFields((fs) => fs.filter((it) => it.id !== field.id))} title="ফিল্ড বাদ দিন" className="rounded-lg border border-red-200 p-2 text-red-600"><XCircle className="h-4 w-4" /></button>
               </div>
             ))}
           </div>
-                      <textarea
-            value={insafResponse}
-            onChange={(e) => setInsafResponse(e.target.value)}
-            placeholder="Insaf Response (আমরা কী বলেছি)"
-            rows={2}
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs"
-          />
-          <textarea
-            value={leadRemarks}
-            onChange={(e) => setLeadRemarks(e.target.value)}
-            placeholder="Remarks"
-            rows={2}
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs"
-          />
+
+          <textarea value={insafResponse} onChange={(e) => setInsafResponse(e.target.value)} placeholder="Insaf Response (আমরা কী বলেছি)" rows={2} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
+          <textarea value={leadRemarks} onChange={(e) => setLeadRemarks(e.target.value)} placeholder="Remarks" rows={2} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <input
-              type="text"
-              value={reminder1Input}
-              onChange={(e) => setReminder1Input(e.target.value)}
-              placeholder="Reminder 1"
-              className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs"
-            />
-            <input
-              type="text"
-              value={reminder2Input}
-              onChange={(e) => setReminder2Input(e.target.value)}
-              placeholder="Reminder 2"
-              className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs"
-            />
-            <input
-              type="text"
-              value={reminder3Input}
-              onChange={(e) => setReminder3Input(e.target.value)}
-              placeholder="Reminder 3"
-              className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs"
-            />
+            <input type="text" value={reminder1Input} onChange={(e) => setReminder1Input(e.target.value)} placeholder="Reminder 1" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
+            <input type="text" value={reminder2Input} onChange={(e) => setReminder2Input(e.target.value)} placeholder="Reminder 2" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
+            <input type="text" value={reminder3Input} onChange={(e) => setReminder3Input(e.target.value)} placeholder="Reminder 3" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
           </div>
-          <label className="block space-y-1 text-xs text-slate-600"><span>পরবর্তী ফলো-আপ তারিখ</span><input type="date" value={nextFollowUpInput} onChange={(e) => setNextFollowUpInput(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs" /></label>
+
+          <label className="block space-y-1 text-xs text-slate-600">
+            <span>পরবর্তী ফলো-আপ তারিখ</span>
+            <input type="date" value={nextFollowUpInput} onChange={(e) => setNextFollowUpInput(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
+          </label>
 
           <button type="submit" className={`w-full py-3 rounded-xl text-white font-bold text-sm transition ${formCompany === "IREL" ? "bg-indigo-600 hover:bg-indigo-500" : "bg-emerald-600 hover:bg-emerald-500"}`}>
             + Save Lead
@@ -2087,43 +1905,37 @@ leadDisplayTexts(l).remarks,
               <div>
                 <h3 className="text-base font-bold text-slate-900">ফলো-আপ — {fuLead.name}</h3>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  {fuLead.leadCode} • Total FU: {(fuByLead.get(fuLead.id) || []).length} • Next: #
-                  {(fuByLead.get(fuLead.id) || []).length + 1}
+                  {fuLead.leadCode} • Total FU: {(fuByLead.get(fuLead.id) || []).length} • Next: #{(fuByLead.get(fuLead.id) || []).length + 1}
                 </p>
               </div>
-              <button type="button" onClick={() => setFuLeadId(null)} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500">
-                ✕
-              </button>
+              <button type="button" onClick={() => setFuLeadId(null)} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500">✕</button>
             </div>
+
+            <a href={waLink(fuLead.phone, fuLead.name, defaultFollowUpMessage(fuLead))} target="_blank" rel="noopener noreferrer"
+              className="w-full py-2.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-600 hover:text-white text-xs font-bold inline-flex items-center justify-center gap-2 transition">
+              <WhatsAppIcon className="w-4 h-4" /> WhatsApp খুলুন (মেসেজ এডিট করা যাবে)
+            </a>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">মাধ্যম *</label>
                 <select value={fuMethod} onChange={(e) => setFuMethod(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-                  {FU_METHODS.map((m) => (
-                    <option key={m}>{m}</option>
-                  ))}
+                  {FU_METHODS.map((m) => <option key={m}>{m}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">ফলাফল *</label>
                 <select value={fuOutcome} onChange={(e) => setFuOutcome(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-                  {FU_OUTCOMES.map((o) => (
-                    <option key={o}>{o}</option>
-                  ))}
+                  {FU_OUTCOMES.map((o) => <option key={o}>{o}</option>)}
                 </select>
               </div>
             </div>
 
             {fuOutcome === "No Response" && (
-              <p className="text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-2.5">
-                Lead active থাকবে। Next follow-up date দিন।
-              </p>
+              <p className="text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-2.5">Lead active থাকবে। Next follow-up date দিন।</p>
             )}
             {closedOutcome && (
-              <p className="text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-2.5">
-                Lead close হবে। Next follow-up clear হবে।
-              </p>
+              <p className="text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-2.5">Lead close হবে। Next follow-up clear হবে।</p>
             )}
 
             <div>
@@ -2150,36 +1962,24 @@ leadDisplayTexts(l).remarks,
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">Attachment</label>
-                <input
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx"
+                <input type="file" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (!f) return setFuAttachment(null);
-                    setFuAttachment({
-                      name: f.name,
-                      type: f.type || "File",
-                      size: `${Math.max(1, Math.round(f.size / 1024))} KB`,
-                      url: `#fu-${encodeURIComponent(f.name)}`,
-                    });
+                    setFuAttachment({ name: f.name, type: f.type || "File", size: `${Math.max(1, Math.round(f.size / 1024))} KB`, url: `#fu-${encodeURIComponent(f.name)}` });
                   }}
-                  className="w-full text-[11px] text-slate-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white file:text-[10px] file:font-bold"
-                />
+                  className="w-full text-[11px] text-slate-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white file:text-[10px] file:font-bold" />
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">Status Update</label>
                 <select value={fuNewStatus} onChange={(e) => setFuNewStatus(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
                   <option value="">Auto</option>
-                  {LEAD_STATUSES_FULL.map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
+                  {LEAD_STATUSES_FULL.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </div>
             </div>
 
-            <button type="submit" className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm">
-              ✓ Save Follow-up
-            </button>
+            <button type="submit" className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm">✓ Save Follow-up</button>
           </form>
         </div>
       )}
@@ -2191,10 +1991,7 @@ leadDisplayTexts(l).remarks,
           form={editForm}
           setForm={setEditForm}
           employees={employees}
-          onClose={() => {
-            setEditingLead(null);
-            setEditForm(null);
-          }}
+          onClose={() => { setEditingLead(null); setEditForm(null); }}
           onSave={saveEditedLead}
         />
       )}
@@ -2203,68 +2000,129 @@ leadDisplayTexts(l).remarks,
       {viewMode === "sheet" && openLead && (
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-slate-900">
-              Timeline — {openLead.name} ({openLead.leadCode})
-            </h3>
-            <button type="button" onClick={() => setOpenLeadId(null)} className="text-xs text-slate-500 hover:text-slate-900 font-semibold">
-              ✕ Close
-            </button>
+            <h3 className="text-sm font-bold text-slate-900">Timeline — {openLead.name} ({openLead.leadCode})</h3>
+            <button type="button" onClick={() => setOpenLeadId(null)} className="text-xs text-slate-500 hover:text-slate-900 font-semibold">✕ Close</button>
           </div>
           <LeadTimeline lead={openLead} fus={fuByLead.get(openLead.id) || []} />
+        </div>
+      )}
+
+      {/* ===== BULK WHATSAPP MODAL ===== */}
+      {showBulkWa && bulkQueue.length > 0 && (
+        <div className="fixed inset-0 z-[70] bg-slate-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-emerald-600 text-white px-5 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <WhatsAppIcon className="w-5 h-5" />
+                <div>
+                  <h3 className="text-sm font-bold">Bulk WhatsApp</h3>
+                  <p className="text-[11px] opacity-90">{bulkIndex + 1} / {bulkQueue.length} — পাঠানো হয়েছে {bulkSentIds.length}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowBulkWa(false)} className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30">✕</button>
+            </div>
+
+            <div className="h-1 bg-slate-200">
+              <div className="h-full bg-emerald-500 transition-all" style={{ width: `${((bulkIndex + 1) / bulkQueue.length) * 100}%` }} />
+            </div>
+
+            <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <p className="text-xs font-bold text-slate-900">{bulkQueue[bulkIndex]?.name}</p>
+                <p className="text-[11px] text-slate-500 font-mono">{bulkQueue[bulkIndex]?.phone} → {normalizePhoneForWa(bulkQueue[bulkIndex]?.phone)}</p>
+                <p className="text-[11px] text-slate-500">{categoryOfLead(bulkQueue[bulkIndex])} • {bulkQueue[bulkIndex]?.leadCode}</p>
+              </div>
+
+              <div className="flex gap-1 flex-wrap">
+                <button type="button" onClick={() => setBulkMessage(defaultFollowUpMessage(bulkQueue[bulkIndex]).replace(bulkQueue[bulkIndex]?.name || "", "{name}"))}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">ফলো-আপ</button>
+                <button type="button" onClick={() => setBulkMessage(defaultReminderMessage(bulkQueue[bulkIndex]).replace(bulkQueue[bulkIndex]?.name || "", "{name}"))}
+                  className="px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold">রিমাইন্ডার</button>
+                <button type="button" onClick={() => setBulkMessage(defaultQuotationMessage(bulkQueue[bulkIndex]).replace(bulkQueue[bulkIndex]?.name || "", "{name}"))}
+                  className="px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold">কোটেশন</button>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">মেসেজ টেমপ্লেট (সবার জন্য একই)</label>
+                <textarea rows={7} value={bulkMessage} onChange={(e) => setBulkMessage(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  ভেরিয়েবল: <code className="bg-slate-100 px-1 rounded">{"{name}"}</code>{" "}
+                  <code className="bg-slate-100 px-1 rounded">{"{service}"}</code>{" "}
+                  <code className="bg-slate-100 px-1 rounded">{"{code}"}</code>{" "}
+                  <code className="bg-slate-100 px-1 rounded">{"{location}"}</code>{" "}
+                  <code className="bg-slate-100 px-1 rounded">{"{nextdate}"}</code>
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-900 text-slate-100">
+                <p className="text-[10px] font-bold text-emerald-400 mb-1">প্রিভিউ (যা WhatsApp-এ যাবে):</p>
+                <p className="text-[11px] whitespace-pre-wrap">{personalizeMessage(bulkMessage, bulkQueue[bulkIndex])}</p>
+              </div>
+
+              <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                মেসেজটি WhatsApp-এর ইনপুট বক্সে <strong>ড্রাফট</strong> হিসেবে যাবে। সেখানে <strong>এডিট করতে পারবেন</strong>, ছবি যোগ করতে পারবেন, তারপর <strong>Send</strong> চাপবেন। সর্বোচ্চ {BULK_WA_LIMIT} জন।
+              </p>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-2">
+              <div className="flex gap-2">
+                <button type="button" onClick={openCurrentBulkChat}
+                  className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold inline-flex items-center justify-center gap-2">
+                  <WhatsAppIcon className="w-4 h-4" /> খুলুন
+                </button>
+                <button type="button" onClick={() => { openCurrentBulkChat(); setTimeout(bulkNext, 500); }}
+                  className="flex-1 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold inline-flex items-center justify-center gap-2">
+                  <Send className="w-4 h-4" /> খুলুন + পরের জন
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={bulkPrev} disabled={bulkIndex === 0}
+                  className="flex-1 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 disabled:opacity-40 text-slate-700 text-xs font-bold">← আগের</button>
+                <button type="button" onClick={bulkNext}
+                  className="flex-1 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold inline-flex items-center justify-center gap-1">
+                  <SkipForward className="w-3.5 h-3.5" /> স্কিপ
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {/* ===== UNDO DELETE TOAST ===== */}
       {pendingCount > 0 && (
         <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[min(30rem,92vw)] space-y-2">
-          {Object.entries(pendingDeletes)
-            .slice(-3)
-            .map(([key, item]) => {
-              const id = Number(key);
-              const remainMs = Math.max(0, item.expiresAt - Date.now());
-              const remainSec = Math.ceil(remainMs / 1000);
-              const pct = (remainMs / UNDO_WINDOW_MS) * 100;
+          {Object.entries(pendingDeletes).slice(-3).map(([key, item]) => {
+            const id = Number(key);
+            const remainMs = Math.max(0, item.expiresAt - Date.now());
+            const remainSec = Math.ceil(remainMs / 1000);
+            const pct = (remainMs / UNDO_WINDOW_MS) * 100;
 
-              return (
-                <div
-                  key={id}
-                  className="bg-slate-950 text-white rounded-2xl shadow-2xl border border-slate-700 overflow-hidden"
-                >
-                  <div className="px-4 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
-                        <Trash2 className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold truncate">
-                          ডিলিট হয়েছে — {item.lead.name || item.lead.leadCode}
-                        </p>
-                        <p className="text-[11px] text-slate-400 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {remainSec} সেকেন্ড পর স্থায়ীভাবে মুছে যাবে
-                        </p>
-                      </div>
+            return (
+              <div key={id} className="bg-slate-950 text-white rounded-2xl shadow-2xl border border-slate-700 overflow-hidden">
+                <div className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
+                      <Trash2 className="w-4 h-4" />
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => undoDelete(id)}
-                      className="shrink-0 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold flex items-center gap-1.5"
-                    >
-                      <Undo2 className="w-3.5 h-3.5" />
-                      Undo
-                    </button>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold truncate">ডিলিট হয়েছে — {item.lead.name || item.lead.leadCode}</p>
+                      <p className="text-[11px] text-slate-400 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {remainSec} সেকেন্ড পর স্থায়ীভাবে মুছে যাবে
+                      </p>
+                    </div>
                   </div>
-
-                  <div className="h-1 bg-slate-800">
-                    <div
-                      className="h-full bg-emerald-500 transition-all duration-300 ease-linear"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
+                  <button type="button" onClick={() => undoDelete(id)}
+                    className="shrink-0 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold flex items-center gap-1.5">
+                    <Undo2 className="w-3.5 h-3.5" /> Undo
+                  </button>
                 </div>
-              );
-            })}
+                <div className="h-1 bg-slate-800">
+                  <div className="h-full bg-emerald-500 transition-all duration-300 ease-linear" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
 
           <p className="text-center text-[11px] text-slate-500 font-semibold">
             কীবোর্ডে <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-600">Ctrl</kbd>
@@ -2281,17 +2139,7 @@ leadDisplayTexts(l).remarks,
 // ============================================================================
 // SUB COMPONENTS
 // ============================================================================
-function KpiCard({
-  label,
-  value,
-  color,
-  bg,
-}: {
-  label: string;
-  value: string | number;
-  color: string;
-  bg: string;
-}) {
+function KpiCard({ label, value, color, bg }: { label: string; value: string | number; color: string; bg: string }) {
   return (
     <div className={`${bg} p-3 text-center`}>
       <p className={`text-2xl font-black ${color} tabular-nums`}>{value}</p>
@@ -2303,46 +2151,32 @@ function KpiCard({
 function MiniList({ title, rows }: { title: string; rows: string[] }) {
   return (
     <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50">
-      <h4 className="text-[11px] font-bold text-slate-700 mb-1.5">
-        {title} ({rows.length})
-      </h4>
+      <h4 className="text-[11px] font-bold text-slate-700 mb-1.5">{title} ({rows.length})</h4>
       {rows.length === 0 ? (
         <p className="text-[10px] text-slate-400">নেই ✓</p>
       ) : (
         <ul className="space-y-0.5 text-[10px] text-slate-600 max-h-24 overflow-y-auto">
-          {rows.map((r, i) => (
-            <li key={i}>• {r}</li>
-          ))}
+          {rows.map((r, i) => <li key={i}>• {r}</li>)}
         </ul>
       )}
     </div>
   );
 }
 
-function PieChartSVG({
-  items,
-}: {
-  items: Array<{ label: string; count: number; color: string }>;
-}) {
+function PieChartSVG({ items }: { items: Array<{ label: string; count: number; color: string }> }) {
   const total = items.reduce((s, i) => s + i.count, 0);
-  const size = 180;
-  const cx = 90;
-  const cy = 90;
-  const r = 80;
+  const size = 180, cx = 90, cy = 90, r = 80;
 
   if (total === 0) {
     return (
       <svg width={size} height={size} viewBox="0 0 180 180" className="shrink-0">
         <circle cx={cx} cy={cy} r={r} fill="#E5E7EB" />
-        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize="11" fill="#94a3b8">
-          No Data
-        </text>
+        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize="11" fill="#94a3b8">No Data</text>
       </svg>
     );
   }
 
   const nonzero = items.filter((i) => i.count > 0);
-
   if (nonzero.length === 1) {
     return (
       <svg width={size} height={size} viewBox="0 0 180 180" className="shrink-0">
@@ -2369,11 +2203,7 @@ function PieChartSVG({
   );
 }
 
-function ServiceBarChart({
-  items,
-}: {
-  items: Array<{ label: string; count: number }>;
-}) {
+function ServiceBarChart({ items }: { items: Array<{ label: string; count: number }> }) {
   const max = Math.max(1, ...items.map((i) => i.count));
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(max * t));
 
@@ -2381,30 +2211,20 @@ function ServiceBarChart({
     <div className="min-h-[220px]">
       <div className="flex gap-2">
         <div className="flex flex-col justify-between h-44 text-[9px] text-slate-400 tabular-nums pr-1 text-right w-8">
-          <span>{ticks[4]}</span>
-          <span>{ticks[3]}</span>
-          <span>{ticks[2]}</span>
-          <span>{ticks[1]}</span>
-          <span>0</span>
+          <span>{ticks[4]}</span><span>{ticks[3]}</span><span>{ticks[2]}</span><span>{ticks[1]}</span><span>0</span>
         </div>
         <div className="relative flex-1 h-44 border-l border-b border-slate-300">
           <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="border-t border-slate-100 w-full" />
-            ))}
+            {[0, 1, 2, 3, 4].map((i) => <div key={i} className="border-t border-slate-100 w-full" />)}
           </div>
           <div className="absolute inset-0 flex items-end gap-1 px-1 overflow-x-auto">
             {items.map((item) => (
               <div key={item.label} className="flex-1 min-w-[22px] h-full flex items-end group relative">
-                <div
-                  className="w-full bg-emerald-400 hover:bg-emerald-500 rounded-t-sm transition-colors"
+                <div className="w-full bg-emerald-400 hover:bg-emerald-500 rounded-t-sm transition-colors"
                   style={{ height: `${(item.count / max) * 100}%`, minHeight: item.count > 0 ? 3 : 0 }}
-                  title={`${item.label}: ${item.count}`}
-                />
+                  title={`${item.label}: ${item.count}`} />
                 {item.count > 0 && (
-                  <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-slate-600 opacity-0 group-hover:opacity-100 whitespace-nowrap">
-                    {item.count}
-                  </span>
+                  <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-slate-600 opacity-0 group-hover:opacity-100 whitespace-nowrap">{item.count}</span>
                 )}
               </div>
             ))}
@@ -2413,9 +2233,7 @@ function ServiceBarChart({
       </div>
       <div className="flex gap-1 pl-10 mt-1 overflow-x-auto">
         {items.map((item) => (
-          <span key={item.label} className="flex-1 min-w-[22px] text-[8px] text-slate-500 text-center leading-tight break-words">
-            {item.label}
-          </span>
+          <span key={item.label} className="flex-1 min-w-[22px] text-[8px] text-slate-500 text-center leading-tight break-words">{item.label}</span>
         ))}
       </div>
     </div>
@@ -2427,10 +2245,7 @@ function LeadTimeline({ lead, fus }: { lead: any; fus: any[] }) {
     <div className="border-l-2 border-emerald-500 pl-4 ml-1 space-y-3 py-2">
       <div className="text-[11px]">
         <span className="font-bold text-slate-800">লিড তৈরি</span>
-        <span className="text-slate-500">
-          {" "}
-          — {fmtISO(lead.leadDate || lead.createdAt || lead.date)} • {lead.source || "—"}
-        </span>
+        <span className="text-slate-500"> — {fmtISO(lead.leadDate || lead.createdAt || lead.date)} • {lead.source || "—"}</span>
       </div>
 
       {fus.map((f) => (
@@ -2439,57 +2254,24 @@ function LeadTimeline({ lead, fus }: { lead: any; fus: any[] }) {
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-[11px] space-y-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-bold text-slate-900">Follow-up #{f.followUpNumber}</span>
-              <span className="font-mono text-slate-500">
-                {f.date} {f.time}
-              </span>
+              <span className="font-mono text-slate-500">{f.date} {f.time}</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">
-                {f.contactMethod}
-              </span>
-              <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
-                {f.outcome}
-              </span>
-              {f.attachmentName && (
-                <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-800 font-semibold">
-                  📎 {f.attachmentName}
-                </span>
-              )}
+              <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">{f.contactMethod}</span>
+              <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">{f.outcome}</span>
+              {f.attachmentName && <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-800 font-semibold">📎 {f.attachmentName}</span>}
             </div>
-            <p className="text-slate-700">
-              <strong>Staff:</strong> {f.staffName || "—"}
-            </p>
-            {f.clientResponse && (
-              <p className="text-slate-700">
-                <strong>ক্লায়েন্টের সাড়া:</strong> {f.clientResponse}
-              </p>
-            )}
-            <p className="text-slate-700">
-              <strong>Note:</strong> {f.discussion || f.note}
-            </p>
-            <p className="text-slate-500">
-              <strong>পরবর্তী ফলো-আপ:</strong>{" "}
-              {f.nextFollowUpDate ? `${f.nextFollowUpDate} ${f.nextFollowUpTime || ""}` : "নেই (closed)"}
-            </p>
+            <p className="text-slate-700"><strong>Staff:</strong> {f.staffName || "—"}</p>
+            {f.clientResponse && <p className="text-slate-700"><strong>ক্লায়েন্টের সাড়া:</strong> {f.clientResponse}</p>}
+            <p className="text-slate-700"><strong>Note:</strong> {f.discussion || f.note}</p>
+            <p className="text-slate-500"><strong>পরবর্তী ফলো-আপ:</strong> {f.nextFollowUpDate ? `${f.nextFollowUpDate} ${f.nextFollowUpTime || ""}` : "নেই (closed)"}</p>
           </div>
         </div>
       ))}
 
-      {lead.reminder1 && (
-        <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-          <strong>Reminder 1:</strong> {lead.reminder1}
-        </div>
-      )}
-      {lead.reminder2 && (
-        <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-          <strong>Reminder 2:</strong> {lead.reminder2}
-        </div>
-      )}
-      {lead.reminder3 && (
-        <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-          <strong>Reminder 3:</strong> {lead.reminder3}
-        </div>
-      )}
+      {lead.reminder1 && <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-2.5"><strong>Reminder 1:</strong> {lead.reminder1}</div>}
+      {lead.reminder2 && <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-2.5"><strong>Reminder 2:</strong> {lead.reminder2}</div>}
+      {lead.reminder3 && <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-2.5"><strong>Reminder 3:</strong> {lead.reminder3}</div>}
 
       {fus.length === 0 && !lead.reminder1 && !lead.reminder2 && !lead.reminder3 && (
         <p className="text-[11px] text-slate-400">এখনো ফলো-আপ নেই।</p>
@@ -2499,9 +2281,8 @@ function LeadTimeline({ lead, fus }: { lead: any; fus: any[] }) {
 }
 
 // ============================================================================
-// EXCEL-LIKE SHEET TABLE (Stable Version - No Layout Break)
+// EXCEL-LIKE SHEET TABLE
 // ============================================================================
-
 type SheetCol = {
   key: string;
   label: string;
@@ -2515,7 +2296,7 @@ const SHEET_COLUMNS: SheetCol[] = [
   { key: "leadCode", label: "Lead ID", width: "140px", frozen: true, get: (l) => String(l.leadCode || l.id || "") },
   { key: "date", label: "Date", width: "100px", frozen: true, get: (l) => fmtISO(l.leadDate || l.createdAt || l.date) },
   { key: "name", label: "Client Name", width: "170px", frozen: true, get: (l) => String(l.name || "") },
-  { key: "phone", label: "Contact No", width: "130px", get: (l) => String(l.phone || "") },
+  { key: "phone", label: "Contact No", width: "150px", get: (l) => String(l.phone || "") },
   { key: "location", label: "Location", width: "120px", get: (l) => String(l.location || l.preferredLocation || "") },
   { key: "source", label: "Source", width: "110px", get: (l) => String(l.source || "") },
   { key: "service", label: "Service Type", width: "170px", get: (l) => categoryOfLead(l) },
@@ -2523,18 +2304,31 @@ const SHEET_COLUMNS: SheetCol[] = [
   { key: "status", label: "Status", width: "130px", align: "center", get: (l) => String(l.status || "") },
   { key: "requirement", label: "Client Requirement", width: "220px", get: (l) => dash(leadDisplayTexts(l).requirement) },
   { key: "insafResponse", label: "Insaf Response", width: "190px", get: (l) => dash(leadDisplayTexts(l).insafResponse) },
-{ key: "remarks", label: "Remarks", width: "190px", get: (l) => dash(leadDisplayTexts(l).remarks) },
+  { key: "remarks", label: "Remarks", width: "190px", get: (l) => dash(leadDisplayTexts(l).remarks) },
   { key: "nextFollowUpDate", label: "Next Follow-up", width: "120px", align: "center", get: (l) => String(l.nextFollowUpDate || "") },
   { key: "reminder1", label: "Reminder 1", width: "160px", get: (l) => String(l.reminder1 || "") },
   { key: "reminder2", label: "Reminder 2", width: "160px", get: (l) => String(l.reminder2 || "") },
   { key: "reminder3", label: "Reminder 3", width: "160px", get: (l) => String(l.reminder3 || "") },
 ];
 
+const CHECKBOX_COL_WIDTH = 36;
+
+function getFrozenLeft(key: string): string {
+  const frozenCols = SHEET_COLUMNS.filter((c) => c.frozen);
+  const idx = frozenCols.findIndex((c) => c.key === key);
+  if (idx === -1) return "auto";
+  let left = CHECKBOX_COL_WIDTH;
+  for (let i = 0; i < idx; i++) left += parseInt(frozenCols[i].width) || 0;
+  return `${left}px`;
+}
+
 function LeadSheetTable({
   leads,
   fuByLead,
   openLeadId,
   today,
+  selectedIds = [],
+  onToggleSelect,
   onOpenLead,
   onFollowUp,
   onEdit,
@@ -2545,6 +2339,8 @@ function LeadSheetTable({
   fuByLead: Map<number, any[]>;
   openLeadId: number | null;
   today: string;
+  selectedIds?: number[];
+  onToggleSelect?: (id: number) => void;
   onOpenLead: (id: number) => void;
   onFollowUp: (id: number) => void;
   onEdit: (lead: any) => void;
@@ -2575,9 +2371,7 @@ function LeadSheetTable({
       const q = searchFilter.toLowerCase();
       rows = rows.filter((l) => {
         const blob = [l.name, l.phone, l.leadCode, l.location, l.source, categoryOfLead(l)]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
+          .filter(Boolean).join(" ").toLowerCase();
         return blob.includes(q);
       });
     }
@@ -2597,9 +2391,7 @@ function LeadSheetTable({
     const col = SHEET_COLUMNS.find((c) => c.key === sortKey);
     if (!col) return filtered;
     return [...filtered].sort((a, b) => {
-      const av = col.get(a) || "";
-      const bv = col.get(b) || "";
-      const cmp = av.localeCompare(bv, "bn", { numeric: true });
+      const cmp = (col.get(a) || "").localeCompare(col.get(b) || "", "bn", { numeric: true });
       return sortDir === "asc" ? cmp : -cmp;
     });
   }, [filtered, sortKey, sortDir]);
@@ -2614,10 +2406,7 @@ function LeadSheetTable({
 
   function toggleSort(key: string) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
+    else { setSortKey(key); setSortDir("asc"); }
   }
 
   function clearAllFilters() {
@@ -2631,15 +2420,15 @@ function LeadSheetTable({
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-      {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 border-b border-slate-200">
         <div className="flex items-center gap-2 text-[11px] text-slate-600 font-semibold">
           <ListFilter className="w-3.5 h-3.5 text-emerald-600" />
           দেখানো হচ্ছে <span className="text-slate-900 font-bold">{sorted.length}</span> / {leads.length}
+          {selectedIds.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">{selectedIds.length} সিলেক্টেড</span>
+          )}
           {activeFilterCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
-              {activeFilterCount} ফিল্টার
-            </span>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">{activeFilterCount} ফিল্টার</span>
           )}
           {sortKey && (
             <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
@@ -2648,63 +2437,50 @@ function LeadSheetTable({
           )}
         </div>
 
-        {(activeFilterCount > 0 || sortKey || searchFilter) && (
-          <button
-            type="button"
-            onClick={clearAllFilters}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold inline-flex items-center gap-1.5"
-          >
-            <Eraser className="w-3 h-3" /> রিসেট
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <input type="search" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} placeholder="টেবিলে খুঁজুন…"
+            className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-[11px] w-40 outline-none focus:ring-2 focus:ring-emerald-400" />
+          {(activeFilterCount > 0 || sortKey || searchFilter) && (
+            <button type="button" onClick={clearAllFilters}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold inline-flex items-center gap-1.5">
+              <Eraser className="w-3 h-3" /> রিসেট
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Table Container with proper scrolling */}
       <div className="overflow-auto" style={{ maxHeight: "65vh" }}>
-        <table className="w-full text-[11px] border-collapse" style={{ tableLayout: "fixed", minWidth: "2000px" }}>
+        <table className="w-full text-[11px] border-collapse" style={{ tableLayout: "fixed", minWidth: "2100px" }}>
           <thead className="bg-slate-900 text-white sticky top-0 z-20">
             <tr>
+              <th className="px-1 py-2.5 bg-slate-900 sticky left-0 z-30 border-r border-slate-700"
+                style={{ width: `${CHECKBOX_COL_WIDTH}px`, minWidth: `${CHECKBOX_COL_WIDTH}px` }}>
+                <Check className="w-3.5 h-3.5 mx-auto text-emerald-400" />
+              </th>
+
               {SHEET_COLUMNS.map((col) => {
                 const selected = colFilters[col.key] || [];
                 const hasFilter = selected.length > 0;
                 const isSorted = sortKey === col.key;
 
                 return (
-                  <th
-                    key={col.key}
-                    className={`font-semibold text-left px-2 py-2.5 border-r border-slate-700 ${
-                      col.frozen ? "sticky left-0 z-30 bg-slate-900" : ""
-                    }`}
+                  <th key={col.key}
+                    className={`font-semibold text-left px-2 py-2.5 border-r border-slate-700 bg-slate-900 ${col.frozen ? "sticky z-30" : ""}`}
                     style={{
-                      width: col.width,
-                      minWidth: col.width,
+                      width: col.width, minWidth: col.width, maxWidth: col.width,
                       textAlign: col.align || "left",
-                    }}
-                  >
+                      left: col.frozen ? getFrozenLeft(col.key) : undefined,
+                    }}>
                     <div className="flex items-center justify-between gap-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleSort(col.key)}
-                        className="flex items-center gap-1 hover:text-emerald-300 truncate font-semibold"
-                        title="সর্ট করুন"
-                      >
+                      <button type="button" onClick={() => toggleSort(col.key)}
+                        className="flex items-center gap-1 hover:text-emerald-300 truncate font-semibold" title="সর্ট করুন">
                         <span className="truncate">{col.label}</span>
-                        {isSorted && (
-                          <span className="text-emerald-400 text-xs">
-                            {sortDir === "asc" ? "↑" : "↓"}
-                          </span>
-                        )}
+                        {isSorted && <span className="text-emerald-400 text-xs shrink-0">{sortDir === "asc" ? "↑" : "↓"}</span>}
                       </button>
 
-                      <button
-                        type="button"
-                        data-filter-trigger
-                        onClick={() => setOpenFilterKey(openFilterKey === col.key ? null : col.key)}
+                      <button type="button" data-filter-trigger onClick={() => setOpenFilterKey(openFilterKey === col.key ? null : col.key)}
                         title="ফিল্টার"
-                        className={`shrink-0 w-5 h-5 rounded flex items-center justify-center transition ${
-                          hasFilter ? "bg-emerald-500 text-slate-950" : "bg-slate-700 hover:bg-slate-600 text-slate-300"
-                        }`}
-                      >
+                        className={`shrink-0 w-5 h-5 rounded flex items-center justify-center transition ${hasFilter ? "bg-emerald-500 text-slate-950" : "bg-slate-700 hover:bg-slate-600 text-slate-300"}`}>
                         <ListFilter className="w-3 h-3" />
                       </button>
                     </div>
@@ -2713,10 +2489,7 @@ function LeadSheetTable({
                       <ColumnFilterPopover
                         values={uniqueValues(col.key)}
                         selected={selected}
-                        onApply={(vals) => {
-                          setColFilters((prev) => ({ ...prev, [col.key]: vals }));
-                          setOpenFilterKey(null);
-                        }}
+                        onApply={(vals) => { setColFilters((prev) => ({ ...prev, [col.key]: vals })); setOpenFilterKey(null); }}
                         onClose={() => setOpenFilterKey(null)}
                       />
                     )}
@@ -2724,7 +2497,7 @@ function LeadSheetTable({
                 );
               })}
 
-              <th className="font-semibold text-left px-2 py-2.5 border-l border-slate-700 sticky left-0 z-30 bg-slate-900" style={{ width: "280px", minWidth: "280px" }}>
+              <th className="font-semibold text-left px-2 py-2.5 border-l border-slate-700 bg-slate-900" style={{ width: "300px", minWidth: "300px" }}>
                 Actions
               </th>
             </tr>
@@ -2737,44 +2510,46 @@ function LeadSheetTable({
               const PIcon = pStyle.Icon;
               const isOpen = openLeadId === l.id;
               const isToday = leadCreatedYmd(l) === today;
-              const rowBg = isOpen ? "bg-emerald-50" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50";
+              const isSelected = selectedIds.includes(Number(l.id));
+              const rowBg = isSelected ? "bg-emerald-50" : isOpen ? "bg-emerald-50" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50";
 
               return (
                 <tr key={l.id} className={`${rowBg} border-b border-slate-200 hover:bg-emerald-50/60 transition-colors`}>
-                  {SHEET_COLUMNS.map((col, colIdx) => {
+                  <td className={`px-1 py-2 text-center sticky left-0 z-10 border-r border-slate-200 ${rowBg}`}
+                    style={{ width: `${CHECKBOX_COL_WIDTH}px`, minWidth: `${CHECKBOX_COL_WIDTH}px` }}>
+                    <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect?.(Number(l.id))}
+                      className="w-4 h-4 accent-emerald-600" title="WhatsApp পাঠানোর জন্য সিলেক্ট" />
+                  </td>
+
+                  {SHEET_COLUMNS.map((col) => {
                     const value = col.get(l);
                     const isFrozen = col.frozen;
                     const isPriority = col.key === "priority";
                     const isStatus = col.key === "status";
+                    const isPhone = col.key === "phone";
+                    const isLastFrozen = col.key === "name";
 
                     return (
-                      <td
-                        key={col.key}
-                        className={`px-2 py-2 border-r border-slate-200 truncate ${
-                          isFrozen ? "sticky bg-inherit z-10" : ""
-                        } ${colIdx === 2 ? "border-r-2 border-slate-300 font-semibold" : ""}`}
+                      <td key={col.key}
+                        className={`px-2 py-2 border-r border-slate-200 truncate ${isFrozen ? `sticky z-10 ${rowBg}` : ""} ${isLastFrozen ? "border-r-2 border-slate-300 font-semibold" : ""}`}
                         style={{
-                          width: col.width,
-                          minWidth: col.width,
+                          width: col.width, minWidth: col.width, maxWidth: col.width,
                           textAlign: col.align || "left",
                           left: isFrozen ? getFrozenLeft(col.key) : undefined,
                         }}
-                        title={value.length > 50 ? value : undefined}
-                      >
-                        {colIdx === 0 && isToday && (
-                          <span className="inline-block mb-1 px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 text-[9px] font-bold">
-                            আজ
-                          </span>
+                        title={!isPhone && value.length > 50 ? value : undefined}>
+                        {col.key === "leadCode" && isToday && (
+                          <span className="inline-block mb-1 px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 text-[9px] font-bold">আজ</span>
                         )}
 
-                        {isPriority ? (
+                        {isPhone ? (
+                          <PhoneWhatsApp phone={l.phone} name={l.name} size="xs" message={defaultFollowUpMessage(l)} />
+                        ) : isPriority ? (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${pStyle.cls}`}>
                             <PIcon className="w-3 h-3" /> {value}
                           </span>
                         ) : isStatus ? (
-                          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${statusStyle(value)}`}>
-                            {value}
-                          </span>
+                          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${statusStyle(value)}`}>{value}</span>
                         ) : (
                           <span className="truncate block">{value || "—"}</span>
                         )}
@@ -2782,47 +2557,30 @@ function LeadSheetTable({
                     );
                   })}
 
-                  <td className="px-2 py-2 border-l border-slate-200 sticky left-0 z-10 bg-inherit" style={{ width: "280px", minWidth: "280px" }}>
+                  <td className="px-2 py-2 border-l border-slate-200" style={{ width: "300px", minWidth: "300px" }}>
                     <div className="flex items-center gap-1 flex-wrap">
                       {!["Won", "Lost", "On Hold"].includes(l.status) && l.priority !== "Lost" && (
-                        <button
-                          type="button"
-                          onClick={() => onFollowUp(l.id)}
-                          className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold shrink-0"
-                        >
-                          FU
-                        </button>
+                        <button type="button" onClick={() => onFollowUp(l.id)}
+                          className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold shrink-0">FU</button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => onOpenLead(l.id)}
-                        className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-bold shrink-0"
-                      >
+                      <a href={waLink(l.phone, l.name, defaultFollowUpMessage(l))} target="_blank" rel="noopener noreferrer"
+                        title="WhatsApp — মেসেজ এডিট করা যাবে"
+                        className="px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-600 hover:text-white shrink-0 inline-flex items-center">
+                        <WhatsAppIcon />
+                      </a>
+                      <button type="button" onClick={() => onOpenLead(l.id)}
+                        className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-bold shrink-0">
                         {isOpen ? "Hide" : `TL(${fus.length})`}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onEdit(l)}
-                        className="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold shrink-0"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(l)}
-                        title="এক ক্লিকে ডিলিট — Ctrl+Z দিয়ে ফেরানো যাবে"
-                        className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white shrink-0"
-                      >
+                      <button type="button" onClick={() => onEdit(l)}
+                        className="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold shrink-0">Edit</button>
+                      <button type="button" onClick={() => onDelete(l)} title="এক ক্লিকে ডিলিট — Ctrl+Z দিয়ে ফেরানো যাবে"
+                        className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white shrink-0">
                         <Trash2 className="w-3 h-3" />
                       </button>
-                      {l.status !== "Won" && (
-                        <button
-                          type="button"
-                          onClick={() => onMutate({ action: "convertLeadToClient", leadId: l.id })}
-                          className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold shrink-0"
-                        >
-                          Convert
-                        </button>
+                      {l.status !== "Won" && l.status !== "Converted" && (
+                        <button type="button" onClick={() => onMutate({ action: "convertLeadToClient", leadId: l.id })}
+                          className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold shrink-0">Convert</button>
                       )}
                     </div>
                   </td>
@@ -2832,7 +2590,7 @@ function LeadSheetTable({
 
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={SHEET_COLUMNS.length + 1} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={SHEET_COLUMNS.length + 2} className="px-4 py-10 text-center text-slate-400">
                   কোনো লিড পাওয়া যায়নি। ফিল্টার পরিবর্তন করুন।
                 </td>
               </tr>
@@ -2844,20 +2602,6 @@ function LeadSheetTable({
   );
 }
 
-// Helper for frozen column positioning
-function getFrozenLeft(key: string): string {
-  const frozenCols = SHEET_COLUMNS.filter((c) => c.frozen);
-  const idx = frozenCols.findIndex((c) => c.key === key);
-  if (idx === -1) return "auto";
-
-  let left = 0;
-  for (let i = 0; i < idx; i++) {
-    left += parseInt(frozenCols[i].width) || 0;
-  }
-  return `${left}px`;
-}
-
-// ---- Simple Column Filter Popover ----
 function ColumnFilterPopover({
   values,
   selected,
@@ -2889,31 +2633,17 @@ function ColumnFilterPopover({
   }
 
   return (
-    <div
-      data-filter-popover
+    <div data-filter-popover
       className="absolute top-full left-0 mt-1 w-56 bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-300 z-50 overflow-hidden"
-      onClick={(e) => e.stopPropagation()}
-    >
+      onClick={(e) => e.stopPropagation()}>
       <div className="p-2 border-b border-slate-200 bg-slate-50">
-        <input
-          autoFocus
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="খুঁজুন…"
-          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-[11px] outline-none focus:ring-2 focus:ring-emerald-400"
-        />
+        <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="খুঁজুন…"
+          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-[11px] outline-none focus:ring-2 focus:ring-emerald-400" />
       </div>
 
-      <button
-        type="button"
-        onClick={toggleAll}
-        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold hover:bg-slate-50 border-b border-slate-200"
-      >
-        <span
-          className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${
-            allChecked ? "bg-emerald-500 border-emerald-600" : "bg-white border-slate-400"
-          }`}
-        >
+      <button type="button" onClick={toggleAll}
+        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold hover:bg-slate-50 border-b border-slate-200">
+        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${allChecked ? "bg-emerald-500 border-emerald-600" : "bg-white border-slate-400"}`}>
           {allChecked && <Check className="w-2.5 h-2.5 text-white" />}
         </span>
         সব নির্বাচন করুন
@@ -2923,22 +2653,12 @@ function ColumnFilterPopover({
         {shown.map((v) => {
           const checked = draft.includes(v);
           return (
-            <button
-              key={v}
-              type="button"
-              onClick={() => toggle(v)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-slate-50 text-left"
-            >
-              <span
-                className={`w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center ${
-                  checked ? "bg-emerald-500 border-emerald-600" : "bg-white border-slate-400"
-                }`}
-              >
+            <button key={v} type="button" onClick={() => toggle(v)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-slate-50 text-left">
+              <span className={`w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center ${checked ? "bg-emerald-500 border-emerald-600" : "bg-white border-slate-400"}`}>
                 {checked && <Check className="w-2.5 h-2.5 text-white" />}
               </span>
-              <span className="truncate" title={v}>
-                {v}
-              </span>
+              <span className="truncate" title={v}>{v}</span>
             </button>
           );
         })}
@@ -2946,31 +2666,17 @@ function ColumnFilterPopover({
       </div>
 
       <div className="flex gap-1.5 p-2 border-t border-slate-200 bg-slate-50">
-        <button
-          type="button"
-          onClick={() => onApply([])}
-          className="flex-1 px-2 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-bold"
-        >
-          মুছুন
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-600 text-[11px] font-bold"
-        >
-          বাতিল
-        </button>
-        <button
-          type="button"
-          onClick={() => onApply(draft.length === values.length ? [] : draft)}
-          className="flex-1 px-2 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold"
-        >
-          প্রয়োগ
-        </button>
+        <button type="button" onClick={() => onApply([])}
+          className="flex-1 px-2 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-bold">মুছুন</button>
+        <button type="button" onClick={onClose}
+          className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-600 text-[11px] font-bold">বাতিল</button>
+        <button type="button" onClick={() => onApply(draft.length === values.length ? [] : draft)}
+          className="flex-1 px-2 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold">প্রয়োগ</button>
       </div>
     </div>
   );
 }
+
 function EditLeadModal({
   lead,
   form,
@@ -2994,13 +2700,9 @@ function EditLeadModal({
         <div className="flex items-start justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-base font-bold text-slate-900">Edit Lead — {lead.name}</h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Lead ID: {lead.leadCode || lead.id}
-            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Lead ID: {lead.leadCode || lead.id}</p>
           </div>
-          <button type="button" onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500">
-            ✕
-          </button>
+          <button type="button" onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500">✕</button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -3010,35 +2712,35 @@ function EditLeadModal({
           </select>
           <input type="date" value={form.leadDate} onChange={(e) => setForm((p: any) => ({ ...p, leadDate: e.target.value }))} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
           <select value={form.status} onChange={(e) => setForm((p: any) => ({ ...p, status: e.target.value }))} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-            {LEAD_STATUSES_FULL.map((s) => (
-              <option key={s}>{s}</option>
-            ))}
+            {LEAD_STATUSES_FULL.map((s) => <option key={s}>{s}</option>)}
           </select>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <input type="text" value={form.name} onChange={(e) => setForm((p: any) => ({ ...p, name: e.target.value }))} placeholder="Client Name" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
-          <input type="text" value={form.phone} onChange={(e) => setForm((p: any) => ({ ...p, phone: e.target.value }))} placeholder="Phone" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
+          <div className="space-y-1">
+            <input type="text" value={form.phone} onChange={(e) => setForm((p: any) => ({ ...p, phone: e.target.value }))} placeholder="Phone" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
+            {form.phone?.trim() && normalizePhoneForWa(form.phone) && (
+              <a href={waLink(form.phone, form.name)} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-600 hover:text-white text-[11px] font-bold transition">
+                <WhatsAppIcon className="w-3.5 h-3.5" /> WhatsApp
+              </a>
+            )}
+          </div>
           <input type="text" value={form.whatsapp} onChange={(e) => setForm((p: any) => ({ ...p, whatsapp: e.target.value }))} placeholder="WhatsApp" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
           <input type="text" value={form.location} onChange={(e) => setForm((p: any) => ({ ...p, location: e.target.value }))} placeholder="Location" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
           <select value={form.source} onChange={(e) => setForm((p: any) => ({ ...p, source: e.target.value }))} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-            {LEAD_SOURCES.map((s) => (
-              <option key={s}>{s}</option>
-            ))}
+            {LEAD_SOURCES.map((s) => <option key={s}>{s}</option>)}
           </select>
           <select value={form.priority} onChange={(e) => setForm((p: any) => ({ ...p, priority: e.target.value }))} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-            {LEAD_PRIORITY_OPTIONS.map((p) => (
-              <option key={p}>{p}</option>
-            ))}
+            {LEAD_PRIORITY_OPTIONS.map((p) => <option key={p}>{p}</option>)}
           </select>
         </div>
 
         {isIREL ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <select value={form.propertyType} onChange={(e) => setForm((p: any) => ({ ...p, propertyType: e.target.value }))} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-              {IREL_PROPERTY_TYPES.map((p) => (
-                <option key={p}>{p}</option>
-              ))}
+              {IREL_PROPERTY_TYPES.map((p) => <option key={p}>{p}</option>)}
             </select>
             <input type="text" value={form.projectName} onChange={(e) => setForm((p: any) => ({ ...p, projectName: e.target.value }))} placeholder="Project Name" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
             <input type="text" value={form.unitFlatShop} onChange={(e) => setForm((p: any) => ({ ...p, unitFlatShop: e.target.value }))} placeholder="Unit/Flat/Shop" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
@@ -3047,8 +2749,7 @@ function EditLeadModal({
             <input type="text" value={form.floor} onChange={(e) => setForm((p: any) => ({ ...p, floor: e.target.value }))} placeholder="Floor" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
             <input type="text" value={form.bedrooms} onChange={(e) => setForm((p: any) => ({ ...p, bedrooms: e.target.value }))} placeholder="Bedrooms" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
             <select value={form.purpose} onChange={(e) => setForm((p: any) => ({ ...p, purpose: e.target.value }))} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-              <option>Own Use</option>
-              <option>Investment</option>
+              <option>Own Use</option><option>Investment</option>
             </select>
             <input type="date" value={form.expectedPurchaseDate} onChange={(e) => setForm((p: any) => ({ ...p, expectedPurchaseDate: e.target.value }))} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
             <textarea value={form.clientRequirement} onChange={(e) => setForm((p: any) => ({ ...p, clientRequirement: e.target.value }))} placeholder="Client Requirement" rows={2} className="md:col-span-2 px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
@@ -3056,9 +2757,7 @@ function EditLeadModal({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <select value={form.service} onChange={(e) => setForm((p: any) => ({ ...p, service: e.target.value }))} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
-              {IBDC_SERVICES.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
+              {IBDC_SERVICES.map((s) => <option key={s}>{s}</option>)}
             </select>
             <input type="text" value={form.landSize} onChange={(e) => setForm((p: any) => ({ ...p, landSize: e.target.value }))} placeholder="Land Size" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
             <input type="text" value={form.roadWidth} onChange={(e) => setForm((p: any) => ({ ...p, roadWidth: e.target.value }))} placeholder="Road Width" className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
@@ -3071,11 +2770,7 @@ function EditLeadModal({
           <input type="date" value={form.nextFollowUpDate} onChange={(e) => setForm((p: any) => ({ ...p, nextFollowUpDate: e.target.value }))} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs" />
           <select value={form.assignedStaffId} onChange={(e) => setForm((p: any) => ({ ...p, assignedStaffId: e.target.value }))} className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white">
             <option value="">অনির্ধারিত স্টাফ</option>
-            {employees.map((e: any) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
+            {employees.map((e: any) => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
         </div>
 
@@ -3089,12 +2784,8 @@ function EditLeadModal({
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold">
-            Cancel
-          </button>
-          <button type="submit" className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold">
-            Save Changes
-          </button>
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold">Cancel</button>
+          <button type="submit" className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold">Save Changes</button>
         </div>
       </form>
     </div>
